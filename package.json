@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "exceljs": "^4.3.0",
+    "react-icons": "^5.5.0"
+  },
+  "devDependencies": {
+    "@types/exceljs": "^1.3.2"
+  }
+}

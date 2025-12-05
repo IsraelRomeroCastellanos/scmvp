@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Prueba CSV</title>
+</head>
+<body>
+  <h2>Prueba de Carga Masiva (sin archivos)</h2>
+  <textarea id="csv" rows="5" cols="60">
+nombre_entidad,tipo_cliente,actividad_economica
+Prueba Web,persona_moral,venta_web
+  </textarea><br>
+  <button onclick="enviar()">Enviar</button>
+  <pre id="resultado"></pre>
+
+  <script>
+    async function enviar() {
+      const csv = document.getElementById('csv').value;
+      const res = await fetch('https://plataforma-cumplimiento-mvp-3i3t.onrender.com/api/carga-directa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csvContent: csv })
+      });
+      const data = await res.json();
+      document.getElementById('resultado').textContent = JSON.stringify(data, null, 2);
+    }
+  </script>
+</body>
+</html>
