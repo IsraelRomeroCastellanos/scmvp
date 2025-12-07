@@ -3,7 +3,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.adminRoutes = void 0;
 // backend/src/routes/admin.routes.ts
 const express_1 = require("express");
 const bcrypt_1 = __importDefault(require("bcrypt"));
@@ -145,4 +144,4 @@ const adminRoutes = (pool) => {
     });
     return router;
 };
-exports.adminRoutes = adminRoutes;
+exports.default = adminRoutes;

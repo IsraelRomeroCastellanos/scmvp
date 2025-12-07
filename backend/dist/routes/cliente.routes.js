@@ -3,7 +3,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.clienteRoutes = void 0;
 // backend/src/routes/cliente.routes.ts
 const express_1 = require("express");
 const exceljs_1 = __importDefault(require("exceljs"));
@@ -220,4 +219,4 @@ const clienteRoutes = (pool) => {
     });
     return router;
 };
-exports.clienteRoutes = clienteRoutes;
+exports.default = clienteRoutes;

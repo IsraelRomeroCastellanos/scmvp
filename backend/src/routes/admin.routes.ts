@@ -6,7 +6,7 @@ import bcrypt from 'bcrypt';
 const router = Router();
 const saltRounds = 10;
 
-export const adminRoutes = (pool: Pool) => {
+const adminRoutes = (pool: Pool) => {
   // ✅ Listar usuarios
   router.get('/api/admin/usuarios', async (req: Request, res: Response) => {
     try {
@@ -174,3 +174,5 @@ export const adminRoutes = (pool: Pool) => {
 
   return router;
 };
+
+export default adminRoutes;

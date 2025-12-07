@@ -5,7 +5,7 @@ import ExcelJS from 'exceljs';
 
 const router = Router();
 
-export const clienteRoutes = (pool: Pool) => {
+const clienteRoutes = (pool: Pool) => {
   // ✅ Plantilla Excel
   router.get('/api/cliente/plantilla-excel', async (req: Request, res: Response) => {
     try {
@@ -249,3 +249,5 @@ export const clienteRoutes = (pool: Pool) => {
 
   return router;
 };
+
+export default clienteRoutes;
