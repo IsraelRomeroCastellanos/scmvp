@@ -6,8 +6,8 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { FiLogOut } from 'react-icons/fi';
 
-// SOLUCIÓN: Importar como objeto namespace
-import * as CookieManager from 'js-cookie';
+// SOLUCIÓN CORRECTA: Importar la función por defecto
+import jsCookies from 'js-cookie';
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -16,9 +16,9 @@ export default function Navbar() {
   const pathname = usePathname();
 
   useEffect(() => {
-    // Leer de cookies usando CookieManager como objeto
-    const userCookie = CookieManager.get('user');
-    const tokenCookie = CookieManager.get('token');
+    // Leer de cookies usando jsCookies
+    const userCookie = jsCookies.get('user');
+    const tokenCookie = jsCookies.get('token');
     
     if (userCookie && tokenCookie) {
       setUser(JSON.parse(userCookie));
@@ -29,8 +29,8 @@ export default function Navbar() {
       const storedToken = localStorage.getItem('token');
       if (storedUser && storedToken) {
         setUser(JSON.parse(storedUser));
-        CookieManager.set('user', storedUser, { path: '/', expires: 7 });
-        CookieManager.set('token', storedToken, { path: '/', expires: 7 });
+        jsCookies.set('user', storedUser, { path: '/', expires: 7 });
+        jsCookies.set('token', storedToken, { path: '/', expires: 7 });
       }
     }
   }, [pathname]);
@@ -38,8 +38,8 @@ export default function Navbar() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    CookieManager.remove('token', { path: '/' });
-    CookieManager.remove('user', { path: '/' });
+    jsCookies.remove('token', { path: '/' });
+    jsCookies.remove('user', { path: '/' });
     
     router.push('/login');
     router.refresh();

@@ -4,8 +4,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-// SOLUCIÓN: Importar como objeto namespace
-import * as CookieManager from 'js-cookie';
+// SOLUCIÓN CORRECTA: Importar la función por defecto
+import jsCookies from 'js-cookie';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -38,15 +38,15 @@ export default function LoginPage() {
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
 
-      // 2. Guardar en cookies (CORREGIDO: usar CookieManager como objeto)
-      CookieManager.set('token', data.token, { 
+      // 2. Guardar en cookies (CORREGIDO: usar jsCookies)
+      jsCookies.set('token', data.token, { 
         expires: 7,
         path: '/',
         sameSite: 'strict',
         secure: process.env.NODE_ENV === 'production'
       });
       
-      CookieManager.set('user', JSON.stringify(data.user), { 
+      jsCookies.set('user', JSON.stringify(data.user), { 
         expires: 7,
         path: '/',
         sameSite: 'strict',

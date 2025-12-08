@@ -1,11 +1,11 @@
 // frontend/src/lib/auth.ts
 
-// SOLUCIÓN: Importar como objeto namespace
-import * as CookieManager from 'js-cookie';
+// SOLUCIÓN CORRECTA: Importar la función por defecto
+import jsCookies from 'js-cookie';
 
 export const checkAuth = (requiredRole?: string) => {
-  const token = CookieManager.get('token') || localStorage.getItem('token');
-  const userStr = CookieManager.get('user') || localStorage.getItem('user');
+  const token = jsCookies.get('token') || localStorage.getItem('token');
+  const userStr = jsCookies.get('user') || localStorage.getItem('user');
   
   if (!token || !userStr) {
     return { authenticated: false, redirect: '/login' };
@@ -27,8 +27,8 @@ export const checkAuth = (requiredRole?: string) => {
     
   } catch (error) {
     console.error('Error parsing user data:', error);
-    CookieManager.remove('token');
-    CookieManager.remove('user');
+    jsCookies.remove('token');
+    jsCookies.remove('user');
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     
@@ -37,7 +37,7 @@ export const checkAuth = (requiredRole?: string) => {
 };
 
 export const getCurrentUser = () => {
-  const userStr = CookieManager.get('user') || localStorage.getItem('user');
+  const userStr = jsCookies.get('user') || localStorage.getItem('user');
   if (!userStr) return null;
   
   try {
