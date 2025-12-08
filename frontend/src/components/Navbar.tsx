@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { FiLogOut } from 'react-icons/fi';
-import Cookies from 'js-cookie';
+import CookieManager from 'js-cookie';  // Renombrado
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -14,41 +14,35 @@ export default function Navbar() {
   const pathname = usePathname();
 
   useEffect(() => {
-    // Leer de cookies PRIMERO (para consistencia con middleware)
-    const userCookie = Cookies.get('user');
-    const tokenCookie = Cookies.get('token');
+    // Leer de cookies usando CookieManager
+    const userCookie = CookieManager.get('user');
+    const tokenCookie = CookieManager.get('token');
     
     if (userCookie && tokenCookie) {
       setUser(JSON.parse(userCookie));
-      // Sincronizar con localStorage por si acaso
       localStorage.setItem('user', userCookie);
       localStorage.setItem('token', tokenCookie);
     } else {
-      // Fallback a localStorage (para compatibilidad)
       const storedUser = localStorage.getItem('user');
       const storedToken = localStorage.getItem('token');
       if (storedUser && storedToken) {
         setUser(JSON.parse(storedUser));
-        // Sincronizar a cookies
-        Cookies.set('user', storedUser, { path: '/', expires: 7 });
-        Cookies.set('token', storedToken, { path: '/', expires: 7 });
+        CookieManager.set('user', storedUser, { path: '/', expires: 7 });
+        CookieManager.set('token', storedToken, { path: '/', expires: 7 });
       }
     }
-  }, [pathname]); // Re-evaluar cuando cambie la ruta
+  }, [pathname]);
 
   const handleLogout = () => {
-    // Limpiar TODO
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    Cookies.remove('token', { path: '/' });
-    Cookies.remove('user', { path: '/' });
+    CookieManager.remove('token', { path: '/' });
+    CookieManager.remove('user', { path: '/' });
     
-    // Redirigir y refrescar
     router.push('/login');
-    router.refresh(); // Importante para que el middleware detecte el cambio
+    router.refresh();
   };
 
-  // CORREGIDO: Usar 'administrador' en lugar de 'admin'
   const menuItems = [
     { href: '/dashboard', label: 'Dashboard', role: 'all' },
     { href: '/admin/usuarios', label: 'Gestión de Usuarios', role: 'administrador' },

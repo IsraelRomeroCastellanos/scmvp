@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Cookies from 'js-cookie';
+import CookieManager from 'js-cookie';  // Renombrado para evitar conflicto
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -37,14 +37,14 @@ export default function LoginPage() {
       localStorage.setItem('user', JSON.stringify(data.user));
 
       // 2. Guardar en cookies (para el middleware Next.js)
-      Cookies.set('token', data.token, { 
-        expires: 7, // Expira en 7 días
+      CookieManager.set('token', data.token, { 
+        expires: 7,
         path: '/',
         sameSite: 'strict',
         secure: process.env.NODE_ENV === 'production'
       });
       
-      Cookies.set('user', JSON.stringify(data.user), { 
+      CookieManager.set('user', JSON.stringify(data.user), { 
         expires: 7,
         path: '/',
         sameSite: 'strict',
@@ -58,7 +58,7 @@ export default function LoginPage() {
       if (data.user.rol === 'consultor') redirectPath = '/dashboard';
 
       router.push(redirectPath);
-      router.refresh(); // Importante: refresca para que el middleware detecte las cookies
+      router.refresh();
 
     } catch (err: any) {
       setError(err.message || 'Credenciales incorrectas');
