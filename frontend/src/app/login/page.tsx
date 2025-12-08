@@ -3,17 +3,14 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import Cookies from 'js-cookie';
 
 export default function LoginPage() {
-  const [formData, setFormData] = useState({ email: '', password: '' });
-  const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,108 +18,108 @@ export default function LoginPage() {
     setError('');
 
     try {
-      // ✅ URL DEL BACKEND SIEMPRE DESDE VARIABLES DE ENTORNO
-      // Usamos NEXT_PUBLIC_API_URL que es el nombre que configuraste en Vercel
-      const backendUrl = process.env.NEXT_PUBLIC_API_URL;
-
-      if (!backendUrl) {
-        throw new Error('La URL del backend no está configurada. Contacte al administrador.');
-      }
-
-      console.log('🔍 Intentando login en:', `${backendUrl}/api/login`);
-
-      const response = await fetch(`${backendUrl}/api/login`, {
+      const response = await fetch('/api/auth/login/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
         },
-        body: JSON.stringify(formData),
-        credentials: 'include'
+        body: JSON.stringify({ email, password }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json();
-        setError(errorData.error || 'Error desconocido al iniciar sesión');
-        setLoading(false);
-        return;
+        throw new Error(data.message || 'Error en la autenticación');
       }
 
-      const data = await response.json();
-      
-      // Guardar token y datos de usuario (ejemplo simple, se recomienda usar un contexto o librería)
+      // 1. Guardar en localStorage (para componentes cliente como Navbar)
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
 
-      router.push('/dashboard'); // Redirigir al dashboard
+      // 2. Guardar en cookies (para el middleware Next.js)
+      Cookies.set('token', data.token, { 
+        expires: 7, // Expira en 7 días
+        path: '/',
+        sameSite: 'strict',
+        secure: process.env.NODE_ENV === 'production'
+      });
+      
+      Cookies.set('user', JSON.stringify(data.user), { 
+        expires: 7,
+        path: '/',
+        sameSite: 'strict',
+        secure: process.env.NODE_ENV === 'production'
+      });
+
+      // 3. Redirigir según el rol
+      let redirectPath = '/dashboard';
+      if (data.user.rol === 'administrador') redirectPath = '/admin/usuarios';
+      if (data.user.rol === 'cliente') redirectPath = '/cliente/clientes';
+      if (data.user.rol === 'consultor') redirectPath = '/dashboard';
+
+      router.push(redirectPath);
+      router.refresh(); // Importante: refresca para que el middleware detecte las cookies
+
     } catch (err: any) {
-      console.error('Error de conexión o configuración:', err);
-      if (err.message.includes('URL del backend no está configurada')) {
-        setError(err.message);
-      } else if (err.message.includes('Failed to fetch')) {
-        setError('No se puede conectar con el servidor. Verifica tu conexión a internet y que el backend esté funcionando.');
-      } else {
-        setError('Error de configuración del servidor. El backend está respondiendo con HTML en lugar de JSON.');
-      }
+      setError(err.message || 'Credenciales incorrectas');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="max-w-md w-full bg-white p-8 rounded-lg shadow-lg">
-        <h2 className="text-2xl font-bold text-center mb-6 text-gray-800">Iniciar Sesión</h2>
-        
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
-            <strong className="font-bold">Error: </strong>
-            <span className="block sm:inline">{error}</span>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow">
+        <div>
+          <h2 className="text-center text-3xl font-bold text-gray-900">
+            Iniciar Sesión
+          </h2>
+        </div>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          {error && (
+            <div className="bg-red-50 text-red-500 p-3 rounded-md text-sm">
+              {error}
+            </div>
+          )}
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                Correo Electrónico
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                Contraseña
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
           </div>
-        )}
 
-        <form onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="email">
-              Correo Electrónico
-            </label>
-            <input
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              id="email"
-              type="email"
-              placeholder="correo@ejemplo.com"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-            />
-          </div>
-          <div className="mb-6">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="password">
-              Contraseña
-            </label>
-            <input
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 mb-3 leading-tight focus:outline-none focus:shadow-outline"
-              id="password"
-              type="password"
-              placeholder="********"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              required
-            />
-          </div>
-          <div className="flex items-center justify-between">
+          <div>
             <button
-              className={`bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
               type="submit"
               disabled={loading}
+              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Cargando...' : 'Ingresar'}
+              {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
             </button>
-            <Link href="/forgot-password" className="inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800">
-              ¿Olvidaste tu Contraseña?
-            </Link>
           </div>
         </form>
       </div>

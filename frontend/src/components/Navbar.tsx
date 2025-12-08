@@ -1,50 +1,82 @@
-// src/components/Navbar.tsx
+// frontend/src/components/Navbar.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { FiLogOut } from 'react-icons/fi';
+import Cookies from 'js-cookie';
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    const token = localStorage.getItem('token');
-    if (storedUser && token) {
-      setUser(JSON.parse(storedUser));
+    // Leer de cookies PRIMERO (para consistencia con middleware)
+    const userCookie = Cookies.get('user');
+    const tokenCookie = Cookies.get('token');
+    
+    if (userCookie && tokenCookie) {
+      setUser(JSON.parse(userCookie));
+      // Sincronizar con localStorage por si acaso
+      localStorage.setItem('user', userCookie);
+      localStorage.setItem('token', tokenCookie);
+    } else {
+      // Fallback a localStorage (para compatibilidad)
+      const storedUser = localStorage.getItem('user');
+      const storedToken = localStorage.getItem('token');
+      if (storedUser && storedToken) {
+        setUser(JSON.parse(storedUser));
+        // Sincronizar a cookies
+        Cookies.set('user', storedUser, { path: '/', expires: 7 });
+        Cookies.set('token', storedToken, { path: '/', expires: 7 });
+      }
     }
-  }, []);
+  }, [pathname]); // Re-evaluar cuando cambie la ruta
 
   const handleLogout = () => {
+    // Limpiar TODO
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    Cookies.remove('token', { path: '/' });
+    Cookies.remove('user', { path: '/' });
+    
+    // Redirigir y refrescar
     router.push('/login');
+    router.refresh(); // Importante para que el middleware detecte el cambio
   };
 
+  // CORREGIDO: Usar 'administrador' en lugar de 'admin'
   const menuItems = [
     { href: '/dashboard', label: 'Dashboard', role: 'all' },
-    { href: '/admin/usuarios', label: 'Gestión de Usuarios', role: 'admin' },
-    { href: '/admin/empresas', label: 'Gestión de Empresas', role: 'admin' },
+    { href: '/admin/usuarios', label: 'Gestión de Usuarios', role: 'administrador' },
+    { href: '/admin/empresas', label: 'Gestión de Empresas', role: 'administrador' },
     { href: '/cliente/clientes', label: 'Mis Clientes', role: 'cliente' },
-    { href: '/cliente/clientes', label: 'Gestión de Clientes', role: 'consultor' },
-    { href: '/cliente/carga-masiva', label: 'Carga Masiva', role: 'all' },
-    { href: '/cliente/registrar-cliente', label: 'Registrar Cliente', role: 'all' },
+    { href: '/consultor/clientes', label: 'Gestión de Clientes', role: 'consultor' },
+    { href: '/cliente/carga-masiva', label: 'Carga Masiva', role: 'cliente' },
+    { href: '/cliente/registrar-cliente', label: 'Registrar Cliente', role: 'cliente' },
   ];
 
   const shouldShowItem = (item: any) => {
     if (!user) return false;
     if (item.role === 'all') return true;
+    
+    // Lógica jerárquica de roles
+    if (user.rol === 'administrador') return true; // Admin ve todo
+    
+    if (item.role === 'consultor' && user.rol === 'consultor') return true;
     if (item.role === 'cliente' && user.rol === 'cliente') return true;
-    if (item.role === 'consultor' && (user.rol === 'consultor' || user.rol === 'admin')) return true;
+    
     return user.rol === item.role;
   };
 
+  // No mostrar navbar en la página de login
+  if (pathname === '/login') return null;
+
   return (
-    <nav className="bg-white shadow-sm">
+    <nav className="bg-white shadow-sm border-b">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
@@ -57,11 +89,16 @@ export default function Navbar() {
           <div className="hidden md:flex items-center space-x-8">
             {menuItems.map((item) => {
               if (shouldShowItem(item)) {
+                const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
                 return (
                   <Link 
                     key={item.href} 
                     href={item.href} 
-                    className="text-gray-700 hover:text-blue-600 font-medium"
+                    className={`font-medium transition-colors ${
+                      isActive 
+                        ? 'text-blue-600 border-b-2 border-blue-600' 
+                        : 'text-gray-700 hover:text-blue-600'
+                    }`}
                   >
                     {item.label}
                   </Link>
@@ -77,20 +114,11 @@ export default function Navbar() {
                 </span>
                 <button
                   onClick={handleLogout}
-                  className="flex items-center text-gray-700 hover:text-red-600"
+                  className="flex items-center text-gray-700 hover:text-red-600 transition-colors"
                 >
                   <FiLogOut className="mr-1" /> Cerrar sesión
                 </button>
               </div>
-            )}
-            
-            {!user && (
-              <Link 
-                href="/login" 
-                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-              >
-                Iniciar Sesión
-              </Link>
             )}
           </div>
           
@@ -99,6 +127,7 @@ export default function Navbar() {
             <button
               onClick={() => setIsOpen(!isOpen)}
               className="text-gray-700 focus:outline-none"
+              aria-label="Toggle menu"
             >
               <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 {isOpen ? (
@@ -114,15 +143,15 @@ export default function Navbar() {
       
       {/* Mobile Menu */}
       {isOpen && (
-        <div className="md:hidden">
-          <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+        <div className="md:hidden bg-white border-t">
+          <div className="px-2 pt-2 pb-3 space-y-1">
             {menuItems.map((item) => {
               if (shouldShowItem(item)) {
                 return (
                   <Link 
                     key={item.href} 
                     href={item.href} 
-                    className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-blue-600 hover:bg-gray-50"
+                    className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-blue-600 hover:bg-gray-50 transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
                     {item.label}
@@ -134,7 +163,7 @@ export default function Navbar() {
             
             {user && (
               <>
-                <div className="block px-3 py-2 text-base font-medium text-gray-700">
+                <div className="block px-3 py-2 text-base font-medium text-gray-700 border-t">
                   Bienvenido, {user.nombre_completo}
                 </div>
                 <button
@@ -142,23 +171,13 @@ export default function Navbar() {
                     handleLogout();
                     setIsOpen(false);
                   }}
-                  className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-red-600 hover:bg-gray-50"
+                  className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-red-600 hover:bg-gray-50 transition-colors"
                 >
                   <div className="flex items-center">
                     <FiLogOut className="mr-2" /> Cerrar sesión
                   </div>
                 </button>
               </>
-            )}
-            
-            {!user && (
-              <Link 
-                href="/login" 
-                className="block px-3 py-2 rounded-md text-base font-medium text-white bg-blue-600 hover:bg-blue-700"
-                onClick={() => setIsOpen(false)}
-              >
-                Iniciar Sesión
-              </Link>
             )}
           </div>
         </div>
