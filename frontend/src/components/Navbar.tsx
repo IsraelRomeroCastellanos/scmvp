@@ -5,7 +5,9 @@ import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { FiLogOut } from 'react-icons/fi';
-import CookieManager from 'js-cookie';  // Renombrado
+
+// SOLUCIÓN: Importar como objeto namespace
+import * as CookieManager from 'js-cookie';
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -14,7 +16,7 @@ export default function Navbar() {
   const pathname = usePathname();
 
   useEffect(() => {
-    // Leer de cookies usando CookieManager
+    // Leer de cookies usando CookieManager como objeto
     const userCookie = CookieManager.get('user');
     const tokenCookie = CookieManager.get('token');
     

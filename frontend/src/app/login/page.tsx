@@ -3,7 +3,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import CookieManager from 'js-cookie';  // Renombrado para evitar conflicto
+
+// SOLUCIÓN: Importar como objeto namespace
+import * as CookieManager from 'js-cookie';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -32,11 +34,11 @@ export default function LoginPage() {
         throw new Error(data.message || 'Error en la autenticación');
       }
 
-      // 1. Guardar en localStorage (para componentes cliente como Navbar)
+      // 1. Guardar en localStorage
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
 
-      // 2. Guardar en cookies (para el middleware Next.js)
+      // 2. Guardar en cookies (CORREGIDO: usar CookieManager como objeto)
       CookieManager.set('token', data.token, { 
         expires: 7,
         path: '/',

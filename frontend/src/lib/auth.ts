@@ -1,5 +1,7 @@
 // frontend/src/lib/auth.ts
-import CookieManager from 'js-cookie';  // Renombrado
+
+// SOLUCIÓN: Importar como objeto namespace
+import * as CookieManager from 'js-cookie';
 
 export const checkAuth = (requiredRole?: string) => {
   const token = CookieManager.get('token') || localStorage.getItem('token');
