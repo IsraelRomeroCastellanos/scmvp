@@ -3,7 +3,7 @@ import axios from "axios";
 
 const api = axios.create({
   baseURL:
-    process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001", // ajusta si es otro puerto/URL
+    process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001", // ajusta el puerto/URL si es otro
 });
 
 // Adjunta el token a cada petición, si existe
@@ -18,4 +18,8 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Export default (import api from '@/lib/api')
 export default api;
+
+// Export nombrado (import { api } from '@/lib/api')
+export { api };
