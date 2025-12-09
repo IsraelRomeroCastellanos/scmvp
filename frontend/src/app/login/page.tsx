@@ -50,7 +50,8 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const response = await fetch('/api/auth/login/', {
+      // ✅ RUTA CORRECTA: /api/login (sin /auth/)
+      const response = await fetch('/api/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -68,19 +69,19 @@ export default function LoginPage() {
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
 
-      // 2. Guardar en cookies usando funciones nativas
-      cookieManager.set('token', data.token, {
+      // 2. Guardar en cookies (para el middleware Next.js)
+      cookieManager.set('token', data.token, { 
         expires: 7,
         path: '/',
         sameSite: 'strict',
-        secure: process.env.NODE_ENV === 'production',
+        secure: process.env.NODE_ENV === 'production'
       });
       
-      cookieManager.set('user', JSON.stringify(data.user), {
+      cookieManager.set('user', JSON.stringify(data.user), { 
         expires: 7,
         path: '/',
         sameSite: 'strict',
-        secure: process.env.NODE_ENV === 'production',
+        secure: process.env.NODE_ENV === 'production'
       });
 
       // 3. Redirigir según el rol
