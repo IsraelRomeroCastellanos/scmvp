@@ -56,7 +56,7 @@ export default function CrearUsuario() {
         throw new Error('Los administradores y consultores no pueden tener empresa asignada');
       }
 
-      const response = await api.post('/api/admin/usuarios', formData, token);
+      const response = await api.post('/api/admin/usuarios', formData);
       
       if (response.success) {
         setMensaje('✅ Usuario creado exitosamente');
