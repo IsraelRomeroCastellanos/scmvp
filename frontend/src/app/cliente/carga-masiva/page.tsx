@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { toast } from 'react-toastify';
-import Navbar from '@/components/Navbar';
 import { FiUploadCloud, FiDownload } from 'react-icons/fi';
 
 // Definir el tipo para la respuesta de carga masiva
@@ -181,7 +180,6 @@ María López,persona_fisica,consultoría fiscal,activo,marial`;
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Navbar />
       <main className="flex-grow container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
           <div className="mb-6">

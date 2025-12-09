@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
-import Navbar from '../../../components/Navbar';
 import { toast } from 'react-toastify';
 
 export default function MisClientes() {
@@ -63,7 +62,6 @@ export default function MisClientes() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Navbar />
         <div className="flex justify-center items-center h-64">
           <div className="text-lg text-gray-600">Cargando clientes...</div>
         </div>
@@ -73,7 +71,6 @@ export default function MisClientes() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar />
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
           <div className="mb-6 flex justify-between items-center">

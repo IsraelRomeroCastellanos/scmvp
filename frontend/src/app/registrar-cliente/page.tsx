@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { toast } from 'react-toastify';
 import Link from 'next/link';
-import Navbar from '@/components/Navbar';
 
 export default function RegistrarCliente() {
   const [formData, setFormData] = useState({
@@ -98,7 +97,6 @@ export default function RegistrarCliente() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Navbar />
       <main className="flex-grow container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto">
           <div className="mb-6">

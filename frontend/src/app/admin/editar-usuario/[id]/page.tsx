@@ -4,7 +4,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import axios from 'axios';
-import Navbar from '@/components/Navbar';
 import { toast } from 'react-toastify';
 
 export default function EditarUsuario() {
@@ -118,7 +117,6 @@ export default function EditarUsuario() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Navbar />
         <div className="flex justify-center items-center h-64">
           <div className="text-lg text-gray-600">Cargando usuario...</div>
         </div>
@@ -128,7 +126,6 @@ export default function EditarUsuario() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar />
       <main className="max-w-2xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
           <div className="mb-6">

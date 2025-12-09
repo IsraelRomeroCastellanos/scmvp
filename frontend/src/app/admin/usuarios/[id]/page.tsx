@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react'; // Importar useCallback
 import { useRouter, useParams } from 'next/navigation';
 import { toast } from 'react-toastify';
-import Navbar from '@/components/Navbar';
 import { FiArrowLeft } from 'react-icons/fi';
 
 export default function DetalleUsuario() {
@@ -70,7 +69,6 @@ export default function DetalleUsuario() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col">
-        <Navbar />
         <main className="flex-grow container mx-auto px-4 py-8">
           <div className="flex justify-center items-center h-64">
             <div className="text-lg text-gray-600">Cargando usuario...</div>
@@ -83,7 +81,6 @@ export default function DetalleUsuario() {
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col">
-        <Navbar />
         <main className="flex-grow container mx-auto px-4 py-8">
           <div className="max-w-2xl mx-auto">
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
@@ -103,7 +100,6 @@ export default function DetalleUsuario() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Navbar />
       <main className="flex-grow container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto">
           <div className="mb-6 flex justify-between items-center">

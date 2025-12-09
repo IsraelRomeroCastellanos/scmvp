@@ -8,10 +8,9 @@ const nextConfig = {
   },
   
   async rewrites() {
-    // ✅ URL CORRECTA: scmvp.onrender.com
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 
                       (process.env.NODE_ENV === 'production' 
-                         ? 'https://scmvp.onrender.com'  // ← CORREGIDO
+                         ? 'https://scmvp.onrender.com' 
                          : 'http://localhost:10000');
     
     console.log('🌐 Configurando proxy a:', backendUrl);
@@ -26,6 +25,15 @@ const nextConfig = {
   
   async headers() {
     return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+        ],
+      },
       {
         source: '/api/:path*',
         headers: [

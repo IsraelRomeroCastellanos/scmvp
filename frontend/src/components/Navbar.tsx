@@ -14,7 +14,11 @@ const cookieManager = {
     return match ? decodeURIComponent(match[2]) : undefined;
   },
   
-  set: (name: string, value: string, options: { expires?: number; path?: string; sameSite?: string; secure?: boolean } = {}) => {
+  set: (
+    name: string,
+    value: string,
+    options: { expires?: number; path?: string; sameSite?: string; secure?: boolean } = {}
+  ) => {
     let cookie = `${name}=${encodeURIComponent(value)}`;
     if (options.expires) {
       const date = new Date();
@@ -40,6 +44,19 @@ const cookieManager = {
   }
 };
 
+// Normaliza el rol para tolerar variaciones de texto y mayúsculas
+const normalizeRole = (raw: any): string => {
+  if (!raw) return '';
+  const r = String(raw).toLowerCase().trim();
+
+  if (r === 'admin' || r === 'administrator') return 'administrador';
+  if (r === 'cliente' || r === 'client') return 'cliente';
+  if (r === 'consultor' || r === 'consultant') return 'consultor';
+
+  // Si ya viene como 'administrador', 'cliente', 'consultor', etc.
+  return r;
+};
+
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
@@ -52,14 +69,22 @@ export default function Navbar() {
     const tokenCookie = cookieManager.get('token');
     
     if (userCookie && tokenCookie) {
-      setUser(JSON.parse(userCookie));
+      try {
+        setUser(JSON.parse(userCookie));
+      } catch {
+        setUser(null);
+      }
       localStorage.setItem('user', userCookie);
       localStorage.setItem('token', tokenCookie);
     } else {
       const storedUser = localStorage.getItem('user');
       const storedToken = localStorage.getItem('token');
       if (storedUser && storedToken) {
-        setUser(JSON.parse(storedUser));
+        try {
+          setUser(JSON.parse(storedUser));
+        } catch {
+          setUser(null);
+        }
         cookieManager.set('user', storedUser, { expires: 7, path: '/' });
         cookieManager.set('token', storedToken, { expires: 7, path: '/' });
       }
@@ -89,15 +114,25 @@ export default function Navbar() {
   const shouldShowItem = (item: any) => {
     if (!user) return false;
     if (item.role === 'all') return true;
-    
-    // Lógica jerárquica de roles
-    if (user.rol === 'administrador') return true; // Admin ve todo
-    
-    if (item.role === 'consultor' && user.rol === 'consultor') return true;
-    if (item.role === 'cliente' && user.rol === 'cliente') return true;
-    
-    return user.rol === item.role;
+
+    // Intentar obtener el rol desde distintas propiedades
+    const role = normalizeRole((user as any).rol ?? (user as any).role);
+
+    // Admin ve todo
+    if (role === 'administrador') return true;
+
+    if (item.role === 'consultor' && role === 'consultor') return true;
+    if (item.role === 'cliente' && role === 'cliente') return true;
+
+    // Fallback estricto
+    if (!role) return false;
+    return item.role === role;
   };
+
+  // Log para depuración: ver cómo llega el usuario
+  if (typeof window !== 'undefined') {
+    console.log('Navbar user:', user);
+  }
 
   // No mostrar navbar en la página de login
   if (pathname === '/login') return null;
@@ -137,7 +172,7 @@ export default function Navbar() {
             {user && (
               <div className="flex items-center space-x-4">
                 <span className="text-gray-700">
-                  Bienvenido, {user.nombre_completo}
+                  Bienvenido, {user.nombre_completo ?? user.nombre ?? user.email}
                 </span>
                 <button
                   onClick={handleLogout}
@@ -191,7 +226,7 @@ export default function Navbar() {
             {user && (
               <>
                 <div className="block px-3 py-2 text-base font-medium text-gray-700 border-t">
-                  Bienvenido, {user.nombre_completo}
+                  Bienvenido, {user.nombre_completo ?? user.nombre ?? user.email}
                 </div>
                 <button
                   onClick={() => {

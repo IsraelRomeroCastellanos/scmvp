@@ -1,15 +1,11 @@
-// src/app/layout.tsx
-import './globals.css';
-import { ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
-import { Inter } from 'next/font/google';
-import Navbar from '@/components/Navbar'; // ✅ AÑADIDO
+// frontend/src/app/layout.tsx
+import "./globals.css";
+import type { Metadata } from "next";
+import Navbar from "@/components/Navbar";
 
-const inter = Inter({ subsets: ['latin'] });
-
-export const metadata = {
-  title: 'Sistema de Cumplimiento MVP',
-  description: 'Plataforma integral de gestión de cumplimiento',
+export const metadata: Metadata = {
+  title: "SCMVP",
+  description: "Proyecto SCMVP con Next 14 + TailwindCSS",
 };
 
 export default function RootLayout({
@@ -19,23 +15,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body className={`${inter.className} min-h-screen bg-gray-50 flex flex-col`}>
-        <Navbar /> {/* ✅ AÑADIDO */}
-        <main className="flex-grow container mx-auto px-4 py-8">
+      <body className="bg-gray-100 text-gray-800 min-h-screen">
+        {/* Navbar global (no se muestra en /login, eso ya lo decide el componente) */}
+        <Navbar />
+
+        {/* Contenedor principal de las vistas */}
+        <main className="max-w-7xl mx-auto px-4 py-6">
           {children}
         </main>
-        <ToastContainer 
-          position="top-right"
-          autoClose={5000}
-          hideProgressBar={false}
-          newestOnTop={false}
-          closeOnClick
-          rtl={false}
-          pauseOnFocusLoss
-          draggable
-          pauseOnHover
-          theme="light"
-        />
       </body>
     </html>
   );

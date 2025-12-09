@@ -1,94 +1,21 @@
-// src/lib/api.ts
-const getBackendUrl = () => {
-  if (typeof window !== 'undefined') {
-    // En el navegador
-    return process.env.NEXT_PUBLIC_BACKEND_URL || 'https://plataforma-cumplimiento-mvp.onrender.com';
-  }
-  // En el servidor
-  return process.env.BACKEND_URL || 'https://plataforma-cumplimiento-mvp.onrender.com';
-};
+// frontend/src/lib/api.ts
+import axios from "axios";
 
-export const api = {
-  get: async (endpoint: string, token?: string) => {
-    const url = `${getBackendUrl()}${endpoint}`;
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    
+const api = axios.create({
+  baseURL:
+    process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001", // ajusta si es otro puerto/URL
+});
+
+// Adjunta el token a cada petición, si existe
+api.interceptors.request.use((config) => {
+  if (typeof window !== "undefined") {
+    const token = window.localStorage.getItem("token");
     if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+      config.headers = config.headers || {};
+      config.headers.Authorization = `Bearer ${token}`;
     }
-    
-    const response = await fetch(url, { headers });
-    
-    if (!response.ok) {
-      let errorData;
-      try {
-        errorData = await response.json();
-      } catch {
-        errorData = { error: `Error ${response.status}: ${response.statusText}` };
-      }
-      throw new Error(errorData.error || `Error ${response.status}`);
-    }
-    
-    return response.json();
-  },
-  
-  post: async (endpoint: string, data: any, token?: string) => {
-    const url = `${getBackendUrl()}${endpoint}`;
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(data),
-    });
-    
-    if (!response.ok) {
-      let errorData;
-      try {
-        errorData = await response.json();
-      } catch {
-        errorData = { error: `Error ${response.status}: ${response.statusText}` };
-      }
-      throw new Error(errorData.error || `Error ${response.status}`);
-    }
-    
-    return response.json();
-  },
-  
-  put: async (endpoint: string, data: any, token?: string) => {
-    const url = `${getBackendUrl()}${endpoint}`;
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    
-    const response = await fetch(url, {
-      method: 'PUT',
-      headers,
-      body: JSON.stringify(data),
-    });
-    
-    if (!response.ok) {
-      let errorData;
-      try {
-        errorData = await response.json();
-      } catch {
-        errorData = { error: `Error ${response.status}: ${response.statusText}` };
-      }
-      throw new Error(errorData.error || `Error ${response.status}`);
-    }
-    
-    return response.json();
   }
-};
+  return config;
+});
+
+export default api;
