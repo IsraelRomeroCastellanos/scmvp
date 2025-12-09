@@ -1,11 +1,17 @@
 // frontend/src/lib/auth.ts
 
-// SOLUCIÓN CORRECTA: Importar la función por defecto
-import jsCookies from 'js-cookie';
+// Funciones nativas para manejar cookies
+const cookieManager = {
+  get: (name: string): string | undefined => {
+    if (typeof document === 'undefined') return undefined;
+    const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+    return match ? decodeURIComponent(match[2]) : undefined;
+  }
+};
 
 export const checkAuth = (requiredRole?: string) => {
-  const token = jsCookies.get('token') || localStorage.getItem('token');
-  const userStr = jsCookies.get('user') || localStorage.getItem('user');
+  const token = cookieManager.get('token') || localStorage.getItem('token');
+  const userStr = cookieManager.get('user') || localStorage.getItem('user');
   
   if (!token || !userStr) {
     return { authenticated: false, redirect: '/login' };
@@ -27,8 +33,7 @@ export const checkAuth = (requiredRole?: string) => {
     
   } catch (error) {
     console.error('Error parsing user data:', error);
-    jsCookies.remove('token');
-    jsCookies.remove('user');
+    // Limpiar datos corruptos
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     
@@ -37,7 +42,7 @@ export const checkAuth = (requiredRole?: string) => {
 };
 
 export const getCurrentUser = () => {
-  const userStr = jsCookies.get('user') || localStorage.getItem('user');
+  const userStr = cookieManager.get('user') || localStorage.getItem('user');
   if (!userStr) return null;
   
   try {

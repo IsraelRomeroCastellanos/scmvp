@@ -4,8 +4,38 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-// SOLUCIÓN CORRECTA: Importar la función por defecto
-import jsCookies from 'js-cookie';
+// Funciones nativas para manejar cookies
+const cookieManager = {
+  set: (name: string, value: string, options: { expires?: number; path?: string; sameSite?: string; secure?: boolean } = {}) => {
+    let cookie = `${name}=${encodeURIComponent(value)}`;
+    if (options.expires) {
+      const date = new Date();
+      date.setDate(date.getDate() + options.expires);
+      cookie += `; expires=${date.toUTCString()}`;
+    }
+    if (options.path) {
+      cookie += `; path=${options.path}`;
+    } else {
+      cookie += `; path=/`;
+    }
+    if (options.sameSite) {
+      cookie += `; sameSite=${options.sameSite}`;
+    }
+    if (options.secure) {
+      cookie += `; secure`;
+    }
+    document.cookie = cookie;
+  },
+  
+  get: (name: string): string | undefined => {
+    const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+    return match ? decodeURIComponent(match[2]) : undefined;
+  },
+  
+  remove: (name: string, options: { path?: string } = {}) => {
+    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=${options.path || '/'};`;
+  }
+};
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -38,19 +68,19 @@ export default function LoginPage() {
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
 
-      // 2. Guardar en cookies (CORREGIDO: usar jsCookies)
-      jsCookies.set('token', data.token, { 
+      // 2. Guardar en cookies usando funciones nativas
+      cookieManager.set('token', data.token, {
         expires: 7,
         path: '/',
         sameSite: 'strict',
-        secure: process.env.NODE_ENV === 'production'
+        secure: process.env.NODE_ENV === 'production',
       });
       
-      jsCookies.set('user', JSON.stringify(data.user), { 
+      cookieManager.set('user', JSON.stringify(data.user), {
         expires: 7,
         path: '/',
         sameSite: 'strict',
-        secure: process.env.NODE_ENV === 'production'
+        secure: process.env.NODE_ENV === 'production',
       });
 
       // 3. Redirigir según el rol

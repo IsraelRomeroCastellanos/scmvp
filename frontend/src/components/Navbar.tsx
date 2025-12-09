@@ -6,8 +6,39 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { FiLogOut } from 'react-icons/fi';
 
-// SOLUCIÓN CORRECTA: Importar la función por defecto
-import jsCookies from 'js-cookie';
+// Funciones nativas para manejar cookies
+const cookieManager = {
+  get: (name: string): string | undefined => {
+    if (typeof document === 'undefined') return undefined;
+    const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+    return match ? decodeURIComponent(match[2]) : undefined;
+  },
+  
+  set: (name: string, value: string, options: { expires?: number; path?: string; sameSite?: string; secure?: boolean } = {}) => {
+    let cookie = `${name}=${encodeURIComponent(value)}`;
+    if (options.expires) {
+      const date = new Date();
+      date.setDate(date.getDate() + options.expires);
+      cookie += `; expires=${date.toUTCString()}`;
+    }
+    if (options.path) {
+      cookie += `; path=${options.path}`;
+    } else {
+      cookie += `; path=/`;
+    }
+    if (options.sameSite) {
+      cookie += `; sameSite=${options.sameSite}`;
+    }
+    if (options.secure) {
+      cookie += `; secure`;
+    }
+    document.cookie = cookie;
+  },
+  
+  remove: (name: string, options: { path?: string } = {}) => {
+    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=${options.path || '/'};`;
+  }
+};
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -16,9 +47,9 @@ export default function Navbar() {
   const pathname = usePathname();
 
   useEffect(() => {
-    // Leer de cookies usando jsCookies
-    const userCookie = jsCookies.get('user');
-    const tokenCookie = jsCookies.get('token');
+    // Leer de cookies
+    const userCookie = cookieManager.get('user');
+    const tokenCookie = cookieManager.get('token');
     
     if (userCookie && tokenCookie) {
       setUser(JSON.parse(userCookie));
@@ -29,8 +60,8 @@ export default function Navbar() {
       const storedToken = localStorage.getItem('token');
       if (storedUser && storedToken) {
         setUser(JSON.parse(storedUser));
-        jsCookies.set('user', storedUser, { path: '/', expires: 7 });
-        jsCookies.set('token', storedToken, { path: '/', expires: 7 });
+        cookieManager.set('user', storedUser, { expires: 7, path: '/' });
+        cookieManager.set('token', storedToken, { expires: 7, path: '/' });
       }
     }
   }, [pathname]);
@@ -38,8 +69,8 @@ export default function Navbar() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    jsCookies.remove('token', { path: '/' });
-    jsCookies.remove('user', { path: '/' });
+    cookieManager.remove('token', { path: '/' });
+    cookieManager.remove('user', { path: '/' });
     
     router.push('/login');
     router.refresh();
