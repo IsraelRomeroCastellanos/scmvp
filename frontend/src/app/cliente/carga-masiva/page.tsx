@@ -28,8 +28,8 @@ export default function CargaMasiva() {
     
     if (storedToken && storedUser) {
       const user = JSON.parse(storedUser);
-      // Verificar que el usuario sea cliente o admin
-      if (user.rol === 'cliente' || user.rol === 'admin') {
+      // Verificar que el usuario sea cliente o administrador
+      if (user.rol === 'cliente' || user.rol === 'administrador') {
         setToken(storedToken);
       } else {
         router.push('/login');
@@ -147,18 +147,20 @@ María López,persona_fisica,consultoría fiscal,activo,marial`;
           const csvContent = event.target?.result as string;
           
           // Enviar al backend con tipado explícito
-          const response = await api.post('/api/cliente/carga-masiva', {
+          const response = await api.post<CargaMasivaResponse>('/api/cliente/carga-masiva', {
             csvContent
-          }, token);
+          });
           
-          if (response.success) {
-            const count = response.count || 0;
+          const data = response.data;
+
+          if (data.success) {
+            const count = data.count ?? 0;
             setMensaje(`✅ ${count} clientes procesados exitosamente`);
             toast.success(`¡${count} clientes registrados correctamente!`);
             setArchivo(null);
             setPreview([]);
           } else {
-            throw new Error(response.message || 'Error al procesar archivo');
+            throw new Error(data.message || 'Error al procesar archivo');
           }
         } catch (err: any) {
           console.error('Error al procesar archivo:', err);
@@ -282,15 +284,15 @@ María López,persona_fisica,consultoría fiscal,activo,marial`;
                       <tbody className="bg-white divide-y divide-gray-200">
                         {preview.map((row, index) => (
                           <tr key={index}>
-			    {Object.values(row).map((value, idx) => (
-			      <td key={idx} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-			       {value != null 
-			        ? (typeof value === 'object' 
-			        ? JSON.stringify(value) 
-		                : value.toString()) 
-			        : 'N/A'}
-			      </td>
-			    ))}                            
+                            {Object.values(row).map((value, idx) => (
+                              <td key={idx} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {value != null 
+                                  ? (typeof value === 'object' 
+                                    ? JSON.stringify(value) 
+                                    : value.toString()) 
+                                  : 'N/A'}
+                              </td>
+                            ))}
                           </tr>
                         ))}
                       </tbody>

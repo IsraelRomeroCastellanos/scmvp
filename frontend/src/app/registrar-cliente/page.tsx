@@ -29,7 +29,8 @@ export default function RegistrarCliente() {
     
     if (token && user) {
       const userData = JSON.parse(user);
-      if (userData.rol === 'admin' || userData.rol === 'cliente') {
+      // Alinear roles: administrador o cliente
+      if (userData.rol === 'administrador' || userData.rol === 'cliente') {
         // Permitir registro a administradores y clientes
       } else {
         router.push('/login');
@@ -56,9 +57,11 @@ export default function RegistrarCliente() {
         throw new Error('Sesión expirada. Por favor inicia sesión nuevamente.');
       }
 
-      const response = await api.post('/api/cliente', formData, token);
+      // El token se añade vía interceptor
+      const response = await api.post('/api/cliente', formData);
+      const data = response.data as any;
       
-      if (response.success) {
+      if (data?.success) {
         setMensaje('✅ Cliente registrado exitosamente');
         toast.success('Cliente registrado exitosamente');
         
@@ -77,13 +80,13 @@ export default function RegistrarCliente() {
         
         // Redirigir según el rol del usuario
         const user = JSON.parse(localStorage.getItem('user') || '{}');
-        if (user.rol === 'admin') {
+        if (user.rol === 'administrador') {
           setTimeout(() => router.push('/admin/usuarios'), 2000);
         } else {
           setTimeout(() => router.push('/cliente/clientes'), 2000);
         }
       } else {
-        throw new Error(response.message || 'Falló el registro');
+        throw new Error(data?.message || 'Falló el registro');
       }
     } catch (err: any) {
       console.error('Error al registrar cliente:', err);
@@ -156,7 +159,7 @@ export default function RegistrarCliente() {
                 </div>
 
                 <div>
-                  <label htmlFor="nombre_completo" className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="nombre_completo" className="block text.sm font-medium text-gray-700">
                     Nombre Completo
                   </label>
                   <input
@@ -277,7 +280,7 @@ export default function RegistrarCliente() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg.green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
                 >
                   {loading ? (
                     <span className="flex items-center">

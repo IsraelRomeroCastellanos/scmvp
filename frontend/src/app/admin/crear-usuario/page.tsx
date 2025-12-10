@@ -25,7 +25,8 @@ export default function CrearUsuario() {
     
     if (storedToken && storedUser) {
       const user = JSON.parse(storedUser);
-      if (user.rol === 'admin') {
+      // Alinear con el rol que usas en login/navbar: "administrador"
+      if (user.rol === 'administrador') {
         setToken(storedToken);
       } else {
         router.push('/login');
@@ -52,13 +53,15 @@ export default function CrearUsuario() {
         throw new Error('Los clientes deben estar vinculados a una empresa');
       }
       
-      if ((formData.rol === 'admin' || formData.rol === 'consultor') && formData.empresa_id) {
+      if ((formData.rol === 'administrador' || formData.rol === 'consultor') && formData.empresa_id) {
         throw new Error('Los administradores y consultores no pueden tener empresa asignada');
       }
 
+      // El token ya se adjunta vía interceptor en lib/api.ts
       const response = await api.post('/api/admin/usuarios', formData);
-      
-      if (response.success) {
+      const data = response.data as any;
+
+      if (data?.success) {
         setMensaje('✅ Usuario creado exitosamente');
         toast.success('Usuario creado exitosamente');
         
@@ -74,7 +77,7 @@ export default function CrearUsuario() {
         // Redirigir a la lista de usuarios después de 2 segundos
         setTimeout(() => router.push('/admin/usuarios'), 2000);
       } else {
-        throw new Error(response.message || 'Falló la creación del usuario');
+        throw new Error(data?.message || 'Falló la creación del usuario');
       }
     } catch (err: any) {
       console.error('Error al crear usuario:', err);
@@ -173,7 +176,7 @@ export default function CrearUsuario() {
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     required
                   >
-                    <option value="admin">Administrador</option>
+                    <option value="administrador">Administrador</option>
                     <option value="consultor">Consultor</option>
                     <option value="cliente">Cliente</option>
                   </select>
