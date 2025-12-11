@@ -53,7 +53,6 @@ const normalizeRole = (raw: any): string => {
   if (r === 'cliente' || r === 'client') return 'cliente';
   if (r === 'consultor' || r === 'consultant') return 'consultor';
 
-  // Si ya viene como 'administrador', 'cliente', 'consultor', etc.
   return r;
 };
 
@@ -64,7 +63,6 @@ export default function Navbar() {
   const pathname = usePathname();
 
   useEffect(() => {
-    // Leer de cookies
     const userCookie = cookieManager.get('user');
     const tokenCookie = cookieManager.get('token');
     
@@ -101,48 +99,70 @@ export default function Navbar() {
     router.refresh();
   };
 
-  const menuItems = [
-    { href: '/dashboard', label: 'Dashboard', role: 'all' },
-    { href: '/admin/usuarios', label: 'Gestión de Usuarios', role: 'administrador' },
-    { href: '/admin/empresas', label: 'Gestión de Empresas', role: 'administrador' },
-    { href: '/cliente/clientes', label: 'Mis Clientes', role: 'cliente' },
-    { href: '/consultor/clientes', label: 'Gestión de Clientes', role: 'consultor' },
-    { href: '/cliente/carga-masiva', label: 'Carga Masiva', role: 'cliente' },
-    { href: '/cliente/registrar-cliente', label: 'Registrar Cliente', role: 'cliente' },
+  const role = normalizeRole(user?.rol ?? user?.role);
+
+  const menuItems: {
+    href: string;
+    baseLabel: string;
+    roles: string[]; // roles que pueden ver este item
+  }[] = [
+    {
+      href: '/dashboard',
+      baseLabel: 'Dashboard',
+      roles: ['administrador', 'consultor', 'cliente'],
+    },
+    {
+      href: '/admin/usuarios',
+      baseLabel: 'Gestión de Usuarios',
+      roles: ['administrador'],
+    },
+    {
+      href: '/admin/empresas',
+      baseLabel: 'Gestión de Empresas',
+      roles: ['administrador'],
+    },
+    {
+      // Módulo unificado de clientes
+      href: '/clientes',
+      baseLabel: 'Gestión de Clientes',
+      roles: ['administrador', 'consultor', 'cliente'],
+    },
+    {
+      href: '/cliente/carga-masiva',
+      baseLabel: 'Carga Masiva',
+      roles: ['administrador', 'cliente'],
+    },
+    {
+      href: '/registrar-cliente',
+      baseLabel: 'Registrar Cliente',
+      roles: ['administrador', 'cliente'],
+    },
   ];
 
-  const shouldShowItem = (item: any) => {
+  const shouldShowItem = (item: (typeof menuItems)[number]) => {
     if (!user) return false;
-    if (item.role === 'all') return true;
-
-    // Intentar obtener el rol desde distintas propiedades
-    const role = normalizeRole((user as any).rol ?? (user as any).role);
-
-    // Admin ve todo
-    if (role === 'administrador') return true;
-
-    if (item.role === 'consultor' && role === 'consultor') return true;
-    if (item.role === 'cliente' && role === 'cliente') return true;
-
-    // Fallback estricto
     if (!role) return false;
-    return item.role === role;
+    return item.roles.includes(role);
   };
-
-  // Log para depuración: ver cómo llega el usuario
-  if (typeof window !== 'undefined') {
-    console.log('Navbar user:', user);
-  }
 
   // No mostrar navbar en la página de login
   if (pathname === '/login') return null;
+
+  const homeHref = user ? '/dashboard' : '/login';
+
+  const getItemLabel = (item: (typeof menuItems)[number]) => {
+    if (item.href === '/clientes' && role === 'cliente') {
+      return 'Mis Clientes';
+    }
+    return item.baseLabel;
+  };
 
   return (
     <nav className="bg-white shadow-sm border-b">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
-            <Link href="/" className="text-xl font-bold text-blue-600">
+            <Link href={homeHref} className="text-xl font-bold text-blue-600">
               Sistema de Cumplimiento
             </Link>
           </div>
@@ -151,18 +171,20 @@ export default function Navbar() {
           <div className="hidden md:flex items-center space-x-8">
             {menuItems.map((item) => {
               if (shouldShowItem(item)) {
-                const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                const isActive =
+                  pathname === item.href ||
+                  pathname.startsWith(item.href + '/');
                 return (
                   <Link 
                     key={item.href} 
                     href={item.href} 
-                    className={`font-medium transition-colors ${
+                    className={`font-medium transition-colors ${ 
                       isActive 
                         ? 'text-blue-600 border-b-2 border-blue-600' 
                         : 'text-gray-700 hover:text-blue-600'
                     }`}
                   >
-                    {item.label}
+                    {getItemLabel(item)}
                   </Link>
                 );
               }
@@ -216,7 +238,7 @@ export default function Navbar() {
                     className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-blue-600 hover:bg-gray-50 transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
-                    {item.label}
+                    {getItemLabel(item)}
                   </Link>
                 );
               }
