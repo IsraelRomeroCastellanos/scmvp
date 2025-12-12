@@ -2,179 +2,86 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { isAdmin } from '@/lib/auth';
 
 export default function EditarEmpresaPage() {
+  const { id } = useParams();
   const router = useRouter();
-  const params = useParams();
-  const id = params?.id as string;
-
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
 
   const [formData, setFormData] = useState({
     nombre_legal: '',
     rfc: '',
-    direccion: '',
+    tipo_entidad: 'persona_moral',
     estado: 'activo'
   });
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const userStr = localStorage.getItem('user');
-
-    if (!token || !userStr) {
-      router.push('/login');
-      return;
-    }
-
-    const user = JSON.parse(userStr);
-    if (!isAdmin(user.rol || user.role)) {
-      router.push('/dashboard');
-      return;
-    }
-
-    const fetchEmpresa = async () => {
+    const init = async () => {
       try {
-        const response = await api.get(`/api/admin/empresas/${id}`);
-        setFormData(response.data);
-      } catch (err) {
-        console.error(err);
+        const res = await api.get('/api/admin/empresas');
+        const empresa = res.data.empresas.find(
+          (e: any) => String(e.id) === String(id)
+        );
+
+        if (!empresa) {
+          setError('Empresa no encontrada');
+          return;
+        }
+
+        setFormData(empresa);
+      } catch {
         setError('Error al cargar la empresa');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchEmpresa();
-  }, [router, id]);
+    init();
+  }, [id]);
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
+  const handleChange = (e: any) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: any) => {
     e.preventDefault();
-    setSaving(true);
-    setError('');
-
     try {
       await api.put(`/api/admin/empresas/${id}`, formData);
       router.push('/admin/empresas');
-    } catch (err: any) {
-      console.error(err);
-      setError(
-        err?.response?.data?.error || 'Error al guardar cambios'
-      );
-    } finally {
-      setSaving(false);
+    } catch {
+      setError('Error al guardar cambios');
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-600">Cargando empresa...</p>
-      </div>
-    );
-  }
+  if (loading) return <p className="p-4">Cargando...</p>;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <main className="flex-grow container mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold mb-6 text-gray-900">
-          Editar Empresa
-        </h1>
+    <main className="container mx-auto px-4 py-8 max-w-2xl">
+      <h1 className="text-2xl font-bold mb-6">Editar Empresa</h1>
 
-        <div className="bg-white p-6 rounded-lg shadow max-w-2xl">
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-md">
-              {error}
-            </div>
-          )}
+      {error && <div className="mb-4 text-red-600">{error}</div>}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Nombre legal
-              </label>
-              <input
-                type="text"
-                name="nombre_legal"
-                value={formData.nombre_legal}
-                onChange={handleChange}
-                required
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-              />
-            </div>
+      <form onSubmit={handleSubmit} className="space-y-5 bg-white p-6 shadow rounded">
+        <input name="nombre_legal" value={formData.nombre_legal} onChange={handleChange} />
+        <input name="rfc" value={formData.rfc} onChange={handleChange} />
+        <select name="tipo_entidad" value={formData.tipo_entidad} onChange={handleChange}>
+          <option value="persona_moral">Persona moral</option>
+          <option value="persona_fisica">Persona física</option>
+        </select>
+        <select name="estado" value={formData.estado} onChange={handleChange}>
+          <option value="activo">Activo</option>
+          <option value="inactivo">Inactivo</option>
+        </select>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                RFC
-              </label>
-              <input
-                type="text"
-                name="rfc"
-                value={formData.rfc}
-                onChange={handleChange}
-                required
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Dirección
-              </label>
-              <input
-                type="text"
-                name="direccion"
-                value={formData.direccion}
-                onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Estado
-              </label>
-              <select
-                name="estado"
-                value={formData.estado}
-                onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-              >
-                <option value="activo">Activo</option>
-                <option value="suspendido">Suspendido</option>
-              </select>
-            </div>
-
-            <div className="flex justify-end space-x-3">
-              <button
-                type="button"
-                onClick={() => router.push('/admin/empresas')}
-                className="px-4 py-2 border rounded-md"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-              >
-                {saving ? 'Guardando...' : 'Guardar Cambios'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </main>
-    </div>
+        <button className="bg-blue-600 text-white px-4 py-2 rounded">
+          Guardar cambios
+        </button>
+      </form>
+    </main>
   );
 }
