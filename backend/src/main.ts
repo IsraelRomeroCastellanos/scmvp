@@ -11,7 +11,7 @@ const app = express();
 // ===============================
 // CONFIG
 // ===============================
-const PORT = process.env.PORT || 3001;
+const PORT = Number(process.env.PORT) || 3001;
 
 // ===============================
 // MIDDLEWARES
@@ -30,12 +30,12 @@ app.use('/', clienteRoutes);
 // HEALTH CHECK
 // ===============================
 app.get('/', (_req, res) => {
-  res.send('SCMVP backend running');
+  res.status(200).send('SCMVP backend running');
 });
 
 // ===============================
-// START SERVER
+// START SERVER (RENDER FIX)
 // ===============================
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 SCMVP backend listening on port ${PORT}`);
 });
