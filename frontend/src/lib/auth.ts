@@ -1,105 +1,129 @@
 // frontend/src/lib/auth.ts
 
-export type AuthResult = {
-  authenticated: boolean;
-  redirect?: string;
-  user?: any;
-  token?: string;
-};
+// Tipos de rol normalizado en el FRONTEND
+export type NormalizedRole = 'administrador' | 'consultor' | 'cliente';
 
-// Manejo simple de cookies (solo en cliente)
+// Funciones nativas para manejar cookies
 const cookieManager = {
-  get(name: string): string | null {
-    if (typeof document === "undefined") return null;
-    const match = document.cookie.match(
-      new RegExp("(^| )" + name + "=([^;]+)")
-    );
-    return match ? decodeURIComponent(match[2]) : null;
-  },
+  get: (name: string): string | undefined => {
+    if (typeof document === 'undefined') return undefined;
+    const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+    return match ? decodeURIComponent(match[2]) : undefined;
+  }
 };
 
 /**
- * Lee token y user desde cookies y/o localStorage.
- * Usa los mismos nombres que tu login y Navbar:
- *  - 'token'
- *  - 'user'
+ * Normaliza cualquier valor de rol que venga del backend
+ * a uno de los valores esperados en el frontend.
+ *
+ * Backend típicamente envía: "admin", "cliente", "consultor".
+ * Aquí los convertimos a: "administrador", "cliente", "consultor".
  */
-function getStoredAuth(): { user: any | null; token: string | null } {
-  if (typeof window === "undefined") {
-    return { user: null, token: null };
+export const normalizeRole = (rol: any): NormalizedRole | null => {
+  if (!rol) return null;
+  const r = String(rol).trim().toLowerCase();
+
+  if (r === 'admin' || r === 'administrator' || r === 'administrador' || r === 'administrador del sistema') {
+    return 'administrador';
   }
 
-  let token = cookieManager.get("token");
-  let userStr = cookieManager.get("user");
-
-  // Si no están en cookies, intenta en localStorage
-  if (!token) {
-    token = window.localStorage.getItem("token");
-  }
-  if (!userStr) {
-    userStr = window.localStorage.getItem("user");
+  if (r === 'consultor' || r === 'consultant') {
+    return 'consultor';
   }
 
-  let user: any = null;
-  if (userStr) {
-    try {
-      user = JSON.parse(userStr);
-    } catch {
-      user = null;
-    }
+  // valor por defecto seguro si viene "cliente", "client", etc.
+  if (r === 'cliente' || r === 'client' || r === 'usuario' || r === 'user') {
+    return 'cliente';
   }
 
-  return { user, token };
-}
+  return null;
+};
+
+export const isAdmin = (rol: any): boolean => normalizeRole(rol) === 'administrador';
+export const isConsultor = (rol: any): boolean => normalizeRole(rol) === 'consultor';
+export const isCliente = (rol: any): boolean => normalizeRole(rol) === 'cliente';
 
 /**
- * Verifica si el usuario tiene el rol requerido.
- * - Admin ve todo.
- * - Si requiredRole es 'all', cualquier usuario autenticado pasa.
- * - Si no hay rol o no coincide, no pasa.
- */
-function hasRequiredRole(user: any, requiredRole?: string): boolean {
-  if (!requiredRole) return true;
-  if (!user || !user.rol) return false;
-
-  const userRole = user.rol;
-
-  // Admin ve todo
-  if (userRole === "administrador") return true;
-
-  if (requiredRole === "all") return true;
-
-  return userRole === requiredRole;
-}
-
-/**
- * checkAuth: usado por AuthGuard.
+ * Verifica autenticación y opcionalmente rol requerido.
  * Devuelve:
- *  - authenticated: true/false
- *  - redirect: ruta a la que debe ir si NO está autenticado
+ *  - authenticated: boolean
+ *  - user: objeto usuario normalizado (incluye rol normalizado)
+ *  - redirect: ruta sugerida si NO está autorizado
  */
-export function checkAuth(requiredRole?: string): AuthResult {
-  const { user, token } = getStoredAuth();
+export const checkAuth = (requiredRole?: NormalizedRole) => {
+  // En cliente podemos usar cookies y localStorage
+  const token =
+    cookieManager.get('token') ||
+    (typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null);
 
-  // Sin token o sin usuario → no autenticado
-  if (!user || !token) {
-    return {
-      authenticated: false,
-      redirect: "/login",
-    };
+  const userStr =
+    cookieManager.get('user') ||
+    (typeof localStorage !== 'undefined' ? localStorage.getItem('user') : null);
+
+  if (!token || !userStr) {
+    return { authenticated: false, redirect: '/login' as const };
   }
 
-  // Si no cumple el rol requerido → también fuera
-  if (!hasRequiredRole(user, requiredRole)) {
-    return {
-      authenticated: false,
-      redirect: "/login",
-    };
-  }
+  try {
+    const userData = JSON.parse(userStr);
+    const normalized = normalizeRole(userData.rol || userData.role);
 
-  return {
-    authenticated: true,
-    user,
-    token,
-  };
-}
+    if (!normalized) {
+      // Rol desconocido → tratamos como no autenticado
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
+      return { authenticated: false, redirect: '/login' as const };
+    }
+
+    // Si se requiere un rol específico y no coincide
+    if (requiredRole && normalized !== requiredRole) {
+      let defaultRoute: string = '/dashboard';
+
+      if (normalized === 'administrador') defaultRoute = '/admin/usuarios';
+      if (normalized === 'cliente') defaultRoute = '/clientes';
+      if (normalized === 'consultor') defaultRoute = '/dashboard';
+
+      return { authenticated: false, redirect: defaultRoute as const };
+    }
+
+    // Devolvemos user con el rol normalizado
+    return {
+      authenticated: true,
+      user: { ...userData, rol: normalized },
+      redirect: null as null
+    };
+
+  } catch (error) {
+    console.error('Error parsing user data:', error);
+
+    // Limpiar datos corruptos
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+    }
+
+    return { authenticated: false, redirect: '/login' as const };
+  }
+};
+
+/**
+ * Obtiene el usuario actual (sin validar rol).
+ * Útil si solo quieres leer datos básicos.
+ */
+export const getCurrentUser = () => {
+  const userStr =
+    cookieManager.get('user') ||
+    (typeof localStorage !== 'undefined' ? localStorage.getItem('user') : null);
+
+  if (!userStr) return null;
+
+  try {
+    const parsed = JSON.parse(userStr);
+    const normalized = normalizeRole(parsed.rol || parsed.role);
+    return { ...parsed, rol: normalized ?? parsed.rol };
+  } catch {
+    return null;
+  }
+};

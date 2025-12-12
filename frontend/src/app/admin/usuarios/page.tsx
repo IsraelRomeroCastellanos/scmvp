@@ -1,56 +1,59 @@
-"use client";
+// frontend/src/app/admin/usuarios/page.tsx
+'use client';
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { api } from "@/lib/api";
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { api } from '@/lib/api';
+import { normalizeRole, isAdmin } from '@/lib/auth';
 
 interface Usuario {
   id: number;
-  nombre_completo: string;
   email: string;
+  nombre_completo: string;
   rol: string;
-  empresa: string | null;
-  estado: string;
+  empresa_id: number | null;
+  activo?: boolean;
 }
 
 export default function UsuariosPage() {
   const router = useRouter();
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    const userStr = localStorage.getItem("user");
+    const token = localStorage.getItem('token');
+    const userStr = localStorage.getItem('user');
 
     if (!token || !userStr) {
-      router.push("/login");
+      router.push('/login');
       return;
     }
 
     const user = JSON.parse(userStr);
+    const esAdmin = isAdmin(user.rol || user.role);
 
-    if (user.rol !== "administrador") {
-      router.push("/dashboard");
+    if (!esAdmin) {
+      router.push('/dashboard');
       return;
     }
 
     const fetchUsuarios = async () => {
       try {
         setLoading(true);
-        setError("");
+        setError('');
 
-        const response = await api.get("/api/admin/usuarios");
+        const response = await api.get('/api/admin/usuarios');
         const data = response.data;
 
         if (!data || !Array.isArray(data.usuarios)) {
-          throw new Error("Formato inesperado en la respuesta del servidor.");
+          throw new Error('Formato inesperado de respuesta al cargar usuarios');
         }
 
         setUsuarios(data.usuarios);
-      } catch (err: any) {
-        console.error("Error al cargar usuarios:", err);
-        setError("Error al cargar usuarios.");
+      } catch (err) {
+        console.error('Error al cargar usuarios:', err);
+        setError('Error al cargar usuarios.');
       } finally {
         setLoading(false);
       }
@@ -59,14 +62,22 @@ export default function UsuariosPage() {
     fetchUsuarios();
   }, [router]);
 
-  const resetPassword = async (id: number) => {
+  const handleResetPassword = async (id: number) => {
+    if (!window.confirm('¿Seguro que deseas restablecer la contraseña de este usuario?')) {
+      return;
+    }
+
     try {
-      const response = await api.post(`/api/admin/usuarios/${id}/reset-password`);
-      alert("Contraseña restablecida correctamente.");
+      await api.post(`/api/admin/usuarios/${id}/reset-password`);
+      alert('Contraseña restablecida correctamente.');
     } catch (err) {
       console.error(err);
-      alert("Error al restablecer contraseña.");
+      alert('Error al restablecer la contraseña.');
     }
+  };
+
+  const handleEditar = (id: number) => {
+    router.push(`/admin/editar-usuario/${id}`);
   };
 
   return (
@@ -97,10 +108,10 @@ export default function UsuariosPage() {
                       Rol
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">
-                      Empresa
+                      Empresa ID
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">
-                      Estado
+                      Activo
                     </th>
                     <th className="px-4 py-3"></th>
                   </tr>
@@ -109,23 +120,33 @@ export default function UsuariosPage() {
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {usuarios.map((u) => (
                     <tr key={u.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm">{u.nombre_completo}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900">
+                        {u.nombre_completo || '—'}
+                      </td>
                       <td className="px-4 py-3 text-sm text-gray-600">{u.email}</td>
-                      <td className="px-4 py-3 text-sm capitalize">{u.rol}</td>
-                      <td className="px-4 py-3 text-sm">{u.empresa ?? "—"}</td>
-                      <td className="px-4 py-3 text-sm">{u.estado}</td>
-
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {normalizeRole(u.rol) === 'administrador'
+                          ? 'Administrador'
+                          : normalizeRole(u.rol) === 'consultor'
+                          ? 'Consultor'
+                          : 'Cliente'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {u.empresa_id ?? '—'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {u.activo === false ? 'Inactivo' : 'Activo'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right space-x-3">
                         <button
-                          className="text-blue-600 hover:text-blue-800 mr-3"
-                          onClick={() => router.push(`/admin/editar-usuario/${u.id}`)}
+                          onClick={() => handleEditar(u.id)}
+                          className="text-blue-600 hover:text-blue-800"
                         >
                           Editar
                         </button>
-
                         <button
-                          className="text-green-600 hover:text-green-800"
-                          onClick={() => resetPassword(u.id)}
+                          onClick={() => handleResetPassword(u.id)}
+                          className="text-amber-600 hover:text-amber-800"
                         >
                           Reset Pass
                         </button>

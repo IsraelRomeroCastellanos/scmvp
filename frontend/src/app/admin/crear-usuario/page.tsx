@@ -1,9 +1,11 @@
+// frontend/src/app/admin/crear-usuario/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { toast } from 'react-toastify';
+import { isAdmin } from '@/lib/auth';
 
 export default function CrearUsuario() {
   const [formData, setFormData] = useState({
@@ -16,19 +18,22 @@ export default function CrearUsuario() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [mensaje, setMensaje] = useState('');
-  const router = useRouter();
   const [token, setToken] = useState<string>('');
+  const router = useRouter();
 
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
-    
+
     if (storedToken && storedUser) {
-      const user = JSON.parse(storedUser);
-      // Alinear con el rol que usas en login/navbar: "administrador"
-      if (user.rol === 'administrador') {
-        setToken(storedToken);
-      } else {
+      try {
+        const user = JSON.parse(storedUser);
+        if (isAdmin(user.rol || user.role)) {
+          setToken(storedToken);
+        } else {
+          router.push('/dashboard');
+        }
+      } catch {
         router.push('/login');
       }
     } else {
@@ -48,42 +53,25 @@ export default function CrearUsuario() {
     setMensaje('');
 
     try {
-      // Validar campos según rol
-      if (formData.rol === 'cliente' && !formData.empresa_id) {
-        throw new Error('Los clientes deben estar vinculados a una empresa');
-      }
-      
-      if ((formData.rol === 'administrador' || formData.rol === 'consultor') && formData.empresa_id) {
-        throw new Error('Los administradores y consultores no pueden tener empresa asignada');
-      }
+      const payload = {
+        email: formData.email,
+        password: formData.password,
+        nombre_completo: formData.nombre_completo,
+        rol: formData.rol,
+        empresa_id: formData.rol === 'cliente' ? Number(formData.empresa_id) || null : null
+      };
 
-      // El token ya se adjunta vía interceptor en lib/api.ts
-      const response = await api.post('/api/admin/usuarios', formData);
-      const data = response.data as any;
+      const response = await api.post('/api/admin/usuarios', payload);
 
-      if (data?.success) {
-        setMensaje('✅ Usuario creado exitosamente');
-        toast.success('Usuario creado exitosamente');
-        
-        // Limpiar formulario
-        setFormData({
-          email: '',
-          password: '',
-          nombre_completo: '',
-          rol: 'consultor',
-          empresa_id: ''
-        });
-        
-        // Redirigir a la lista de usuarios después de 2 segundos
-        setTimeout(() => router.push('/admin/usuarios'), 2000);
-      } else {
-        throw new Error(data?.message || 'Falló la creación del usuario');
-      }
+      setMensaje('✅ Usuario creado exitosamente');
+      toast.success('Usuario creado exitosamente');
+
+      // Podrías redirigir de inmediato:
+      // router.push('/admin/usuarios');
     } catch (err: any) {
-      console.error('Error al crear usuario:', err);
-      const errorMessage = err.message || 'Error al crear usuario. Por favor intenta nuevamente.';
-      setError(errorMessage);
-      toast.error(errorMessage);
+      console.error(err);
+      setError(err?.response?.data?.error || 'Error al crear usuario');
+      toast.error('Error al crear usuario');
     } finally {
       setLoading(false);
     }
@@ -92,149 +80,123 @@ export default function CrearUsuario() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <main className="flex-grow container mx-auto px-4 py-8">
-        <div className="max-w-2xl mx-auto">
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-gray-900">Crear Nuevo Usuario</h1>
-            <p className="mt-1 text-sm text-gray-500">
-              Completa el formulario para crear un nuevo usuario en el sistema
-            </p>
-          </div>
+        <h1 className="text-2xl font-bold mb-6 text-gray-900">Crear Usuario</h1>
 
-          <div className="bg-white shadow rounded-lg p-6">
-            {error && (
-              <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-md">
-                {error}
-              </div>
-            )}
-            
-            {mensaje && (
-              <div className="mb-4 p-3 bg-green-50 text-green-700 rounded-md">
-                {mensaje}
-              </div>
-            )}
+        <div className="bg-white p-6 rounded-lg shadow">
+          {error && (
+            <div className="mb-4 p-3 rounded bg-red-50 text-red-700 text-sm">
+              {error}
+            </div>
+          )}
+          {mensaje && (
+            <div className="mb-4 p-3 rounded bg-green-50 text-green-700 text-sm">
+              {mensaje}
+            </div>
+          )}
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                  Email
+                </label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  value={formData.email}
+                  onChange={handleChange}
+                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                  Contraseña
+                </label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  required
+                  minLength={8}
+                  value={formData.password}
+                  onChange={handleChange}
+                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="nombre_completo" className="block text-sm font-medium text-gray-700">
+                  Nombre completo
+                </label>
+                <input
+                  id="nombre_completo"
+                  name="nombre_completo"
+                  type="text"
+                  required
+                  value={formData.nombre_completo}
+                  onChange={handleChange}
+                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="rol" className="block text-sm font-medium text-gray-700">
+                  Rol
+                </label>
+                <select
+                  id="rol"
+                  name="rol"
+                  value={formData.rol}
+                  onChange={handleChange}
+                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="consultor">Consultor</option>
+                  <option value="cliente">Cliente</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </div>
+
+              {formData.rol === 'cliente' && (
                 <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                    Email
+                  <label htmlFor="empresa_id" className="block text-sm font-medium text-gray-700">
+                    Empresa ID
                   </label>
                   <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    required
-                    value={formData.email}
+                    id="empresa_id"
+                    name="empresa_id"
+                    type="number"
+                    value={formData.empresa_id}
                     onChange={handleChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                    Contraseña
-                  </label>
-                  <input
-                    id="password"
-                    name="password"
-                    type="password"
-                    required
-                    minLength={8}
-                    value={formData.password}
-                    onChange={handleChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    min={1}
                   />
                   <p className="mt-1 text-xs text-gray-500">
-                    Mínimo 8 caracteres
+                    ID de la empresa a la que pertenece el cliente
                   </p>
                 </div>
+              )}
+            </div>
 
-                <div>
-                  <label htmlFor="nombre_completo" className="block text-sm font-medium text-gray-700">
-                    Nombre Completo
-                  </label>
-                  <input
-                    id="nombre_completo"
-                    name="nombre_completo"
-                    type="text"
-                    required
-                    value={formData.nombre_completo}
-                    onChange={handleChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="rol" className="block text-sm font-medium text-gray-700">
-                    Rol
-                  </label>
-                  <select
-                    id="rol"
-                    name="rol"
-                    value={formData.rol}
-                    onChange={handleChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  >
-                    <option value="administrador">Administrador</option>
-                    <option value="consultor">Consultor</option>
-                    <option value="cliente">Cliente</option>
-                  </select>
-                  <p className="mt-1 text-xs text-gray-500">
-                    {formData.rol === 'cliente' 
-                      ? 'Los clientes deben estar vinculados a una empresa' 
-                      : 'Administradores y consultores no tienen empresa asignada'}
-                  </p>
-                </div>
-
-                {formData.rol === 'cliente' && (
-                  <div>
-                    <label htmlFor="empresa_id" className="block text-sm font-medium text-gray-700">
-                      ID de la Empresa
-                    </label>
-                    <input
-                      id="empresa_id"
-                      name="empresa_id"
-                      type="number"
-                      required
-                      value={formData.empresa_id}
-                      onChange={handleChange}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      min="1"
-                    />
-                    <p className="mt-1 text-xs text-gray-500">
-                      ID de la empresa a la que pertenece el cliente
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-end space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => router.push('/admin/usuarios')}
-                  className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                >
-                  {loading ? (
-                    <span className="flex items-center">
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Creando usuario...
-                    </span>
-                  ) : 'Crear Usuario'}
-                </button>
-              </div>
-            </form>
-          </div>
+            <div className="flex justify-end space-x-3 pt-4">
+              <button
+                type="button"
+                onClick={() => router.push('/admin/usuarios')}
+                className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="px-4 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {loading ? 'Guardando...' : 'Crear usuario'}
+              </button>
+            </div>
+          </form>
         </div>
       </main>
     </div>
