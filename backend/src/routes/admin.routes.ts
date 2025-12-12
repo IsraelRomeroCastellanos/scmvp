@@ -137,6 +137,56 @@ const adminRoutes = (pool: Pool) => {
     }
   });
 
+// ✅ Crear empresa
+router.post('/api/admin/empresas', async (req: Request, res: Response) => {
+  try {
+    const { nombre_legal, rfc, tipo_entidad } = req.body;
+
+    if (!nombre_legal || !tipo_entidad) {
+      return res.status(400).json({
+        error: 'nombre_legal y tipo_entidad son obligatorios'
+      });
+    }
+
+    const tiposPermitidos = ['persona_fisica', 'persona_moral'];
+    if (!tiposPermitidos.includes(tipo_entidad)) {
+      return res.status(400).json({
+        error: 'tipo_entidad inválido'
+      });
+    }
+
+    const result = await pool.query(
+      `
+      INSERT INTO empresas (nombre_legal, rfc, tipo_entidad, estado)
+      VALUES ($1, $2, $3, 'activo')
+      RETURNING *
+      `,
+      [
+        nombre_legal,
+        rfc && rfc.trim() !== '' ? rfc : null,
+        tipo_entidad
+      ]
+    );
+
+    return res.status(201).json({
+      empresa: result.rows[0]
+    });
+
+  } catch (error: any) {
+    console.error('Error al crear empresa:', error);
+
+    if (error.code === '23505') {
+      return res.status(409).json({
+        error: 'Ya existe una empresa con ese RFC'
+      });
+    }
+
+    return res.status(500).json({
+      error: 'Error interno al crear la empresa'
+    });
+  }
+});
+
   // ✅ Editar empresa
   router.put('/api/admin/empresas/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
