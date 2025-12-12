@@ -9,6 +9,11 @@ import clienteRoutes from './routes/cliente.routes';
 const app = express();
 
 // ===============================
+// CONFIG
+// ===============================
+const PORT = process.env.PORT || 3001;
+
+// ===============================
 // MIDDLEWARES
 // ===============================
 app.use(cors());
@@ -17,8 +22,6 @@ app.use(express.json());
 // ===============================
 // RUTAS
 // ===============================
-// IMPORTANTE: usamos '/' porque las rutas
-// YA incluyen /api/...
 app.use('/', authRoutes);
 app.use('/', adminRoutes);
 app.use('/', clienteRoutes);
@@ -30,4 +33,9 @@ app.get('/', (_req, res) => {
   res.send('SCMVP backend running');
 });
 
-export default app;
+// ===============================
+// START SERVER
+// ===============================
+app.listen(PORT, () => {
+  console.log(`🚀 SCMVP backend listening on port ${PORT}`);
+});
