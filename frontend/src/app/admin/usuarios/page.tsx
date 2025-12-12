@@ -31,9 +31,7 @@ export default function UsuariosPage() {
     }
 
     const user = JSON.parse(userStr);
-    const esAdmin = isAdmin(user.rol || user.role);
-
-    if (!esAdmin) {
+    if (!isAdmin(user.rol || user.role)) {
       router.push('/dashboard');
       return;
     }
@@ -46,11 +44,20 @@ export default function UsuariosPage() {
         const response = await api.get('/api/admin/usuarios');
         const data = response.data;
 
-        if (!data || !Array.isArray(data.usuarios)) {
-          throw new Error('Formato inesperado de respuesta al cargar usuarios');
+        // ✅ aceptar múltiples formatos del backend
+        let lista: Usuario[] = [];
+
+        if (Array.isArray(data)) {
+          lista = data;
+        } else if (Array.isArray(data.usuarios)) {
+          lista = data.usuarios;
+        } else if (Array.isArray(data.data)) {
+          lista = data.data;
+        } else {
+          throw new Error('Formato inesperado de respuesta');
         }
 
-        setUsuarios(data.usuarios);
+        setUsuarios(lista);
       } catch (err) {
         console.error('Error al cargar usuarios:', err);
         setError('Error al cargar usuarios.');
@@ -61,24 +68,6 @@ export default function UsuariosPage() {
 
     fetchUsuarios();
   }, [router]);
-
-  const handleResetPassword = async (id: number) => {
-    if (!window.confirm('¿Seguro que deseas restablecer la contraseña de este usuario?')) {
-      return;
-    }
-
-    try {
-      await api.post(`/api/admin/usuarios/${id}/reset-password`);
-      alert('Contraseña restablecida correctamente.');
-    } catch (err) {
-      console.error(err);
-      alert('Error al restablecer la contraseña.');
-    }
-  };
-
-  const handleEditar = (id: number) => {
-    router.push(`/admin/editar-usuario/${id}`);
-  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -99,7 +88,7 @@ export default function UsuariosPage() {
                 <thead className="bg-gray-100">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">
-                      Nombre Completo
+                      Nombre
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">
                       Email
@@ -108,53 +97,27 @@ export default function UsuariosPage() {
                       Rol
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">
-                      Empresa ID
+                      Empresa
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">
-                      Activo
-                    </th>
-                    <th className="px-4 py-3"></th>
                   </tr>
                 </thead>
 
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {usuarios.map((u) => (
                     <tr key={u.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm text-gray-900">
-                        {u.nombre_completo || '—'}
-                      </td>
+                      <td className="px-4 py-3 text-sm">{u.nombre_completo}</td>
                       <td className="px-4 py-3 text-sm text-gray-600">{u.email}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
+                      <td className="px-4 py-3 text-sm">
                         {normalizeRole(u.rol) === 'administrador'
                           ? 'Administrador'
                           : normalizeRole(u.rol) === 'consultor'
                           ? 'Consultor'
                           : 'Cliente'}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {u.empresa_id ?? '—'}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {u.activo === false ? 'Inactivo' : 'Activo'}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-right space-x-3">
-                        <button
-                          onClick={() => handleEditar(u.id)}
-                          className="text-blue-600 hover:text-blue-800"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => handleResetPassword(u.id)}
-                          className="text-amber-600 hover:text-amber-800"
-                        >
-                          Reset Pass
-                        </button>
-                      </td>
+                      <td className="px-4 py-3 text-sm">{u.empresa_id ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>
-
               </table>
             </div>
           )}
