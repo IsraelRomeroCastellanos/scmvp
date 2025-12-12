@@ -13,8 +13,7 @@ export default function CrearEmpresaPage() {
   const [formData, setFormData] = useState({
     nombre_legal: '',
     rfc: '',
-    direccion: '',
-    estado: 'activo'
+    tipo_entidad: 'persona_moral'
   });
 
   useEffect(() => {
@@ -45,12 +44,18 @@ export default function CrearEmpresaPage() {
     setError('');
 
     try {
-      await api.post('/api/admin/empresas', formData);
+      await api.post('/api/admin/empresas', {
+        nombre_legal: formData.nombre_legal,
+        rfc: formData.rfc || null,
+        tipo_entidad: formData.tipo_entidad
+      });
+
       router.push('/admin/empresas');
     } catch (err: any) {
       console.error(err);
       setError(
-        err?.response?.data?.error || 'Error al crear la empresa'
+        err?.response?.data?.error ||
+        'Error al crear la empresa'
       );
     } finally {
       setLoading(false);
@@ -72,6 +77,7 @@ export default function CrearEmpresaPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Nombre legal */}
             <div>
               <label className="block text-sm font-medium text-gray-700">
                 Nombre legal
@@ -86,45 +92,33 @@ export default function CrearEmpresaPage() {
               />
             </div>
 
+            {/* RFC */}
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                RFC
+                RFC (opcional)
               </label>
               <input
                 type="text"
                 name="rfc"
-                required
                 value={formData.rfc}
                 onChange={handleChange}
                 className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
               />
             </div>
 
+            {/* Tipo de entidad */}
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                Dirección
-              </label>
-              <input
-                type="text"
-                name="direccion"
-                value={formData.direccion}
-                onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Estado
+                Tipo de entidad
               </label>
               <select
-                name="estado"
-                value={formData.estado}
+                name="tipo_entidad"
+                value={formData.tipo_entidad}
                 onChange={handleChange}
                 className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
               >
-                <option value="activo">Activo</option>
-                <option value="suspendido">Suspendido</option>
+                <option value="persona_moral">Persona moral</option>
+                <option value="persona_fisica">Persona física</option>
               </select>
             </div>
 
