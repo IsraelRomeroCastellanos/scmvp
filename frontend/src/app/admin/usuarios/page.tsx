@@ -1,190 +1,142 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import axios from 'axios';
-import { toast } from 'react-toastify';
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { api } from "@/lib/api";
 
-export default function GestionUsuarios() {
-  const [usuarios, setUsuarios] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>('');
+interface Usuario {
+  id: number;
+  nombre_completo: string;
+  email: string;
+  rol: string;
+  empresa: string | null;
+  estado: string;
+}
+
+export default function UsuariosPage() {
   const router = useRouter();
-  const [token, setToken] = useState<string>('');
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const fetchUsuarios = useCallback(async (authToken: string) => {
-    try {
-      setLoading(true);
-      
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://plataforma-cumplimiento-mvp.onrender.com';
-      
-      const response = await axios.get(`${backendUrl}/api/admin/usuarios`, {
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-        },
-      });
-      
-      if (response.data && Array.isArray(response.data.usuarios)) {
-        setUsuarios(response.data.usuarios);
-      } else {
-        setError('Formato de respuesta inesperado');
-      }
-    } catch (err: any) {
-      console.error('Error al cargar usuarios:', err);
-      setError(err.response?.data?.error || 'Error al cargar usuarios');
-      if (err.response?.status === 401 || err.response?.status === 403) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        router.push('/login');
-      }
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const userStr = localStorage.getItem("user");
+
+    if (!token || !userStr) {
+      router.push("/login");
+      return;
     }
+
+    const user = JSON.parse(userStr);
+
+    if (user.rol !== "administrador") {
+      router.push("/dashboard");
+      return;
+    }
+
+    const fetchUsuarios = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const response = await api.get("/api/admin/usuarios");
+        const data = response.data;
+
+        if (!data || !Array.isArray(data.usuarios)) {
+          throw new Error("Formato inesperado en la respuesta del servidor.");
+        }
+
+        setUsuarios(data.usuarios);
+      } catch (err: any) {
+        console.error("Error al cargar usuarios:", err);
+        setError("Error al cargar usuarios.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUsuarios();
   }, [router]);
 
-  const handleDesactivar = async (id: number) => {
-    if (!window.confirm('¿Estás seguro de que deseas desactivar este usuario?')) return;
-    
+  const resetPassword = async (id: number) => {
     try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://plataforma-cumplimiento-mvp.onrender.com';
-      
-      await axios.put(`${backendUrl}/api/admin/usuarios/${id}/desactivar`, {}, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      
-      toast.success('Usuario desactivado correctamente');
-      fetchUsuarios(token);
-    } catch (err: any) {
-      console.error('Error al desactivar usuario:', err);
-      setError(err.response?.data?.error || 'Error al desactivar usuario');
-      toast.error(err.response?.data?.error || 'Error al desactivar usuario');
+      const response = await api.post(`/api/admin/usuarios/${id}/reset-password`);
+      alert("Contraseña restablecida correctamente.");
+    } catch (err) {
+      console.error(err);
+      alert("Error al restablecer contraseña.");
     }
   };
 
-  useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
-    
-    if (storedToken && storedUser) {
-      const user = JSON.parse(storedUser);
-      if (user.rol === 'admin') {
-        setToken(storedToken);
-        fetchUsuarios(storedToken);
-      } else {
-        router.push('/login');
-      }
-    } else {
-      router.push('/login');
-    }
-  }, [router, fetchUsuarios]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="flex justify-center items-center h-64">
-          <div className="text-lg text-gray-600">Cargando usuarios...</div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold text-gray-900">Gestión de Usuarios</h1>
-            <button
-              onClick={() => router.push('/admin/crear-usuario')}
-              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-            >
-              Crear Usuario
-            </button>
-          </div>
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      <main className="flex-grow container mx-auto px-4 py-8">
+        <h1 className="text-2xl font-bold mb-6 text-gray-900">Gestión de Usuarios</h1>
 
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-md">
-              {error}
-            </div>
+        <div className="bg-white p-6 rounded-lg shadow">
+          {loading && <p className="text-gray-600">Cargando usuarios...</p>}
+          {error && <p className="text-red-600 mb-4">{error}</p>}
+
+          {!loading && !error && usuarios.length === 0 && (
+            <p className="text-gray-600">No hay usuarios registrados.</p>
           )}
 
-          <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-            <table className="min-w-full divide-y divide-gray-300">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">ID</th>
-                  <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Nombre</th>
-                  <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Email</th>
-                  <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Rol</th>
-                  <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Empresa</th>
-                  <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Estado</th>
-                  <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 bg-white">
-                {usuarios.map((usuario) => (
-                  <tr key={usuario.id} className="hover:bg-gray-50">
-                    <td className="py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">
-                      {usuario.id}
-                    </td>
-                    <td className="px-3 py-4 text-sm text-gray-500">{usuario.nombre_completo}</td>
-                    <td className="px-3 py-4 text-sm text-gray-500">{usuario.email}</td>
-                    <td className="px-3 py-4 text-sm text-gray-500">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        usuario.rol === 'admin' ? 'bg-green-100 text-green-800' :
-                        usuario.rol === 'consultor' ? 'bg-blue-100 text-blue-800' :
-                        'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {usuario.rol}
-                      </span>
-                    </td>
-                    <td className="px-3 py-4 text-sm text-gray-500">
-                      {usuario.empresa_id ? `Empresa ${usuario.empresa_id}` : 'N/A'}
-                    </td>
-                    <td className="px-3 py-4 text-sm text-gray-500">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        usuario.activo ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                      }`}>
-                        {usuario.activo ? 'Activo' : 'Inactivo'}
-                      </span>
-                    </td>
-                    <td className="px-3 py-4 text-sm text-gray-500">
-                      <div className="flex space-x-2">
+          {!loading && !error && usuarios.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">
+                      Nombre Completo
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">
+                      Email
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">
+                      Rol
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">
+                      Empresa
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">
+                      Estado
+                    </th>
+                    <th className="px-4 py-3"></th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-gray-200 bg-white">
+                  {usuarios.map((u) => (
+                    <tr key={u.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm">{u.nombre_completo}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{u.email}</td>
+                      <td className="px-4 py-3 text-sm capitalize">{u.rol}</td>
+                      <td className="px-4 py-3 text-sm">{u.empresa ?? "—"}</td>
+                      <td className="px-4 py-3 text-sm">{u.estado}</td>
+
+                      <td className="px-4 py-3 text-right">
                         <button
-                          onClick={() => router.push(`/admin/usuarios/${usuario.id}`)}
-                          className="text-indigo-600 hover:text-indigo-900"
-                        >
-                          Ver
-                        </button>
-                        <button
-                          onClick={() => router.push(`/admin/editar-usuario/${usuario.id}`)}
-                          className="text-blue-600 hover:text-blue-900"
+                          className="text-blue-600 hover:text-blue-800 mr-3"
+                          onClick={() => router.push(`/admin/editar-usuario/${u.id}`)}
                         >
                           Editar
                         </button>
-                        {usuario.activo && usuario.email !== 'admin@cumplimiento.com' && (
-                          <button
-                            onClick={() => handleDesactivar(usuario.id)}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            Desactivar
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
 
-            {usuarios.length === 0 && !error && (
-              <div className="text-center py-8 text-gray-500">
-                No se encontraron usuarios
-              </div>
-            )}
-          </div>
+                        <button
+                          className="text-green-600 hover:text-green-800"
+                          onClick={() => resetPassword(u.id)}
+                        >
+                          Reset Pass
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+
+              </table>
+            </div>
+          )}
         </div>
       </main>
     </div>
