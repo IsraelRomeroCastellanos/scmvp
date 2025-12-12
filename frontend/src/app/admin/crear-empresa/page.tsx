@@ -1,18 +1,13 @@
-// frontend/src/app/admin/editar-empresa/[id]/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { isAdmin } from '@/lib/auth';
 
-export default function EditarEmpresaPage() {
+export default function CrearEmpresaPage() {
   const router = useRouter();
-  const params = useParams();
-  const id = params?.id as string;
-
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const [formData, setFormData] = useState({
@@ -34,23 +29,8 @@ export default function EditarEmpresaPage() {
     const user = JSON.parse(userStr);
     if (!isAdmin(user.rol || user.role)) {
       router.push('/dashboard');
-      return;
     }
-
-    const fetchEmpresa = async () => {
-      try {
-        const response = await api.get(`/api/admin/empresas/${id}`);
-        setFormData(response.data);
-      } catch (err) {
-        console.error(err);
-        setError('Error al cargar la empresa');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchEmpresa();
-  }, [router, id]);
+  }, [router]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -61,35 +41,27 @@ export default function EditarEmpresaPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
+    setLoading(true);
     setError('');
 
     try {
-      await api.put(`/api/admin/empresas/${id}`, formData);
+      await api.post('/api/admin/empresas', formData);
       router.push('/admin/empresas');
     } catch (err: any) {
       console.error(err);
       setError(
-        err?.response?.data?.error || 'Error al guardar cambios'
+        err?.response?.data?.error || 'Error al crear la empresa'
       );
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-600">Cargando empresa...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <main className="flex-grow container mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold mb-6 text-gray-900">
-          Editar Empresa
+          Crear Empresa
         </h1>
 
         <div className="bg-white p-6 rounded-lg shadow max-w-2xl">
@@ -107,9 +79,9 @@ export default function EditarEmpresaPage() {
               <input
                 type="text"
                 name="nombre_legal"
+                required
                 value={formData.nombre_legal}
                 onChange={handleChange}
-                required
                 className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
               />
             </div>
@@ -121,9 +93,9 @@ export default function EditarEmpresaPage() {
               <input
                 type="text"
                 name="rfc"
+                required
                 value={formData.rfc}
                 onChange={handleChange}
-                required
                 className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
               />
             </div>
@@ -166,10 +138,10 @@ export default function EditarEmpresaPage() {
               </button>
               <button
                 type="submit"
-                disabled={saving}
+                disabled={loading}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
               >
-                {saving ? 'Guardando...' : 'Guardar Cambios'}
+                {loading ? 'Guardando...' : 'Crear Empresa'}
               </button>
             </div>
           </form>
