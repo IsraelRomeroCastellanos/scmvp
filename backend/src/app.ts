@@ -8,23 +8,23 @@ import clienteRoutes from './routes/cliente.routes';
 const app = express();
 
 // ===============================
-// MIDDLEWARES
+// MIDDLEWARES BÁSICOS
 // ===============================
 app.use(cors());
 app.use(express.json());
 
 // ===============================
-// RUTAS
+// HEALTH CHECK (ANTES DE RUTAS)
+// ===============================
+app.get('/', (_req, res) => {
+  res.status(200).send('OK');
+});
+
+// ===============================
+// RUTAS DE LA APLICACIÓN
 // ===============================
 app.use('/', authRoutes);
 app.use('/', adminRoutes);
 app.use('/', clienteRoutes);
-
-// ===============================
-// HEALTH CHECK
-// ===============================
-app.get('/', (_req, res) => {
-  res.status(200).send('SCMVP backend running');
-});
 
 export default app;
