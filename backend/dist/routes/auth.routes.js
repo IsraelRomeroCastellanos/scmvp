@@ -5,45 +5,89 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 // backend/src/routes/auth.routes.ts
 const express_1 = require("express");
-const bcrypt_1 = __importDefault(require("bcrypt"));
+const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const db_1 = __importDefault(require("../db"));
 const router = (0, express_1.Router)();
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev';
-const authRoutes = (pool) => {
-    router.post('/api/login', async (req, res) => {
+/**
+ * LOGIN
+ * POST /api/auth/login
+ */
+router.post('/api/auth/login', async (req, res) => {
+    try {
         const { email, password } = req.body;
+        // Validación básica
         if (!email || !password) {
-            return res.status(400).json({ message: 'Email y contraseña son requeridos' });
-        }
-        try {
-            // CONSULTA MODIFICADA: incluir nombre_completo
-            const result = await pool.query('SELECT id, email, nombre_completo, password_hash, rol, empresa_id FROM usuarios WHERE email = $1', [email]);
-            if (result.rows.length === 0) {
-                return res.status(401).json({ message: 'Credenciales inválidas' });
-            }
-            const user = result.rows[0];
-            const isValid = await bcrypt_1.default.compare(password, user.password_hash);
-            if (!isValid) {
-                return res.status(401).json({ message: 'Credenciales inválidas' });
-            }
-            const token = jsonwebtoken_1.default.sign({ id: user.id, email: user.email, rol: user.rol, empresa_id: user.empresa_id }, JWT_SECRET, { expiresIn: '24h' });
-            // RESPUESTA MODIFICADA: estructura que el frontend espera
-            res.json({
-                token,
-                user: {
-                    id: user.id,
-                    email: user.email,
-                    nombre_completo: user.nombre_completo || user.email,
-                    rol: user.rol,
-                    empresa_id: user.empresa_id
-                }
+            return res.status(400).json({
+                success: false,
+                error: 'Email y contraseña son obligatorios'
             });
         }
-        catch (err) {
-            console.error('Error en login:', err);
-            res.status(500).json({ message: 'Error interno del servidor' });
+        const result = await db_1.default.query(`
+      SELECT
+        id,
+        email,
+        password,
+        rol,
+        empresa_id,
+        nombre_completo
+      FROM usuarios
+      WHERE email = $1
+      `, [email]);
+        if (result.rowCount === 0) {
+            return res.status(401).json({
+                success: false,
+                error: 'Credenciales inválidas'
+            });
         }
+        const user = result.rows[0];
+        const validPassword = await bcryptjs_1.default.compare(password, user.password);
+        if (!validPassword) {
+            return res.status(401).json({
+                success: false,
+                error: 'Credenciales inválidas'
+            });
+        }
+        if (!process.env.JWT_SECRET) {
+            console.error('JWT_SECRET no definido');
+            return res.status(500).json({
+                success: false,
+                error: 'Error de configuración del servidor'
+            });
+        }
+        const token = jsonwebtoken_1.default.sign({
+            id: user.id,
+            rol: user.rol,
+            empresa_id: user.empresa_id
+        }, process.env.JWT_SECRET, { expiresIn: '8h' });
+        return res.status(200).json({
+            success: true,
+            token,
+            user: {
+                id: user.id,
+                email: user.email,
+                rol: user.rol,
+                empresa_id: user.empresa_id,
+                nombre_completo: user.nombre_completo
+            }
+        });
+    }
+    catch (error) {
+        console.error('Error en login:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Error interno del servidor'
+        });
+    }
+});
+/**
+ * LOGOUT (opcional, frontend puede manejarlo localmente)
+ * POST /api/auth/logout
+ */
+router.post('/api/auth/logout', (_req, res) => {
+    return res.status(200).json({
+        success: true,
+        message: 'Logout exitoso'
     });
-    return router;
-};
-exports.default = authRoutes;
+});
+exports.default = router;

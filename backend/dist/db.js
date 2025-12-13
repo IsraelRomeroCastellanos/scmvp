@@ -1,23 +1,27 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.pool = void 0;
 // backend/src/db.ts
 const pg_1 = require("pg");
-const dotenv_1 = __importDefault(require("dotenv"));
-dotenv_1.default.config();
-exports.pool = new pg_1.Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+// Render suele proveer DATABASE_URL. Si no existe, fallamos rápido con mensaje claro.
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+    console.error('❌ DATABASE_URL no está definido en variables de entorno');
+    // No hacemos process.exit aquí para no romper / (health check),
+    // pero las rutas a BD fallarán rápido cuando intenten usar el pool.
+}
+// En Render (y muchos hosts) Postgres requiere SSL desde apps externas.
+// Usamos SSL en producción por defecto.
+const useSSL = (process.env.NODE_ENV === 'production') || Boolean(process.env.RENDER);
+const pool = new pg_1.Pool({
+    connectionString,
+    ssl: useSSL ? { rejectUnauthorized: false } : undefined,
+    // Evita “cuelgues” interminables al conectar
+    connectionTimeoutMillis: 8000,
+    idleTimeoutMillis: 30000,
+    max: 10,
 });
-// Verificar conexión
-exports.pool.on('connect', () => {
-    console.log('✅ Conexión a base de datos establecida');
+// Log simple para diagnosticar (se ve en Render logs)
+pool.on('error', (err) => {
+    console.error('❌ Error inesperado en pool de Postgres:', err);
 });
-exports.pool.on('error', (err) => {
-    console.error('❌ Error en conexión de base de datos:', err);
-    process.exit(-1);
-});
-exports.default = exports.pool;
+exports.default = pool;
