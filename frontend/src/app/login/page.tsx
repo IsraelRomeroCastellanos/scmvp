@@ -17,9 +17,11 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
 
+console.log('API BASE URL:', process.env.NEXT_PUBLIC_API_BASE_URL);
+
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`,
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/login`,
         {
           method: 'POST',
           headers: {
