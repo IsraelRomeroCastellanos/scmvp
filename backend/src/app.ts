@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import cors from 'cors';
 
 import authRoutes from './routes/auth.routes';
@@ -11,24 +11,24 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// HEALTH CHECK (antes de rutas)
-app.get('/', (_req, res) => {
+// Health check
+app.get('/', (_req: Request, res: Response) => {
   res.status(200).send('OK');
 });
 
-// Ping simple sin BD
-app.get('/api/ping', (_req, res) => {
+// Ping simple
+app.get('/api/ping', (_req: Request, res: Response) => {
   res.status(200).json({ ok: true });
 });
 
-// Ping BD (diagnóstico)
-app.get('/api/ping-db', async (_req, res) => {
+// Ping DB
+app.get('/api/ping-db', async (_req: Request, res: Response) => {
   try {
     const r = await pool.query('SELECT 1 as ok');
     res.status(200).json({ ok: true, db: r.rows[0] });
   } catch (e: any) {
-    console.error('❌ ping-db failed:', e?.message || e);
-    res.status(500).json({ ok: false, error: e?.message || 'db error' });
+    console.error('ping-db error:', e);
+    res.status(500).json({ ok: false, error: 'db error' });
   }
 });
 
