@@ -10,9 +10,14 @@ export default function CrearEmpresaPage() {
   const [rfc, setRfc] = useState('');
   const [tipoEntidad, setTipoEntidad] = useState('persona_moral');
   const [pais, setPais] = useState('México');
+
+  const [calle, setCalle] = useState('');
+  const [numero, setNumero] = useState('');
+  const [interior, setInterior] = useState('');
   const [entidad, setEntidad] = useState('');
   const [municipio, setMunicipio] = useState('');
   const [codigoPostal, setCodigoPostal] = useState('');
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,13 +25,21 @@ export default function CrearEmpresaPage() {
     e.preventDefault();
     setError(null);
 
-    if (!nombreLegal || !entidad || !municipio || !codigoPostal) {
+    if (
+      !nombreLegal ||
+      !calle ||
+      !numero ||
+      !entidad ||
+      !municipio ||
+      !codigoPostal
+    ) {
       setError('Por favor completa todos los campos obligatorios.');
       return;
     }
 
-    // Domicilio temporal consolidado
-    const domicilio = `Entidad: ${entidad}, Municipio: ${municipio}, CP: ${codigoPostal}`;
+    const domicilio = `Calle ${calle} #${numero}${
+      interior ? ` Int ${interior}` : ''
+    }, ${municipio}, ${entidad}, CP ${codigoPostal}`;
 
     try {
       setLoading(true);
@@ -54,7 +67,6 @@ export default function CrearEmpresaPage() {
         throw new Error(text || 'Error al crear la empresa');
       }
 
-      // Éxito → regresar al listado
       router.push('/admin/empresas');
     } catch (err: any) {
       console.error(err);
@@ -78,18 +90,15 @@ export default function CrearEmpresaPage() {
         <div>
           <label className="block font-medium mb-1">Nombre legal *</label>
           <input
-            type="text"
             value={nombreLegal}
             onChange={(e) => setNombreLegal(e.target.value)}
             className="w-full border px-3 py-2 rounded"
-            required
           />
         </div>
 
         <div>
           <label className="block font-medium mb-1">RFC</label>
           <input
-            type="text"
             value={rfc}
             onChange={(e) => setRfc(e.target.value)}
             className="w-full border px-3 py-2 rounded"
@@ -109,46 +118,56 @@ export default function CrearEmpresaPage() {
         </div>
 
         <div>
-          <label className="block font-medium mb-1">País *</label>
+          <label className="block font-medium mb-1">Calle *</label>
           <input
-            type="text"
-            value={pais}
-            onChange={(e) => setPais(e.target.value)}
+            value={calle}
+            onChange={(e) => setCalle(e.target.value)}
             className="w-full border px-3 py-2 rounded"
-            required
+          />
+        </div>
+
+        <div>
+          <label className="block font-medium mb-1">Número *</label>
+          <input
+            value={numero}
+            onChange={(e) => setNumero(e.target.value)}
+            className="w-full border px-3 py-2 rounded"
+          />
+        </div>
+
+        <div>
+          <label className="block font-medium mb-1">Interior</label>
+          <input
+            value={interior}
+            onChange={(e) => setInterior(e.target.value)}
+            className="w-full border px-3 py-2 rounded"
           />
         </div>
 
         <div>
           <label className="block font-medium mb-1">Entidad *</label>
           <input
-            type="text"
             value={entidad}
             onChange={(e) => setEntidad(e.target.value)}
             className="w-full border px-3 py-2 rounded"
-            required
           />
         </div>
 
         <div>
           <label className="block font-medium mb-1">Municipio *</label>
           <input
-            type="text"
             value={municipio}
             onChange={(e) => setMunicipio(e.target.value)}
             className="w-full border px-3 py-2 rounded"
-            required
           />
         </div>
 
         <div>
           <label className="block font-medium mb-1">Código Postal *</label>
           <input
-            type="text"
             value={codigoPostal}
             onChange={(e) => setCodigoPostal(e.target.value)}
             className="w-full border px-3 py-2 rounded"
-            required
           />
         </div>
 
