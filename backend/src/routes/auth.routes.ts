@@ -1,20 +1,37 @@
 // backend/src/routes/auth.routes.ts
 import { Router } from 'express';
-import pool from '../db';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import pool from '../db';
 
 const router = Router();
 
+/**
+ * ===============================
+ * POST /api/auth/login
+ * ===============================
+ */
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email y password son obligatorios' });
+  }
 
   try {
     const result = await pool.query(
       `
-      SELECT id, email, password, nombre_completo, rol, empresa_id
+      SELECT
+        id,
+        email,
+        password_hash,
+        nombre_completo,
+        rol,
+        empresa_id,
+        activo
       FROM usuarios
       WHERE email = $1
+      LIMIT 1
       `,
       [email]
     );
@@ -24,9 +41,14 @@ router.post('/login', async (req, res) => {
     }
 
     const user = result.rows[0];
-    const match = await bcrypt.compare(password, user.password);
 
-    if (!match) {
+    if (!user.activo) {
+      return res.status(403).json({ error: 'Usuario inactivo' });
+    }
+
+    const passwordOk = await bcrypt.compare(password, user.password_hash);
+
+    if (!passwordOk) {
       return res.status(401).json({ error: 'Credenciales inválidas' });
     }
 
@@ -41,7 +63,7 @@ router.post('/login', async (req, res) => {
       { expiresIn: '8h' }
     );
 
-    res.json({
+    return res.json({
       token,
       user: {
         id: user.id,
@@ -51,9 +73,9 @@ router.post('/login', async (req, res) => {
         empresa_id: user.empresa_id
       }
     });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Error al iniciar sesión' });
+  } catch (error) {
+    console.error('Error en login:', error);
+    return res.status(500).json({ error: 'Error al iniciar sesión' });
   }
 });
 
