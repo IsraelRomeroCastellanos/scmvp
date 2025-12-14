@@ -4,11 +4,31 @@ import pool from './db';
 
 const app = express();
 
+// ===============================
+// Middleware
+// ===============================
 app.use(cors());
 app.use(express.json());
 
+// ===============================
+// Health checks
+// ===============================
+app.get('/', (_req, res) => {
+  res.json({ ok: true });
+});
+
+app.get('/health/db', async (_req, res) => {
+  try {
+    const result = await pool.query('SELECT 1');
+    res.json({ ok: true, db: result.rowCount });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false });
+  }
+});
+
 // ===================================================
-// ADMIN - EMPRESAS (RUTAS DEFINITIVAS)
+// ADMIN - EMPRESAS
 // ===================================================
 
 // LISTAR EMPRESAS
@@ -90,7 +110,14 @@ app.post('/api/admin/empresas', async (req, res) => {
 app.put('/api/admin/empresas/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { nombre_legal, rfc, tipo_entidad, pais, domicilio, estado } = req.body;
+    const {
+      nombre_legal,
+      rfc,
+      tipo_entidad,
+      pais,
+      domicilio,
+      estado
+    } = req.body;
 
     if (!nombre_legal || !tipo_entidad || !pais || !domicilio || !estado) {
       return res.status(400).json({ error: 'Faltan campos obligatorios' });
@@ -123,83 +150,7 @@ app.put('/api/admin/empresas/:id', async (req, res) => {
   }
 });
 
-
-
-    const result = await pool.query(
-      `
-      INSERT INTO empresas
-        (nombre_legal, rfc, tipo_entidad, pais, domicilio)
-      VALUES
-        ($1, $2, $3, $4, $5)
-      RETURNING id
-      `,
-      [nombre_legal, rfc, tipo_entidad, pais, domicilio]
-    );
-
-    return res.status(201).json({
-      success: true,
-      id: result.rows[0].id
-    });
-  } catch (err: any) {
-    console.error('Error creando empresa:', err);
-    return res.status(500).json({
-      error: 'Error al crear la empresa'
-    });
-  }
-});
-
-
 // ===============================
-// HEALTH CHECK
+// Server
 // ===============================
-app.get('/', (_req, res) => {
-  res.status(200).send('OK');
-});
-
-// ===============================
-// LOGIN DIRECTO (MODO ESTABILIZACIÓN)
-// ===============================
-app.post('/api/auth/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        error: 'Email y contraseña requeridos'
-      });
-    }
-
-    const result = await pool.query(
-      `
-      SELECT id, email, rol, empresa_id, nombre_completo
-      FROM usuarios
-      WHERE email = $1
-      `,
-      [email]
-    );
-
-    if (result.rowCount === 0) {
-      return res.status(401).json({
-        success: false,
-        error: 'Usuario no encontrado'
-      });
-    }
-
-    const user = result.rows[0];
-
-    return res.status(200).json({
-      success: true,
-      token: 'dev-token',
-      user
-    });
-  } catch (err) {
-    console.error('Login error:', err);
-    return res.status(500).json({
-      success: false,
-      error: 'Error interno'
-    });
-  }
-});
-
 export default app;
