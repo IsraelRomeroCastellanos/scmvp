@@ -1,49 +1,44 @@
 // backend/src/routes/admin.routes.ts
-import { Router, Request, Response } from 'express';
+import { Router } from 'express';
 import pool from '../db';
 
 const router = Router();
 
-/* ======================================================
-   EMPRESAS
-   ====================================================== */
-
 /**
+ * ===============================
  * LISTAR EMPRESAS
  * GET /api/admin/empresas
+ * ===============================
  */
-router.get('/api/admin/empresas', async (req: Request, res: Response) => {
+router.get('/empresas', async (_req, res) => {
   try {
-    const result = await pool.query(`
+    const result = await pool.query(
+      `
       SELECT
         id,
         nombre_legal,
         rfc,
         tipo_entidad,
-        pais,
-        domicilio,
-        actividad,
-        codigo_postal,
-        entidad,
-        municipio,
-        estado,
-        creado_en
+        estado
       FROM empresas
       ORDER BY nombre_legal
-    `);
+      `
+    );
 
     res.json({ empresas: result.rows });
-  } catch (error) {
-    console.error('Error al listar empresas:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+  } catch (err) {
+    console.error('Error al listar empresas:', err);
+    res.status(500).json({ error: 'Error al listar empresas' });
   }
 });
 
-
-// ===============================
-// 🔧 OBTENER EMPRESA POR ID
-// ===============================
-router.get('/api/admin/empresas/:id', async (req, res) => {
+/**
+ * ===============================
+ * OBTENER EMPRESA POR ID
+ * GET /api/admin/empresas/:id
+ * ===============================
+ */
+router.get('/empresas/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -64,138 +59,80 @@ router.get('/api/admin/empresas/:id', async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({
-        error: 'Empresa no encontrada'
-      });
+      return res.status(404).json({ error: 'Empresa no encontrada' });
     }
 
-    res.json({
-      empresa: result.rows[0]
-    });
+    res.json({ empresa: result.rows[0] });
   } catch (err) {
-    console.error('Error al obtener empresa por ID:', err);
-    res.status(500).json({
-      error: 'Error interno del servidor'
-    });
+    console.error('Error al obtener empresa:', err);
+    res.status(500).json({ error: 'Error al obtener empresa' });
   }
 });
 
-
 /**
+ * ===============================
  * CREAR EMPRESA
  * POST /api/admin/empresas
+ * ===============================
  */
-router.post('/api/admin/empresas', async (req: Request, res: Response) => {
+router.post('/empresas', async (req, res) => {
   try {
     const {
       nombre_legal,
       rfc,
       tipo_entidad,
       pais,
-      domicilio,
-      actividad,
-      codigo_postal,
-      entidad,
-      municipio
+      domicilio
     } = req.body;
 
-    const faltantes: string[] = [];
-    if (!nombre_legal) faltantes.push('nombre_legal');
-    if (!rfc) faltantes.push('rfc');
-    if (!tipo_entidad) faltantes.push('tipo_entidad');
-    if (!pais) faltantes.push('pais');
-    if (!domicilio) faltantes.push('domicilio');
-    if (!actividad) faltantes.push('actividad');
-    if (!codigo_postal) faltantes.push('codigo_postal');
-    if (!entidad) faltantes.push('entidad');
-    if (!municipio) faltantes.push('municipio');
-
-    if (faltantes.length > 0) {
+    if (!nombre_legal || !tipo_entidad || !pais || !domicilio) {
       return res.status(400).json({
-        error: `Faltan campos obligatorios: ${faltantes.join(', ')}`
+        error: 'Faltan campos obligatorios'
       });
     }
 
     const result = await pool.query(
       `
-      INSERT INTO empresas (
-        nombre_legal,
-        rfc,
-        tipo_entidad,
-        pais,
-        domicilio,
-        actividad,
-        codigo_postal,
-        entidad,
-        municipio,
-        estado
-      )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'activo')
-      RETURNING *
+      INSERT INTO empresas
+        (nombre_legal, rfc, tipo_entidad, pais, domicilio)
+      VALUES
+        ($1, $2, $3, $4, $5)
+      RETURNING id
       `,
-      [
-        nombre_legal,
-        rfc,
-        tipo_entidad,
-        pais,
-        domicilio,
-        actividad,
-        codigo_postal,
-        entidad,
-        municipio
-      ]
+      [nombre_legal, rfc, tipo_entidad, pais, domicilio]
     );
 
-    res.status(201).json({ empresa: result.rows[0] });
-  } catch (error: any) {
-    console.error('Error al crear empresa:', error);
-
-    if (error.code === '23505') {
-      return res.status(409).json({
-        error: 'Ya existe una empresa con el mismo nombre legal o RFC'
-      });
-    }
-
-    res.status(500).json({ error: 'Error interno al crear la empresa' });
+    res.status(201).json({
+      success: true,
+      id: result.rows[0].id
+    });
+  } catch (err) {
+    console.error('Error al crear empresa:', err);
+    res.status(500).json({ error: 'Error al crear empresa' });
   }
 });
 
 /**
+ * ===============================
  * EDITAR EMPRESA
  * PUT /api/admin/empresas/:id
+ * ===============================
  */
-router.put('/api/admin/empresas/:id', async (req: Request, res: Response) => {
-  const { id } = req.params;
-
+router.put('/empresas/:id', async (req, res) => {
   try {
+    const { id } = req.params;
     const {
       nombre_legal,
       rfc,
       tipo_entidad,
       pais,
       domicilio,
-      actividad,
-      codigo_postal,
-      entidad,
-      municipio,
       estado
     } = req.body;
 
-    const faltantes: string[] = [];
-    if (!nombre_legal) faltantes.push('nombre_legal');
-    if (!rfc) faltantes.push('rfc');
-    if (!tipo_entidad) faltantes.push('tipo_entidad');
-    if (!pais) faltantes.push('pais');
-    if (!domicilio) faltantes.push('domicilio');
-    if (!actividad) faltantes.push('actividad');
-    if (!codigo_postal) faltantes.push('codigo_postal');
-    if (!entidad) faltantes.push('entidad');
-    if (!municipio) faltantes.push('municipio');
-    if (!estado) faltantes.push('estado');
-
-    if (faltantes.length > 0) {
+    if (!nombre_legal || !tipo_entidad || !pais || !domicilio || !estado) {
       return res.status(400).json({
-        error: `Faltan campos obligatorios: ${faltantes.join(', ')}`
+        error: 'Faltan campos obligatorios'
       });
     }
 
@@ -208,14 +145,10 @@ router.put('/api/admin/empresas/:id', async (req: Request, res: Response) => {
         tipo_entidad = $3,
         pais = $4,
         domicilio = $5,
-        actividad = $6,
-        codigo_postal = $7,
-        entidad = $8,
-        municipio = $9,
-        estado = $10,
+        estado = $6,
         actualizado_en = NOW()
-      WHERE id = $11
-      RETURNING *
+      WHERE id = $7
+      RETURNING id
       `,
       [
         nombre_legal,
@@ -223,10 +156,6 @@ router.put('/api/admin/empresas/:id', async (req: Request, res: Response) => {
         tipo_entidad,
         pais,
         domicilio,
-        actividad,
-        codigo_postal,
-        entidad,
-        municipio,
         estado,
         id
       ]
@@ -236,10 +165,10 @@ router.put('/api/admin/empresas/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Empresa no encontrada' });
     }
 
-    res.json({ empresa: result.rows[0] });
-  } catch (error) {
-    console.error('Error al editar empresa:', error);
-    res.status(500).json({ error: 'Error interno al editar la empresa' });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error al editar empresa:', err);
+    res.status(500).json({ error: 'Error al editar empresa' });
   }
 });
 
