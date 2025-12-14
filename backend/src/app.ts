@@ -34,6 +34,50 @@ app.get('/api/admin/empresas', async (_req, res) => {
   }
 });
 
+
+// ===============================
+// 🔧 RUTA PUENTE TEMPORAL - CREAR EMPRESA
+// ===============================
+app.post('/api/admin/empresas', async (req, res) => {
+  try {
+    const {
+      nombre_legal,
+      rfc,
+      tipo_entidad,
+      pais,
+      domicilio,
+    } = req.body;
+
+    if (!nombre_legal || !tipo_entidad || !pais || !domicilio) {
+      return res.status(400).json({
+        error: 'Faltan campos obligatorios'
+      });
+    }
+
+    const result = await pool.query(
+      `
+      INSERT INTO empresas
+        (nombre_legal, rfc, tipo_entidad, pais, domicilio)
+      VALUES
+        ($1, $2, $3, $4, $5)
+      RETURNING id
+      `,
+      [nombre_legal, rfc, tipo_entidad, pais, domicilio]
+    );
+
+    return res.status(201).json({
+      success: true,
+      id: result.rows[0].id
+    });
+  } catch (err: any) {
+    console.error('Error creando empresa:', err);
+    return res.status(500).json({
+      error: 'Error al crear la empresa'
+    });
+  }
+});
+
+
 // ===============================
 // HEALTH CHECK
 // ===============================
