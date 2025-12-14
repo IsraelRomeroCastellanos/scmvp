@@ -8,6 +8,33 @@ app.use(cors());
 app.use(express.json());
 
 // ===============================
+// 🔧 RUTA PUENTE TEMPORAL - EMPRESAS
+// ===============================
+app.get('/api/admin/empresas', async (_req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        id,
+        nombre_legal,
+        rfc,
+        tipo_entidad,
+        estado
+      FROM empresas
+      ORDER BY nombre_legal
+    `);
+
+    return res.status(200).json({
+      empresas: result.rows
+    });
+  } catch (err) {
+    console.error('Error puente empresas:', err);
+    return res.status(500).json({
+      error: 'Error al listar empresas'
+    });
+  }
+});
+
+// ===============================
 // HEALTH CHECK
 // ===============================
 app.get('/', (_req, res) => {
