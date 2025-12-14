@@ -21,7 +21,7 @@ export default function EmpresasPage() {
     const fetchEmpresas = async () => {
       try {
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/admin/empresas`,
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/admin/empresas`,
           {
             method: 'GET',
             headers: {
