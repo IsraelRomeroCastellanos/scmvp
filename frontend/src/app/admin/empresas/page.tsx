@@ -7,8 +7,8 @@ interface Empresa {
   id: number;
   nombre_legal: string;
   rfc: string | null;
-  tipo_entidad: 'persona_fisica' | 'persona_moral';
-  estado: 'activo' | 'inactivo' | 'suspendido';
+  tipo_entidad: string;
+  estado: string;
 }
 
 export default function EmpresasPage() {
@@ -20,27 +20,36 @@ export default function EmpresasPage() {
   useEffect(() => {
     const fetchEmpresas = async () => {
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/admin/empresas`,
-          {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          }
-        );
+        const url = `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/admin/empresas`;
+        console.log('Fetching empresas from:', url);
+
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          cache: 'no-store',
+        });
+
+        console.log('Response status:', res.status);
+
+        const text = await res.text();
+        console.log('Raw response:', text);
 
         if (!res.ok) {
-          throw new Error('Error al cargar empresas');
+          throw new Error(`HTTP ${res.status}: ${text}`);
         }
 
-        const data = await res.json();
+        const data = JSON.parse(text);
 
-        // El backend devuelve: { empresas: [...] }
-        setEmpresas(data.empresas || []);
+        if (!data.empresas || !Array.isArray(data.empresas)) {
+          throw new Error('Formato inesperado de respuesta');
+        }
+
+        setEmpresas(data.empresas);
       } catch (err: any) {
-        console.error(err);
-        setError('Error al cargar empresas');
+        console.error('Error cargando empresas:', err);
+        setError(err.message || 'Error al cargar empresas');
       } finally {
         setLoading(false);
       }
@@ -54,12 +63,17 @@ export default function EmpresasPage() {
   }
 
   if (error) {
-    return <p className="p-6 text-red-600">{error}</p>;
+    return (
+      <div className="p-6 text-red-600">
+        <p>Error:</p>
+        <pre className="mt-2 whitespace-pre-wrap">{error}</pre>
+      </div>
+    );
   }
 
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-semibold">Gestión de Empresas</h1>
         <button
           onClick={() => router.push('/admin/crear-empresa')}
@@ -69,51 +83,39 @@ export default function EmpresasPage() {
         </button>
       </div>
 
-      {empresas.length === 0 ? (
-        <p>No hay empresas registradas.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full border border-gray-200">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="px-4 py-2 border">Nombre legal</th>
-                <th className="px-4 py-2 border">RFC</th>
-                <th className="px-4 py-2 border">Tipo de entidad</th>
-                <th className="px-4 py-2 border">Estado</th>
-                <th className="px-4 py-2 border">Acciones</th>
+      <div className="overflow-x-auto">
+        <table className="min-w-full border border-gray-200">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="px-4 py-2 border">Nombre legal</th>
+              <th className="px-4 py-2 border">RFC</th>
+              <th className="px-4 py-2 border">Tipo</th>
+              <th className="px-4 py-2 border">Estado</th>
+              <th className="px-4 py-2 border">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {empresas.map((empresa) => (
+              <tr key={empresa.id} className="hover:bg-gray-50">
+                <td className="px-4 py-2 border">{empresa.nombre_legal}</td>
+                <td className="px-4 py-2 border">{empresa.rfc || '—'}</td>
+                <td className="px-4 py-2 border">{empresa.tipo_entidad}</td>
+                <td className="px-4 py-2 border">{empresa.estado}</td>
+                <td className="px-4 py-2 border text-center">
+                  <button
+                    onClick={() =>
+                      router.push(`/admin/editar-empresa/${empresa.id}`)
+                    }
+                    className="text-blue-600 hover:underline"
+                  >
+                    Editar
+                  </button>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {empresas.map((empresa) => (
-                <tr key={empresa.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-2 border">
-                    {empresa.nombre_legal}
-                  </td>
-                  <td className="px-4 py-2 border">
-                    {empresa.rfc || '—'}
-                  </td>
-                  <td className="px-4 py-2 border capitalize">
-                    {empresa.tipo_entidad.replace('_', ' ')}
-                  </td>
-                  <td className="px-4 py-2 border capitalize">
-                    {empresa.estado}
-                  </td>
-                  <td className="px-4 py-2 border text-center">
-                    <button
-                      onClick={() =>
-                        router.push(`/admin/editar-empresa/${empresa.id}`)
-                      }
-                      className="text-blue-600 hover:underline"
-                    >
-                      Editar
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
