@@ -54,6 +54,48 @@ app.post('/api/admin/empresas', async (req, res) => {
       });
     }
 
+// ===============================
+// 🔧 RUTA PUENTE - OBTENER EMPRESA POR ID
+// ===============================
+app.get('/api/admin/empresas/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `
+      SELECT
+        id,
+        nombre_legal,
+        rfc,
+        tipo_entidad,
+        pais,
+        domicilio,
+        estado
+      FROM empresas
+      WHERE id = $1
+      `,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Empresa no encontrada'
+      });
+    }
+
+    return res.json({
+      empresa: result.rows[0]
+    });
+  } catch (err: any) {
+    console.error('Error al obtener empresa:', err);
+    return res.status(500).json({
+      error: 'Error interno del servidor'
+    });
+  }
+});
+
+
+
     const result = await pool.query(
       `
       INSERT INTO empresas
