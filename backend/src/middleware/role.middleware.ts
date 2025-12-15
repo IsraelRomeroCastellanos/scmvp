@@ -1,29 +1,23 @@
 // backend/src/middleware/role.middleware.ts
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
-
-export const authorizeRoles = (...allowedRoles: string[]) => {
+export function authorizeRoles(...rolesPermitidos: string[]) {
   return (req: Request, res: Response, next: NextFunction) => {
-    const authHeader = req.headers.authorization;
+    // El middleware authenticate ya puso el usuario en req.user
+    const user = (req as any).user;
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Token no proporcionado' });
+    if (!user || !user.rol) {
+      return res.status(403).json({
+        error: 'Acceso denegado: rol no encontrado'
+      });
     }
 
-    const token = authHeader.split(' ')[1];
-    try {
-      const decoded = jwt.verify(token, JWT_SECRET) as { userId: number; email: string; role: string };
-      
-      if (!allowedRoles.includes(decoded.role)) {
-        return res.status(403).json({ error: 'Acceso denegado: rol insuficiente' });
-      }
-
-      (req as any).user = decoded;
-      next();
-    } catch (err) {
-      return res.status(401).json({ error: 'Token inválido o expirado' });
+    if (!rolesPermitidos.includes(user.rol)) {
+      return res.status(403).json({
+        error: 'Acceso denegado: rol insuficiente'
+      });
     }
+
+    next();
   };
-};
+}
