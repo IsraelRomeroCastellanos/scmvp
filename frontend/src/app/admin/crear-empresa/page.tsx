@@ -41,37 +41,48 @@ export default function CrearEmpresaPage() {
     return true;
   };
 
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
+const onSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setError('');
 
-    if (!validar()) return;
+  if (!validar()) return;
 
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('token');
+  try {
+    setLoading(true);
+    const token = localStorage.getItem('token');
 
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/admin/empresas`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(form),
-        }
-      );
+    const payload = {
+      nombre_legal: form.nombre_legal,
+      rfc: form.rfc,
+      tipo_entidad: form.tipo_entidad,
+      domicilio: `${form.calle} ${form.numero}${form.interior ? ` Int. ${form.interior}` : ''}`,
+      entidad: form.entidad,
+      municipio: form.municipio,
+      codigo_postal: form.codigo_postal,
+    };
 
-      if (!res.ok) throw new Error();
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/admin/empresas`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      }
+    );
 
-      router.push('/admin/empresas');
-    } catch {
-      setError('Error al crear la empresa.');
-    } finally {
-      setLoading(false);
-    }
-  };
+    if (!res.ok) throw new Error();
+
+    router.push('/admin/empresas');
+  } catch {
+    setError('Error al crear la empresa.');
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
