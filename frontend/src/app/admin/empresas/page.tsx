@@ -15,11 +15,8 @@ type Empresa = {
 };
 
 function getToken(): string | null {
-  try {
-    return localStorage.getItem('token');
-  } catch {
-    return null;
-  }
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('token');
 }
 
 export default function EmpresasPage() {
@@ -34,24 +31,37 @@ export default function EmpresasPage() {
       try {
         const token = getToken();
 
-        const res = await fetch(`${apiBase}/api/admin/empresas`, {
-          method: 'GET',
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        if (!token) {
+          throw new Error('Token no encontrado');
+        }
+
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/admin/empresas`,
+          {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+          },
           cache: 'no-store'
-        });
+        }
+      );
 
-        const text = await res.text();
-        if (!res.ok) throw new Error(text || 'Error al cargar empresas');
+      const data = await res.json();
 
-        const data = JSON.parse(text);
-        setEmpresas(data.empresas || []);
-      } catch (err) {
-        console.error(err);
-        setError('Error al cargar empresas');
-      } finally {
-        setLoading(false);
+      if (!res.ok) {
+        throw new Error(data.error || 'Error al cargar empresas');
       }
-    };
+
+      setEmpresas(data.empresas || []);
+    } catch (err) {
+      console.error(err);
+      setError('Error al cargar empresas');
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
     fetchEmpresas();
   }, [apiBase]);
