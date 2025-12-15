@@ -117,7 +117,7 @@ export default function EmpresasPage() {
                   <td className="border px-2 py-1">{e.estado}</td>
                   <td className="border px-2 py-1">
                     <Link
-                      href={`/admin/empresas/${e.id}`}
+                      href={`/admin/editar-empresa/${e.id}`}
                       className="text-blue-600 hover:underline"
                     >
                       Editar
