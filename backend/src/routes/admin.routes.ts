@@ -2,7 +2,6 @@
 import { Router, Request, Response } from 'express';
 import pool from '../db';
 import { authenticate } from '../middleware/auth.middleware';
-import { authorizeRoles } from '../middleware/role.middleware';
 import { authorizeRole } from '../middleware/role.middleware';
 
 const router = Router();
