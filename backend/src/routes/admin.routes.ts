@@ -2,7 +2,7 @@
 import { Router, Request, Response } from 'express';
 import pool from '../db';
 import { authenticate } from '../middleware/auth.middleware';
-import { authorizeRole } from '../middleware/role.middleware';
+import { authorizeRoles } from '../middleware/role.middleware';
 
 const router = Router();
 
@@ -16,7 +16,7 @@ const router = Router();
 router.get(
   '/api/admin/empresas',
   authenticate,
-  authorizeRole('admin'),
+  authorizeRoles('admin'),
   async (_req: Request, res: Response) => {
     try {
       const result = await pool.query(`
@@ -46,7 +46,7 @@ router.get(
 router.get(
   '/api/admin/empresas/:id',
   authenticate,
-  authorizeRole('admin'),
+  authorizeRoles('admin'),
   async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
@@ -85,7 +85,7 @@ router.get(
 router.post(
   '/api/admin/empresas',
   authenticate,
-  authorizeRole('admin'),
+  authorizeRoles('admin'),
   async (req: Request, res: Response) => {
     try {
       const {
@@ -142,7 +142,7 @@ router.post(
 router.put(
   '/api/admin/empresas/:id',
   authenticate,
-  authorizeRole(['admin']),
+  authorizeRoles(['admin']),
   async (req, res) => {
     try {
       const { id } = req.params;
