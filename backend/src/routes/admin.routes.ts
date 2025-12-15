@@ -142,7 +142,7 @@ router.post(
 router.put(
   '/api/admin/empresas/:id',
   authenticate,
-  authorizeRoles(['admin']),
+  authorizeRoles('admin'),
   async (req, res) => {
     try {
       const { id } = req.params;
