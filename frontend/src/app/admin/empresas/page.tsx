@@ -24,7 +24,9 @@ export default function EmpresasPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
+  const apiBase =
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  'https://scmvp.onrender.com';
 
   useEffect(() => {
     const fetchEmpresas = async () => {
@@ -35,8 +37,7 @@ export default function EmpresasPage() {
           throw new Error('Token no encontrado');
         }
 
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/admin/empresas`,
+        const res = await fetch(`${apiBase}/api/admin/empresas`,
           {
             method: 'GET',
             headers: {
