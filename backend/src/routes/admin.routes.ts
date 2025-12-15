@@ -3,6 +3,7 @@ import { Router, Request, Response } from 'express';
 import pool from '../db';
 import { authenticate } from '../middleware/auth.middleware';
 import { authorizeRoles } from '../middleware/role.middleware';
+import { authorizeRole } from '../middleware/role.middleware';
 
 const router = Router();
 
@@ -142,7 +143,7 @@ router.post(
 router.put(
   '/api/admin/empresas/:id',
   authenticate,
-  requireRole(['admin']),
+  authorizeRole(['admin']),
   async (req, res) => {
     try {
       const { id } = req.params;
