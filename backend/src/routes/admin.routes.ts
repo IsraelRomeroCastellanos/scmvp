@@ -4,33 +4,55 @@ import pool from '../db';
 
 const router = Router();
 
-/**
- * ===============================
- * LISTAR EMPRESAS
- * GET /api/admin/empresas
- * ===============================
- */
-router.get('/empresas', async (_req, res) => {
+// ✅ Listar empresas (extendido para listado)
+router.get('/api/admin/empresas', async (req, res) => {
   try {
-    const result = await pool.query(
-      `
+    const result = await pool.query(`
       SELECT
         id,
         nombre_legal,
         rfc,
         tipo_entidad,
-        estado
+        estado,
+        domicilio
       FROM empresas
       ORDER BY nombre_legal
-      `
-    );
+    `);
 
-    res.json({ empresas: result.rows });
+    const empresas = result.rows.map((e) => {
+      let entidad = null;
+      let municipio = null;
+      let codigo_postal = null;
+
+      if (e.domicilio) {
+        const parts = e.domicilio.split(',').map((p: string) => p.trim());
+
+        if (parts[1]) municipio = parts[1];
+        if (parts[2]) entidad = parts[2];
+
+        const cpMatch = e.domicilio.match(/CP\s*([0-9]{4,6})/i);
+        if (cpMatch?.[1]) codigo_postal = cpMatch[1];
+      }
+
+      return {
+        id: e.id,
+        nombre_legal: e.nombre_legal,
+        rfc: e.rfc,
+        tipo_entidad: e.tipo_entidad,
+        estado: e.estado,
+        entidad,
+        municipio,
+        codigo_postal
+      };
+    });
+
+    res.json({ empresas });
   } catch (err) {
     console.error('Error al listar empresas:', err);
     res.status(500).json({ error: 'Error al listar empresas' });
   }
 });
+
 
 /**
  * ===============================
