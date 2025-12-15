@@ -5,14 +5,54 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
 
+type FormState = {
+  nombre_legal: string;
+  rfc: string;
+  tipo_entidad: 'persona_moral' | 'persona_fisica';
+  calle: string;
+  numero: string;
+  interior: string;
+  entidad: string;
+  municipio: string;
+  codigo_postal: string;
+  estado: 'activo' | 'suspendido' | 'inactivo';
+};
+
+function splitDomicilio(domicilio: string | null | undefined) {
+  let calle = '';
+  let numero = '';
+  let interior = '';
+
+  if (!domicilio) return { calle, numero, interior };
+
+  // Intento flexible: "Calle 123 Int 4" | "Calle 123" | "Calle"
+  const match = domicilio.match(/^(.*?)(?:\s+(\d+))?(?:\s+Int\.?\s*(.+))?$/i);
+  if (!match) return { calle: domicilio, numero: '', interior: '' };
+
+  calle = (match[1] || '').trim();
+  numero = (match[2] || '').trim();
+  interior = (match[3] || '').trim();
+
+  return { calle, numero, interior };
+}
+
+function buildDomicilio(calle: string, numero: string, interior: string) {
+  const parts: string[] = [];
+  if (calle.trim()) parts.push(calle.trim());
+  if (numero.trim()) parts.push(numero.trim());
+  if (interior.trim()) parts.push(`Int ${interior.trim()}`);
+  return parts.join(' ').trim();
+}
+
 export default function EditarEmpresaPage() {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const [formData, setFormData] = useState({
+  const [form, setForm] = useState<FormState>({
     nombre_legal: '',
     rfc: '',
     tipo_entidad: 'persona_moral',
@@ -28,38 +68,25 @@ export default function EditarEmpresaPage() {
   useEffect(() => {
     const fetchEmpresa = async () => {
       try {
+        setError('');
         const res = await api.get(`/api/admin/empresas/${id}`);
-        const empresa = res.data.empresa;
+        const empresa = res.data?.empresa;
 
-        // 🔹 Descomponer domicilio
-        let calle = '';
-        let numero = '';
-        let interior = '';
+        const { calle, numero, interior } = splitDomicilio(empresa?.domicilio);
 
-        if (empresa.domicilio) {
-          const match = empresa.domicilio.match(
-            /^(.*?)(?:\s+(\d+))?(?:\s+Int\.?\s*(\w+))?$/i
-          );
-          if (match) {
-            calle = match[1] || '';
-            numero = match[2] || '';
-            interior = match[3] || '';
-          }
-        }
-
-        setFormData({
-          nombre_legal: empresa.nombre_legal ?? '',
-          rfc: empresa.rfc ?? '',
-          tipo_entidad: empresa.tipo_entidad ?? 'persona_moral',
+        setForm({
+          nombre_legal: empresa?.nombre_legal ?? '',
+          rfc: empresa?.rfc ?? '',
+          tipo_entidad: empresa?.tipo_entidad ?? 'persona_moral',
           calle,
           numero,
           interior,
-          entidad: empresa.entidad ?? '',
-          municipio: empresa.municipio ?? '',
-          codigo_postal: empresa.codigo_postal ?? '',
-          estado: empresa.estado ?? 'activo'
+          entidad: empresa?.entidad ?? '',
+          municipio: empresa?.municipio ?? '',
+          codigo_postal: empresa?.codigo_postal ?? '',
+          estado: empresa?.estado ?? 'activo'
         });
-      } catch (err) {
+      } catch (e) {
         setError('Error al cargar la empresa');
       } finally {
         setLoading(false);
@@ -69,69 +96,187 @@ export default function EditarEmpresaPage() {
     fetchEmpresa();
   }, [id]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  const onChange = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    setForm(prev => ({ ...prev, [key]: e.target.value as any }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaving(true);
+    setError('');
 
     try {
-      const domicilio = `${formData.calle} ${formData.numero}${
-        formData.interior ? ' Int ' + formData.interior : ''
-      }`.trim();
+      const domicilio = buildDomicilio(form.calle, form.numero, form.interior);
 
       await api.put(`/api/admin/empresas/${id}`, {
-        nombre_legal: formData.nombre_legal,
-        rfc: formData.rfc,
-        tipo_entidad: formData.tipo_entidad,
+        nombre_legal: form.nombre_legal,
+        rfc: form.rfc,
+        tipo_entidad: form.tipo_entidad,
         domicilio,
-        entidad: formData.entidad,
-        municipio: formData.municipio,
-        codigo_postal: formData.codigo_postal,
-        estado: formData.estado
+        entidad: form.entidad,
+        municipio: form.municipio,
+        codigo_postal: form.codigo_postal,
+        estado: form.estado
       });
 
       router.push('/admin/empresas');
-    } catch (err) {
+    } catch (e) {
       setError('Error al guardar cambios');
+    } finally {
+      setSaving(false);
     }
   };
 
-  if (loading) return <p className="p-4">Cargando...</p>;
-  if (error) return <p className="p-4 text-red-600">{error}</p>;
+  if (loading) return <div className="p-6">Cargando...</div>;
 
   return (
-    <div className="max-w-3xl mx-auto bg-white p-6 rounded shadow">
-      <h1 className="text-xl font-bold mb-4">Editar Empresa</h1>
+    <div className="max-w-4xl mx-auto p-6">
+      <div className="bg-white rounded-lg shadow p-6">
+        <h1 className="text-xl font-semibold mb-6">Editar Empresa</h1>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <input name="nombre_legal" value={formData.nombre_legal} onChange={handleChange} placeholder="Nombre legal" className="input" required />
-        <input name="rfc" value={formData.rfc} onChange={handleChange} placeholder="RFC" className="input" />
-        <select name="tipo_entidad" value={formData.tipo_entidad} onChange={handleChange} className="input">
-          <option value="persona_moral">Persona moral</option>
-          <option value="persona_fisica">Persona física</option>
-        </select>
+        {error && (
+          <div className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-red-700">
+            {error}
+          </div>
+        )}
 
-        <input name="calle" value={formData.calle} onChange={handleChange} placeholder="Calle" className="input" />
-        <input name="numero" value={formData.numero} onChange={handleChange} placeholder="Número" className="input" />
-        <input name="interior" value={formData.interior} onChange={handleChange} placeholder="Interior" className="input" />
+        <form onSubmit={onSubmit} className="space-y-6">
+          {/* Datos generales */}
+          <div>
+            <h2 className="text-sm font-semibold text-gray-700 mb-3">Datos generales</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Nombre legal *</label>
+                <input
+                  value={form.nombre_legal}
+                  onChange={onChange('nombre_legal')}
+                  className="w-full rounded border px-3 py-2"
+                  required
+                />
+              </div>
 
-        <input name="entidad" value={formData.entidad} onChange={handleChange} placeholder="Entidad" className="input" />
-        <input name="municipio" value={formData.municipio} onChange={handleChange} placeholder="Municipio" className="input" />
-        <input name="codigo_postal" value={formData.codigo_postal} onChange={handleChange} placeholder="Código Postal" className="input" />
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">RFC</label>
+                <input
+                  value={form.rfc}
+                  onChange={onChange('rfc')}
+                  className="w-full rounded border px-3 py-2"
+                />
+              </div>
 
-        <select name="estado" value={formData.estado} onChange={handleChange} className="input">
-          <option value="activo">Activo</option>
-          <option value="suspendido">Suspendido</option>
-          <option value="inactivo">Inactivo</option>
-        </select>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Tipo de entidad *</label>
+                <select
+                  value={form.tipo_entidad}
+                  onChange={onChange('tipo_entidad')}
+                  className="w-full rounded border px-3 py-2"
+                  required
+                >
+                  <option value="persona_moral">Persona moral</option>
+                  <option value="persona_fisica">Persona física</option>
+                </select>
+              </div>
 
-        <div className="flex gap-4">
-          <button type="submit" className="btn-primary">Guardar cambios</button>
-          <button type="button" onClick={() => router.back()} className="btn-secondary">Cancelar</button>
-        </div>
-      </form>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Estado</label>
+                <select
+                  value={form.estado}
+                  onChange={onChange('estado')}
+                  className="w-full rounded border px-3 py-2"
+                >
+                  <option value="activo">Activo</option>
+                  <option value="suspendido">Suspendido</option>
+                  <option value="inactivo">Inactivo</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Domicilio */}
+          <div>
+            <h2 className="text-sm font-semibold text-gray-700 mb-3">Domicilio</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="md:col-span-2">
+                <label className="block text-sm text-gray-600 mb-1">Calle *</label>
+                <input
+                  value={form.calle}
+                  onChange={onChange('calle')}
+                  className="w-full rounded border px-3 py-2"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Número *</label>
+                <input
+                  value={form.numero}
+                  onChange={onChange('numero')}
+                  className="w-full rounded border px-3 py-2"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Interior</label>
+                <input
+                  value={form.interior}
+                  onChange={onChange('interior')}
+                  className="w-full rounded border px-3 py-2"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Entidad *</label>
+                <input
+                  value={form.entidad}
+                  onChange={onChange('entidad')}
+                  className="w-full rounded border px-3 py-2"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Municipio *</label>
+                <input
+                  value={form.municipio}
+                  onChange={onChange('municipio')}
+                  className="w-full rounded border px-3 py-2"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Código Postal *</label>
+                <input
+                  value={form.codigo_postal}
+                  onChange={onChange('codigo_postal')}
+                  className="w-full rounded border px-3 py-2"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Acciones */}
+          <div className="flex items-center gap-3">
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-60"
+            >
+              {saving ? 'Guardando…' : 'Guardar cambios'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="rounded border px-4 py-2 hover:bg-gray-50"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
