@@ -9,6 +9,9 @@ interface Empresa {
   rfc: string | null;
   tipo_entidad: string;
   estado: string;
+  entidad: string | null;
+  municipio: string | null;
+  codigo_postal: string | null;
 }
 
 export default function EmpresasPage() {
@@ -34,12 +37,14 @@ export default function EmpresasPage() {
         const data = await res.json();
         setEmpresas(data.empresas);
       } catch {
-        setError('Error al cargar empresas.');
+        setError('Error al cargar empresas');
       }
     };
 
     fetchEmpresas();
   }, []);
+
+  const mostrar = (valor: string | null) => valor ?? '—';
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -63,7 +68,7 @@ export default function EmpresasPage() {
         </div>
 
         {/* Tabla */}
-        <div className="bg-gray-50 rounded-lg p-4">
+        <div className="bg-gray-50 rounded-lg p-4 overflow-x-auto">
           {error && (
             <div className="text-red-600 bg-red-50 p-3 rounded">
               {error}
@@ -71,13 +76,15 @@ export default function EmpresasPage() {
           )}
 
           {!error && (
-            <table className="w-full border-collapse">
+            <table className="w-full border-collapse min-w-[900px]">
               <thead>
                 <tr className="border-b text-left text-sm text-gray-600">
                   <th className="py-2">ID</th>
                   <th>Nombre legal</th>
                   <th>RFC</th>
-                  <th>Tipo</th>
+                  <th>Entidad</th>
+                  <th>Municipio</th>
+                  <th>C.P.</th>
                   <th>Estado</th>
                   <th className="text-right">Acciones</th>
                 </tr>
@@ -90,10 +97,12 @@ export default function EmpresasPage() {
                   >
                     <td className="py-2">{e.id}</td>
                     <td>{e.nombre_legal}</td>
-                    <td>{e.rfc ?? '-'}</td>
-                    <td>{e.tipo_entidad}</td>
+                    <td>{mostrar(e.rfc)}</td>
+                    <td>{mostrar(e.entidad)}</td>
+                    <td>{mostrar(e.municipio)}</td>
+                    <td>{mostrar(e.codigo_postal)}</td>
                     <td>
-                      <span className="text-green-700 bg-green-100 px-2 py-1 rounded text-xs">
+                      <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs">
                         {e.estado}
                       </span>
                     </td>
