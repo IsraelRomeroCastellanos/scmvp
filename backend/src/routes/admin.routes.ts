@@ -87,40 +87,55 @@ router.get(
   }
 );
 
-// CREAR EMPRESA
-router.post(
-  '/empresas',
-  authenticate,
-  authorizeRoles('admin'),
-  async (req: Request, res: Response) => {
-    try {
-      const {
-        nombre_legal,
-        rfc,
-        tipo_entidad,
-        domicilio
-      } = req.body;
+router.post('/api/admin/empresas', async (req: Request, res: Response) => {
+  try {
+    const {
+      nombre_legal,
+      rfc,
+      tipo_entidad,
+      domicilio,
+      entidad,
+      municipio,
+      codigo_postal,
+    } = req.body;
 
-      if (!nombre_legal || !tipo_entidad || !domicilio) {
-        return res.status(400).json({ error: 'Faltan campos obligatorios' });
-      }
-
-      const result = await pool.query(
-        `
-        INSERT INTO empresas (nombre_legal, rfc, tipo_entidad, domicilio)
-        VALUES ($1, $2, $3, $4)
-        RETURNING *
-        `,
-        [nombre_legal, rfc, tipo_entidad, domicilio]
-      );
-
-      res.status(201).json({ empresa: result.rows[0] });
-    } catch (err) {
-      console.error('Error al crear empresa:', err);
-      res.status(500).json({ error: 'Error al crear empresa' });
+    if (
+      !nombre_legal ||
+      !tipo_entidad ||
+      !domicilio ||
+      !entidad ||
+      !municipio ||
+      !codigo_postal
+    ) {
+      return res.status(400).json({
+        error: 'Faltan campos obligatorios',
+      });
     }
+
+    await pool.query(
+      `
+      INSERT INTO empresas
+      (nombre_legal, rfc, tipo_entidad, domicilio, entidad, municipio, codigo_postal)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `,
+      [
+        nombre_legal,
+        rfc || null,
+        tipo_entidad,
+        domicilio,
+        entidad,
+        municipio,
+        codigo_postal,
+      ]
+    );
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error al crear empresa:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
   }
-);
+});
+
 
 // EDITAR EMPRESA
 router.put(
