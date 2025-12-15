@@ -41,6 +41,46 @@ router.get(
   }
 );
 
+
+// OBTENER EMPRESA POR ID
+router.get(
+  '/api/admin/empresas/:id',
+  authenticate,
+  authorizeRoles('admin'),
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      const result = await pool.query(
+        `
+        SELECT
+          id,
+          nombre_legal,
+          rfc,
+          tipo_entidad,
+          estado,
+          domicilio,
+          entidad,
+          municipio,
+          codigo_postal
+        FROM empresas
+        WHERE id = $1
+        `,
+        [id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Empresa no encontrada' });
+      }
+
+      res.json({ empresa: result.rows[0] });
+    } catch (error) {
+      console.error('Error al obtener empresa:', error);
+      res.status(500).json({ error: 'Error interno del servidor' });
+    }
+  }
+);
+
 // CREAR EMPRESA
 router.post(
   '/api/admin/empresas',
