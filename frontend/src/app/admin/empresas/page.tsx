@@ -102,9 +102,17 @@ export default function EmpresasPage() {
                     <td>{mostrar(e.municipio)}</td>
                     <td>{mostrar(e.codigo_postal)}</td>
                     <td>
-                      <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs">
-                        {e.estado}
-                      </span>
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-semibold ${    empresa.estado === 'activo'
+                            ? 'bg-green-100 text-green-800'
+                            : empresa.estado === 'suspendido'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-red-100 text-red-800'
+                       }`}
+                     >
+                       {empresa.estado}
+                     </span>
+
                     </td>
                     <td className="text-right">
                       <Link
