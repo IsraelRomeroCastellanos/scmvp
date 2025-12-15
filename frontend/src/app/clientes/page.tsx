@@ -36,7 +36,7 @@ export default function ClientesPage() {
         const data = await res.json();
         setClientes(data.clientes);
       } catch {
-        setError('Error al cargar clientes.');
+        setError('Error al cargar clientes');
       }
     };
 
@@ -101,7 +101,7 @@ export default function ClientesPage() {
                     </td>
                     <td className="text-right">
                       <Link
-                        href={`/admin/clientes/${c.id}`}
+                        href={`/cliente/clientes/${c.id}`}
                         className="text-blue-600 hover:underline"
                       >
                         Ver

@@ -3,144 +3,115 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
-type Empresa = {
+interface Empresa {
   id: number;
   nombre_legal: string;
   rfc: string | null;
   tipo_entidad: string;
   estado: string;
-  entidad: string | null;
-  municipio: string | null;
-  codigo_postal: string | null;
-};
-
-function getToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('token');
 }
 
 export default function EmpresasPage() {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-
-  const apiBase =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  'https://scmvp.onrender.com';
 
   useEffect(() => {
     const fetchEmpresas = async () => {
       try {
-        const token = getToken();
+        const token = localStorage.getItem('token');
 
-        if (!token) {
-          throw new Error('Token no encontrado');
-        }
-
-        const res = await fetch(`${apiBase}/api/admin/empresas`,
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/admin/empresas`,
           {
-            method: 'GET',
             headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`
-          },
-          cache: 'no-store'
-        }
-      );
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
-      const data = await res.json();
+        if (!res.ok) throw new Error();
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Error al cargar empresas');
+        const data = await res.json();
+        setEmpresas(data.empresas);
+      } catch {
+        setError('Error al cargar empresas.');
       }
-
-      setEmpresas(data.empresas || []);
-    } catch (err) {
-      console.error(err);
-      setError('Error al cargar empresas');
-    } finally {
-      setLoading(false);
-    }
-  };
-
+    };
 
     fetchEmpresas();
-  }, [apiBase]);
-
-  if (loading) {
-    return <div className="p-6">Cargando empresas...</div>;
-  }
-
-  if (error) {
-    return <div className="p-6 text-red-600">{error}</div>;
-  }
+  }, []);
 
   return (
-    <div className="p-6">
-      <div className="mb-4 bg-gray-50 border border-gray-200 rounded p-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Gestión de Empresas</h1>
+    <div className="p-6 bg-gray-50 min-h-screen">
+      <div className="max-w-7xl mx-auto bg-white rounded-lg shadow-sm p-6">
+
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-2xl font-semibold">Gestión de Empresas</h1>
+            <p className="text-sm text-gray-500">
+              Listado general de empresas del sistema
+            </p>
+          </div>
 
           <Link
-            href="/admin/crear-empresa"
-            className="bg-blue-600 text-white px-4 py-2 rounded"
+            href="/admin/empresas/crear"
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
           >
             Crear empresa
           </Link>
         </div>
-      </div>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full border border-gray-200 text-sm">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="border px-2 py-1">ID</th>
-              <th className="border px-2 py-1">Nombre legal</th>
-              <th className="border px-2 py-1">RFC</th>
-              <th className="border px-2 py-1">Entidad</th>
-              <th className="border px-2 py-1">Municipio</th>
-              <th className="border px-2 py-1">CP</th>
-              <th className="border px-2 py-1">Tipo</th>
-              <th className="border px-2 py-1">Estado</th>
-              <th className="border px-2 py-1">Acciones</th>
-            </tr>
-          </thead>
+        {/* Tabla */}
+        <div className="bg-gray-50 rounded-lg p-4">
+          {error && (
+            <div className="text-red-600 bg-red-50 p-3 rounded">
+              {error}
+            </div>
+          )}
 
-          <tbody>
-            {empresas.map((e) => (
-              <tr key={e.id} className="border-t">
-                <td className="border px-2 py-1">{e.id}</td>
-                <td className="border px-2 py-1">{e.nombre_legal}</td>
-                <td className="border px-2 py-1">{e.rfc || '-'}</td>
-                <td className="border px-2 py-1">{e.entidad || '-'}</td>
-                <td className="border px-2 py-1">{e.municipio || '-'}</td>
-                <td className="border px-2 py-1">{e.codigo_postal || '-'}</td>
-                <td className="border px-2 py-1">{e.tipo_entidad}</td>
-                <td className="border px-2 py-1">
-                  <span
-                    className={`px-2 py-1 rounded text-xs font-semibold ${
-                      e.estado === 'activo'
-                        ? 'bg-green-100 text-green-700'
-                        : e.estado === 'inactivo'
-                        ? 'bg-gray-200 text-gray-700'
-                        : 'bg-yellow-100 text-yellow-700'
-                    }`}
+          {!error && (
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b text-left text-sm text-gray-600">
+                  <th className="py-2">ID</th>
+                  <th>Nombre legal</th>
+                  <th>RFC</th>
+                  <th>Tipo</th>
+                  <th>Estado</th>
+                  <th className="text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {empresas.map((e) => (
+                  <tr
+                    key={e.id}
+                    className="border-b text-sm hover:bg-white"
                   >
-                    {e.estado}
-                  </span>
-                </td>
-                <td className="border px-2 py-1">
-                  <Link
-                    href={`/admin/editar-empresa/${e.id}`}
-                    className="text-blue-600 hover:underline"
-                  >
-                    Editar
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                    <td className="py-2">{e.id}</td>
+                    <td>{e.nombre_legal}</td>
+                    <td>{e.rfc ?? '-'}</td>
+                    <td>{e.tipo_entidad}</td>
+                    <td>
+                      <span className="text-green-700 bg-green-100 px-2 py-1 rounded text-xs">
+                        {e.estado}
+                      </span>
+                    </td>
+                    <td className="text-right">
+                      <Link
+                        href={`/admin/empresas/${e.id}`}
+                        className="text-blue-600 hover:underline"
+                      >
+                        Editar
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
       </div>
     </div>
   );
