@@ -2,7 +2,7 @@
 
 import { Router, Request, Response } from 'express';
 import pool from '../db';
-import { authenticateToken } from '../middleware/auth.middleware';
+import { authenticate } from '../middleware/auth.middleware';
 import { authorizeRoles } from '../middleware/role.middleware';
 
 const router = Router();
@@ -16,7 +16,7 @@ const router = Router();
 // LISTAR EMPRESAS (para listado)
 router.get(
   '/empresas',
-  authenticateToken,
+  authenticate,
   authorizeRoles('admin'),
   async (_req: Request, res: Response) => {
     try {
@@ -64,7 +64,7 @@ router.get(
 // OBTENER EMPRESA POR ID
 router.get(
   '/empresas/:id',
-  authenticateToken,
+  authenticate,
   authorizeRoles('admin'),
   async (req: Request, res: Response) => {
     try {
@@ -90,7 +90,7 @@ router.get(
 // CREAR EMPRESA
 router.post(
   '/empresas',
-  authenticateToken,
+  authenticate,
   authorizeRoles('admin'),
   async (req: Request, res: Response) => {
     try {
@@ -125,7 +125,7 @@ router.post(
 // EDITAR EMPRESA
 router.put(
   '/empresas/:id',
-  authenticateToken,
+  authenticate,
   authorizeRoles('admin'),
   async (req: Request, res: Response) => {
     try {
