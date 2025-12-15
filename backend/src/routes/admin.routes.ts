@@ -16,7 +16,7 @@ const router = Router();
 router.get(
   '/api/admin/empresas',
   authenticate,
-  authorizeRoles('admin'),
+  authorizeRole('admin'),
   async (_req: Request, res: Response) => {
     try {
       const result = await pool.query(`
@@ -46,7 +46,7 @@ router.get(
 router.get(
   '/api/admin/empresas/:id',
   authenticate,
-  authorizeRoles('admin'),
+  authorizeRole('admin'),
   async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
@@ -85,7 +85,7 @@ router.get(
 router.post(
   '/api/admin/empresas',
   authenticate,
-  authorizeRoles('admin'),
+  authorizeRole('admin'),
   async (req: Request, res: Response) => {
     try {
       const {
