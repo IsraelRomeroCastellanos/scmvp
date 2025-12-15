@@ -9,7 +9,9 @@ type Empresa = {
   rfc: string | null;
   tipo_entidad: string;
   estado: string;
-  domicilio: string | null;
+  entidad: string | null;
+  municipio: string | null;
+  codigo_postal: string | null;
 };
 
 function getToken(): string | null {
@@ -18,23 +20,6 @@ function getToken(): string | null {
   } catch {
     return null;
   }
-}
-
-function parseDomicilio(domicilio?: string | null) {
-  let entidad = '-';
-  let municipio = '-';
-  let cp = '-';
-
-  if (domicilio) {
-    const parts = domicilio.split(',').map(p => p.trim());
-    if (parts[1]) municipio = parts[1];
-    if (parts[2]) entidad = parts[2];
-
-    const cpMatch = domicilio.match(/CP\s*([0-9]{4,6})/i);
-    if (cpMatch?.[1]) cp = cpMatch[1];
-  }
-
-  return { entidad, municipio, cp };
 }
 
 export default function EmpresasPage() {
@@ -48,7 +33,9 @@ export default function EmpresasPage() {
     const fetchEmpresas = async () => {
       try {
         const token = getToken();
+
         const res = await fetch(`${apiBase}/api/admin/empresas`, {
+          method: 'GET',
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
           cache: 'no-store'
         });
@@ -69,20 +56,27 @@ export default function EmpresasPage() {
     fetchEmpresas();
   }, [apiBase]);
 
-  if (loading) return <div className="p-6">Cargando empresas...</div>;
-  if (error) return <div className="p-6 text-red-600">{error}</div>;
+  if (loading) {
+    return <div className="p-6">Cargando empresas...</div>;
+  }
+
+  if (error) {
+    return <div className="p-6 text-red-600">{error}</div>;
+  }
 
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-semibold">Gestión de Empresas</h1>
+      <div className="mb-4 bg-gray-50 border border-gray-200 rounded p-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold">Gestión de Empresas</h1>
 
-        <Link
-          href="/admin/crear-empresa"
-          className="bg-blue-600 text-white px-4 py-2 rounded"
-        >
-          Crear empresa
-        </Link>
+          <Link
+            href="/admin/crear-empresa"
+            className="bg-blue-600 text-white px-4 py-2 rounded"
+          >
+            Crear empresa
+          </Link>
+        </div>
       </div>
 
       <div className="overflow-x-auto">
@@ -102,30 +96,38 @@ export default function EmpresasPage() {
           </thead>
 
           <tbody>
-            {empresas.map((e) => {
-              const { entidad, municipio, cp } = parseDomicilio(e.domicilio);
-
-              return (
-                <tr key={e.id} className="border-t">
-                  <td className="border px-2 py-1">{e.id}</td>
-                  <td className="border px-2 py-1">{e.nombre_legal}</td>
-                  <td className="border px-2 py-1">{e.rfc || '-'}</td>
-                  <td className="border px-2 py-1">{entidad}</td>
-                  <td className="border px-2 py-1">{municipio}</td>
-                  <td className="border px-2 py-1">{cp}</td>
-                  <td className="border px-2 py-1">{e.tipo_entidad}</td>
-                  <td className="border px-2 py-1">{e.estado}</td>
-                  <td className="border px-2 py-1">
-                    <Link
-                      href={`/admin/editar-empresa/${e.id}`}
-                      className="text-blue-600 hover:underline"
-                    >
-                      Editar
-                    </Link>
-                  </td>
-                </tr>
-              );
-            })}
+            {empresas.map((e) => (
+              <tr key={e.id} className="border-t">
+                <td className="border px-2 py-1">{e.id}</td>
+                <td className="border px-2 py-1">{e.nombre_legal}</td>
+                <td className="border px-2 py-1">{e.rfc || '-'}</td>
+                <td className="border px-2 py-1">{e.entidad || '-'}</td>
+                <td className="border px-2 py-1">{e.municipio || '-'}</td>
+                <td className="border px-2 py-1">{e.codigo_postal || '-'}</td>
+                <td className="border px-2 py-1">{e.tipo_entidad}</td>
+                <td className="border px-2 py-1">
+                  <span
+                    className={`px-2 py-1 rounded text-xs font-semibold ${
+                      e.estado === 'activo'
+                        ? 'bg-green-100 text-green-700'
+                        : e.estado === 'inactivo'
+                        ? 'bg-gray-200 text-gray-700'
+                        : 'bg-yellow-100 text-yellow-700'
+                    }`}
+                  >
+                    {e.estado}
+                  </span>
+                </td>
+                <td className="border px-2 py-1">
+                  <Link
+                    href={`/admin/editar-empresa/${e.id}`}
+                    className="text-blue-600 hover:underline"
+                  >
+                    Editar
+                  </Link>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
