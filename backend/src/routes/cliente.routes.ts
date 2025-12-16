@@ -11,45 +11,45 @@ const router = Router();
  * Listado rápido para tabla (limitado).
  */
 router.get(
-  '/mis-clientes',
+  '/api/cliente/mis-clientes',
   authenticate,
-  authorizeRoles('admin', 'consultor', 'cliente'),
-  async (req, res) => {
+  async (req: Request, res: Response) => {
     try {
-      if (!req.user) {
+      const user = req.user;
+
+      if (!user) {
         return res.status(401).json({ error: 'Usuario no autenticado' });
       }
-
-      const user = req.user;
 
       let query = `
         SELECT
           c.id,
-          c.nombre,
-          c.tipo,
+          c.nombre_entidad,
+          c.tipo_cliente,
           c.estado,
+          c.porcentaje_cumplimiento,
           e.nombre_legal AS empresa
         FROM clientes c
-        LEFT JOIN empresas e ON e.id = c.empresa_id
+        INNER JOIN empresas e ON e.id = c.empresa_id
       `;
 
       const params: any[] = [];
 
-      // cliente: sólo clientes de su empresa
+      // 🔐 Si el usuario es cliente, solo ve los de su empresa
       if (user.rol === 'cliente') {
-        query += ` WHERE c.empresa_id = $1`;
+        query += ' WHERE c.empresa_id = $1';
         params.push(user.empresa_id);
       }
 
-      query += ` ORDER BY c.id DESC LIMIT 100`;
+      query += ' ORDER BY c.nombre_entidad';
 
-      const { rows } = await pool.query(query, params);
-      return res.json({ clientes: rows });
+      const result = await pool.query(query, params);
+
+      res.json({ clientes: result.rows });
     } catch (error) {
       console.error('Error al listar clientes:', error);
-      return res.status(500).json({ error: 'Error al listar clientes' });
+      res.status(500).json({ error: 'Error al listar clientes' });
     }
   }
 );
-
 export default router;
