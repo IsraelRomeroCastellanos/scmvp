@@ -12,7 +12,12 @@ router.get(
   authorizeRoles('admin', 'consultor', 'cliente'),
   async (req, res) => {
     try {
-      const user = req.user;
+      if (!req.user) {
+  return res.status(401).json({ error: 'Usuario no autenticado' });
+}
+
+const user = req.user;
+
 
       let query = `
         SELECT
