@@ -10,43 +10,60 @@ interface Cliente {
   empresa: string;
   tipo: string;
   actividad: string;
-  estado: string;
+  estado: 'activo' | 'inactivo' | string;
+}
+
+function mostrar(v: string | null | undefined) {
+  if (!v || v.trim() === '') return '—';
+  return v;
+}
+
+function badgeEstado(estado: string) {
+  const e = estado?.toLowerCase();
+  if (e === 'activo') return 'bg-green-100 text-green-800';
+  if (e === 'inactivo') return 'bg-red-100 text-red-800';
+  return 'bg-gray-100 text-gray-800';
 }
 
 export default function ClientesPage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const fetchClientes = async () => {
+    try {
+      setLoading(true);
+      setError('');
+
+      const token = localStorage.getItem('token');
+      const base = process.env.NEXT_PUBLIC_API_BASE_URL;
+      if (!base) throw new Error('Falta NEXT_PUBLIC_API_BASE_URL');
+
+      const res = await fetch(`${base}/api/cliente/clientes`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: 'no-store',
+      });
+
+      if (!res.ok) throw new Error('Error de servidor');
+
+      const data = await res.json();
+      setClientes(Array.isArray(data?.clientes) ? data.clientes : []);
+    } catch (_e) {
+      setError('Error al cargar clientes');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchClientes = async () => {
-      try {
-        const token = localStorage.getItem('token');
-
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/admin/clientes`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        if (!res.ok) throw new Error();
-
-        const data = await res.json();
-        setClientes(data.clientes);
-      } catch {
-        setError('Error al cargar clientes');
-      }
-    };
-
     fetchClientes();
   }, []);
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="max-w-7xl mx-auto bg-white rounded-lg shadow-sm p-6">
-
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -65,55 +82,68 @@ export default function ClientesPage() {
         </div>
 
         {/* Tabla */}
-        <div className="bg-gray-50 rounded-lg p-4">
+        <div className="bg-gray-50 rounded-lg p-4 overflow-x-auto">
           {error && (
-            <div className="text-red-600 bg-red-50 p-3 rounded">
+            <div className="mb-3 rounded bg-red-50 text-red-700 p-3">
               {error}
             </div>
           )}
 
-          {!error && (
-            <table className="w-full border-collapse">
+          {loading ? (
+            <div className="text-gray-600">Cargando clientes…</div>
+          ) : (
+            <table className="w-full">
               <thead>
                 <tr className="border-b text-left text-sm text-gray-600">
-                  <th className="py-2">Nombre</th>
-                  <th>Empresa</th>
-                  <th>Tipo</th>
-                  <th>Actividad</th>
-                  <th>Estado</th>
+                  <th className="py-2 pr-3">ID</th>
+                  <th className="pr-3">Nombre</th>
+                  <th className="pr-3">Empresa</th>
+                  <th className="pr-3">Tipo</th>
+                  <th className="pr-3">Actividad</th>
+                  <th className="pr-3">Estado</th>
                   <th className="text-right">Acciones</th>
                 </tr>
               </thead>
+
               <tbody>
                 {clientes.map((c) => (
-                  <tr
-                    key={c.id}
-                    className="border-b text-sm hover:bg-white"
-                  >
-                    <td className="py-2">{c.nombre}</td>
-                    <td>{c.empresa}</td>
-                    <td>{c.tipo}</td>
-                    <td>{c.actividad}</td>
-                    <td>
-                      <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs">
-                        {c.estado}
+                  <tr key={c.id} className="border-b text-sm hover:bg-white">
+                    <td className="py-2 pr-3">{c.id}</td>
+                    <td className="pr-3">{mostrar(c.nombre)}</td>
+                    <td className="pr-3">{mostrar(c.empresa)}</td>
+                    <td className="pr-3">{mostrar(c.tipo)}</td>
+                    <td className="pr-3">{mostrar(c.actividad)}</td>
+                    <td className="pr-3">
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-semibold ${badgeEstado(
+                          c.estado
+                        )}`}
+                      >
+                        {mostrar(c.estado)}
                       </span>
                     </td>
                     <td className="text-right">
                       <Link
-                        href={`/cliente/clientes/${c.id}`}
+                        href={`/cliente/editar-cliente/${c.id}`}
                         className="text-blue-600 hover:underline"
                       >
-                        Ver
+                        Editar
                       </Link>
                     </td>
                   </tr>
                 ))}
+
+                {clientes.length === 0 && !error && (
+                  <tr>
+                    <td colSpan={7} className="py-6 text-center text-gray-500">
+                      No hay clientes registrados.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           )}
         </div>
-
       </div>
     </div>
   );
