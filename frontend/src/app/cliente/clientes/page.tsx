@@ -1,164 +1,110 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
-import { toast } from 'react-toastify';
 
-export default function MisClientes() {
-  const [clientes, setClientes] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>('');
+interface Cliente {
+  id: number;
+  nombre: string;
+  email?: string;
+  empresa?: string;
+}
+
+export default function GestionClientesPage() {
   const router = useRouter();
-  const [token, setToken] = useState<string>('');
 
- 70 |     } finally {
- 71 |       setLoading(false);
- 72 |     }
- 73 |   }, [router]);
-    :   ^
- 74 | 
- 75 |   useEffect(() => {
- 75 |     const storedToken = localStorage.getItem('token');
-    `----
-Caused by:
-    Syntax Error
-Import trace for requested module:
-./src/app/cliente/clientes/page.tsx
-> Build failed because of webpack errors
-Error: Command "npm run build" exited with 1
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
-      
+  const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL as string;
+
+  const fetchClientes = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+
+      const response = await axios.get(
+        `${backendUrl}/api/cliente/clientes`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
       const data = response.data;
 
-const clientesNormalizados = Array.isArray(data)
-  ? data
-  : Array.isArray(data?.clientes)
-  ? data.clientes
-  : Array.isArray(data?.data?.clientes)
-  ? data.data.clientes
-  : [];
+      const clientesNormalizados: Cliente[] = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.clientes)
+        ? data.clientes
+        : Array.isArray(data?.data?.clientes)
+        ? data.data.clientes
+        : [];
 
-setClientes(clientesNormalizados);
-
-    } catch (err: any) {
-      console.error('Error al cargar clientes:', err);
-      setError(err.response?.data?.error || 'Error al cargar clientes');
-      if (err.response?.status === 401 || err.response?.status === 403) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        router.push('/login');
-      }
+      setClientes(clientesNormalizados);
+    } catch (err) {
+      console.error('Error cargando clientes:', err);
+      setError('Error al cargar clientes');
+      setClientes([]);
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  };
 
-useEffect(() => {
-  const storedToken = localStorage.getItem('token');
-  if (!storedToken) {
-    router.push('/login');
-    return;
-  }
-
-  fetchClientes();
-}, [fetchClientes, router]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="flex justify-center items-center h-64">
-          <div className="text-lg text-gray-600">Cargando clientes...</div>
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    fetchClientes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <div className="mb-6 flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-900">Mis Clientes</h1>
-            <div className="flex space-x-3">
-              <button
-                onClick={() => router.push('/cliente/carga-masiva')}
-                className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors"
-              >
-                Carga Masiva
-              </button>
-              <button
-                onClick={() => router.push('/registrar-cliente')}
-                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-              >
-                Registrar Cliente
-              </button>
-            </div>
-          </div>
+    <div className="p-6">
+      <h1 className="text-2xl font-semibold mb-4">Gestión de Clientes</h1>
 
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-md">
-              {error}
-            </div>
-          )}
+      {loading && (
+        <p className="text-gray-600">Cargando clientes…</p>
+      )}
 
-          <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-            <table className="min-w-full divide-y divide-gray-300">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">ID</th>
-                  <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Nombre</th>
-                  <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Tipo</th>
-                  <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Actividad</th>
-                  <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Estado</th>
-                  <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Acciones</th>
+      {error && (
+        <p className="text-red-600">{error}</p>
+      )}
+
+      {!loading && !error && clientes.length === 0 && (
+        <p className="text-gray-600">No hay clientes para mostrar.</p>
+      )}
+
+      {!loading && !error && clientes.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="min-w-full border border-gray-200">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="border px-4 py-2 text-left">ID</th>
+                <th className="border px-4 py-2 text-left">Nombre</th>
+                <th className="border px-4 py-2 text-left">Empresa</th>
+              </tr>
+            </thead>
+            <tbody>
+              {clientes.map((cliente) => (
+                <tr key={cliente.id}>
+                  <td className="border px-4 py-2">{cliente.id}</td>
+                  <td className="border px-4 py-2">{cliente.nombre}</td>
+                  <td className="border px-4 py-2">
+                    {cliente.empresa ?? '—'}
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 bg-white">
-                {clientes.map((cliente) => (
-                  <tr key={cliente.id} className="hover:bg-gray-50">
-                    <td className="py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">
-                      {cliente.id}
-                    </td>
-                    <td className="px-3 py-4 text-sm text-gray-500">{cliente.nombre_entidad}</td>
-                    <td className="px-3 py-4 text-sm text-gray-500">
-                      <span className={`px-2 inline-flex text-xs font-semibold rounded-full ${
-                        cliente.tipo_cliente === 'persona_fisica' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
-                      }`}>
-                        {cliente.tipo_cliente === 'persona_fisica' ? 'Persona Física' : 'Persona Moral'}
-                      </span>
-                    </td>
-                    <td className="px-3 py-4 text-sm text-gray-500">{cliente.actividad_economica}</td>
-                    <td className="px-3 py-4 text-sm text-gray-500">
-                      <span className={`px-2 inline-flex text-xs font-semibold rounded-full ${
-                        cliente.estado === 'activo' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                      }`}>
-                        {cliente.estado}
-                      </span>
-                    </td>
-                    <td className="px-3 py-4 text-sm text-gray-500">
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => router.push(`/cliente/clientes/${cliente.id}`)}
-                          className="text-indigo-600 hover:text-indigo-900"
-                        >
-                          Ver
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {clientes.length === 0 && !error && (
-              <div className="text-center py-8 text-gray-500">
-                No se encontraron clientes
-              </div>
-            )}
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </main>
+      )}
     </div>
   );
 }
