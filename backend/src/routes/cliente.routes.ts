@@ -2,6 +2,7 @@
 import { Router, Request, Response } from 'express';
 import { Pool } from 'pg';
 import ExcelJS from 'exceljs';
+import { authenticate } from '../middleware/auth.middleware';
 
 const router = Router();
 
