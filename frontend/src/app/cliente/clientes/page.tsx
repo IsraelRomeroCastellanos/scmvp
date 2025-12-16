@@ -12,39 +12,21 @@ export default function MisClientes() {
   const router = useRouter();
   const [token, setToken] = useState<string>('');
 
-  const fetchClientes = async () => {
-  setLoading(true);
-  setError(null);
-
-  try {
-    const response = await axios.get(
-      `${backendUrl}/api/cliente/clientes`,
-      {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-      }
-    );
-
-    const data = response.data;
-
-    const clientesNormalizados = Array.isArray(data)
-      ? data
-      : Array.isArray(data?.clientes)
-      ? data.clientes
-      : Array.isArray(data?.data?.clientes)
-      ? data.data.clientes
-      : [];
-
-    setClientes(clientesNormalizados);
-  } catch (err) {
-    console.error('Error cargando clientes:', err);
-    setError('Error al cargar clientes');
-    setClientes([]); // ← clave para no colgar UI
-  } finally {
-    setLoading(false); // ← ESTO ES LO QUE FALTABA
-  }
-};
+ 70 |     } finally {
+ 71 |       setLoading(false);
+ 72 |     }
+ 73 |   }, [router]);
+    :   ^
+ 74 | 
+ 75 |   useEffect(() => {
+ 75 |     const storedToken = localStorage.getItem('token');
+    `----
+Caused by:
+    Syntax Error
+Import trace for requested module:
+./src/app/cliente/clientes/page.tsx
+> Build failed because of webpack errors
+Error: Command "npm run build" exited with 1
 
       
       const data = response.data;
@@ -72,22 +54,15 @@ setClientes(clientesNormalizados);
     }
   }, [router]);
 
-  useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
-    
-    if (storedToken && storedUser) {
-      const user = JSON.parse(storedUser);
-      if (user.rol === 'cliente' || user.rol === 'consultor' || user.rol === 'admin') {
-        setToken(storedToken);
-        fetchClientes(storedToken);
-      } else {
-        router.push('/login');
-      }
-    } else {
-      router.push('/login');
-    }
-  }, [router, fetchClientes]);
+useEffect(() => {
+  const storedToken = localStorage.getItem('token');
+  if (!storedToken) {
+    router.push('/login');
+    return;
+  }
+
+  fetchClientes();
+}, [fetchClientes, router]);
 
   if (loading) {
     return (
