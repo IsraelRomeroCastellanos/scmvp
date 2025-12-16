@@ -5,6 +5,15 @@ import ExcelJS from 'exceljs';
 
 const router = Router();
 
+// 🔎 DEBUG TEMPORAL — NO BORRAR HASTA CONFIRMAR
+router.get('/clientes', authenticate, (_req, res) => {
+  return res.json({
+    ok: true,
+    debug: 'endpoint clientes alcanzado',
+  });
+});
+
+
 const clienteRoutes = (pool: Pool) => {
   // ✅ Plantilla Excel
   router.get('/api/cliente/plantilla-excel', async (req: Request, res: Response) => {
