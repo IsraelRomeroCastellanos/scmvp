@@ -77,7 +77,7 @@ export default function EmpresasPage() {
           </div>
 
           <Link
-            href="/admin/empresas/crear"
+            href="/admin/crear-empresa"
             className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
           >
             Crear empresa
