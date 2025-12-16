@@ -15,8 +15,8 @@ export default function MisClientes() {
   const fetchClientes = useCallback(async (authToken: string) => {
     try {
       setLoading(true);
-      
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://plataforma-cumplimiento-mvp.onrender.com';
+
+      const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL!;
       
       const response = await axios.get(`${backendUrl}/api/cliente/mis-clientes`, {
         headers: {
@@ -24,11 +24,18 @@ export default function MisClientes() {
         },
       });
       
-      if (response.data && Array.isArray(response.data.clientes)) {
-        setClientes(response.data.clientes);
-      } else {
-        setError('Formato de respuesta inesperado');
-      }
+      const data = response.data;
+
+const clientesNormalizados = Array.isArray(data)
+  ? data
+  : Array.isArray(data?.clientes)
+  ? data.clientes
+  : Array.isArray(data?.data?.clientes)
+  ? data.data.clientes
+  : [];
+
+setClientes(clientesNormalizados);
+
     } catch (err: any) {
       console.error('Error al cargar clientes:', err);
       setError(err.response?.data?.error || 'Error al cargar clientes');
