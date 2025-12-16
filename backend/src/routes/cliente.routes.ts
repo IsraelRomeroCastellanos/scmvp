@@ -129,40 +129,45 @@ const clienteRoutes = (pool: Pool) => {
   });
 
   // ✅ Listar clientes
-  router.get('/api/cliente/mis-clientes', async (req: Request, res: Response) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Token no proporcionado' });
-    }
-    const token = authHeader.split(' ')[1];
-    let payload;
+  router.get(
+  '/api/cliente/mis-clientes',
+  authenticate,
+  authorizeRoles('admin', 'consultor', 'cliente'),
+  async (req, res) => {
     try {
-      const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev';
-      payload = require('jsonwebtoken').verify(token, JWT_SECRET) as any;
-    } catch (err: any) {
-      return res.status(401).json({ error: 'Token inválido' });
-    }
+      const user = req.user;
 
-    try {
-      let clientes;
-      if (payload.role === 'cliente' && payload.empresaId) {
-        const result = await pool.query(
-          'SELECT id, nombre_entidad, tipo_cliente, actividad_economica, estado FROM clientes WHERE empresa_id = $1 ORDER BY nombre_entidad',
-          [payload.empresaId]
-        );
-        clientes = result.rows;
-      } else {
-        const result = await pool.query(
-          'SELECT c.id, c.nombre_entidad, c.tipo_cliente, c.actividad_economica, c.estado, e.nombre_legal as empresa FROM clientes c JOIN empresas e ON c.empresa_id = e.id ORDER BY e.nombre_legal, c.nombre_entidad'
-        );
-        clientes = result.rows;
+      let query = `
+        SELECT
+          c.id,
+          c.nombre,
+          c.tipo,
+          c.estado,
+          e.nombre_legal AS empresa
+        FROM clientes c
+        LEFT JOIN empresas e ON e.id = c.empresa_id
+      `;
+
+      const params: any[] = [];
+
+      // 🔒 Cliente: solo ve clientes de su empresa
+      if (user.rol === 'cliente') {
+        query += ` WHERE c.empresa_id = $1`;
+        params.push(user.empresa_id);
       }
-      res.json({ clientes });
-    } catch (err: any) {
-      console.error('Error al listar clientes:', err);
-      res.status(500).json({ error: 'Error al cargar clientes' });
+
+      query += ` ORDER BY c.id DESC LIMIT 100`;
+
+      const { rows } = await pool.query(query, params);
+
+      res.json({ clientes: rows });
+    } catch (error) {
+      console.error('Error al listar clientes:', error);
+      res.status(500).json({ error: 'Error al listar clientes' });
     }
-  });
+  }
+);
+
 
   // ✅ Actualizar estado de cliente
   router.put('/api/cliente/:id/estado', async (req: Request, res: Response) => {
