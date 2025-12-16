@@ -12,17 +12,40 @@ export default function MisClientes() {
   const router = useRouter();
   const [token, setToken] = useState<string>('');
 
-  const fetchClientes = useCallback(async (authToken: string) => {
-    try {
-      setLoading(true);
+  const fetchClientes = async () => {
+  setLoading(true);
+  setError(null);
 
-      const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL!;
-      
-      const response = await axios.get(`${backendUrl}/api/cliente/mis-clientes`, {
+  try {
+    const response = await axios.get(
+      `${backendUrl}/api/cliente/clientes`,
+      {
         headers: {
-          Authorization: `Bearer ${authToken}`,
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
-      });
+      }
+    );
+
+    const data = response.data;
+
+    const clientesNormalizados = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.clientes)
+      ? data.clientes
+      : Array.isArray(data?.data?.clientes)
+      ? data.data.clientes
+      : [];
+
+    setClientes(clientesNormalizados);
+  } catch (err) {
+    console.error('Error cargando clientes:', err);
+    setError('Error al cargar clientes');
+    setClientes([]); // ← clave para no colgar UI
+  } finally {
+    setLoading(false); // ← ESTO ES LO QUE FALTABA
+  }
+};
+
       
       const data = response.data;
 
