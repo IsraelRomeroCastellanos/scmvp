@@ -35,8 +35,9 @@ export default function GestionClientesPage() {
         `${backendUrl}/api/cliente/clientes`,
         {
           headers: {
-            Authorization: `Bearer ${token}`,
+           Authorization: `Bearer ${token}`,
           },
+         timeout: 5000, // ⏱️ CLAVE
         }
       );
 
@@ -51,13 +52,20 @@ export default function GestionClientesPage() {
         : [];
 
       setClientes(clientesNormalizados);
-    } catch (err) {
-      console.error('Error cargando clientes:', err);
-      setError('Error al cargar clientes');
+    } catch (err: any) {
+      console.error('⛔ Error cargando clientes:', err);
+
+      if (err.code === 'ECONNABORTED') {
+        setError('El servidor tardó demasiado en responder.');
+      } else {
+        setError('Error al cargar clientes');
+      }
+
       setClientes([]);
     } finally {
       setLoading(false);
     }
+
   };
 
   useEffect(() => {
