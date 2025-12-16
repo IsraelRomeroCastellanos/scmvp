@@ -6,18 +6,21 @@ import { authorizeRoles } from '../middleware/role.middleware';
 
 const router = Router();
 
+/**
+ * GET /api/cliente/mis-clientes
+ * Listado rápido para tabla (limitado).
+ */
 router.get(
-  '/api/cliente/mis-clientes',
+  '/mis-clientes',
   authenticate,
   authorizeRoles('admin', 'consultor', 'cliente'),
   async (req, res) => {
     try {
       if (!req.user) {
-  return res.status(401).json({ error: 'Usuario no autenticado' });
-}
+        return res.status(401).json({ error: 'Usuario no autenticado' });
+      }
 
-const user = req.user;
-
+      const user = req.user;
 
       let query = `
         SELECT
@@ -32,6 +35,7 @@ const user = req.user;
 
       const params: any[] = [];
 
+      // cliente: sólo clientes de su empresa
       if (user.rol === 'cliente') {
         query += ` WHERE c.empresa_id = $1`;
         params.push(user.empresa_id);
@@ -40,11 +44,10 @@ const user = req.user;
       query += ` ORDER BY c.id DESC LIMIT 100`;
 
       const { rows } = await pool.query(query, params);
-
-      res.json({ clientes: rows });
+      return res.json({ clientes: rows });
     } catch (error) {
       console.error('Error al listar clientes:', error);
-      res.status(500).json({ error: 'Error al listar clientes' });
+      return res.status(500).json({ error: 'Error al listar clientes' });
     }
   }
 );

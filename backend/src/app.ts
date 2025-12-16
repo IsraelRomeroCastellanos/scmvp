@@ -7,28 +7,13 @@ import clienteRoutes from './routes/cliente.routes';
 
 const app = express();
 
-/**
- * ===============================
- * Middlewares GLOBALES
- * ===============================
- */
 app.use(cors());
 app.use(express.json());
 
-/**
- * ===============================
- * Health check
- * ===============================
- */
 app.get('/', (_req, res) => {
   res.json({ ok: true });
 });
 
-/**
- * ===============================
- * Rutas del sistema
- * ===============================
- */
 app.use('/api/auth', authRoutes);
 app.use(adminRoutes);
 app.use('/api/cliente', clienteRoutes);
