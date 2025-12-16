@@ -1,32 +1,18 @@
 // backend/src/routes/cliente.routes.ts
-import { Router, Request, Response } from 'express';
-import { Pool } from 'pg';
+import { Router } from 'express';
 import pool from '../db';
-import ExcelJS from 'exceljs';
 import { authenticate } from '../middleware/auth.middleware';
-import { requireRole } from '../middleware/role.middleware';
+import { authorizeRoles } from '../middleware/role.middleware';
 
 const router = Router();
-
-interface AuthenticatedRequest extends Request {
-  user?: {
-    id: number;
-    rol: string;
-    empresa_id: number | null;
-  };
-}
 
 router.get(
   '/api/cliente/mis-clientes',
   authenticate,
-  requireRole('admin', 'consultor', 'cliente'),
-  async (req: AuthenticatedRequest, res: Response) => {
+  authorizeRoles('admin', 'consultor', 'cliente'),
+  async (req, res) => {
     try {
-      if (!req.user) {
-        return res.status(401).json({ error: 'Usuario no autenticado' });
-      }
-
-      const { rol, empresa_id } = req.user;
+      const user = req.user;
 
       let query = `
         SELECT
@@ -41,16 +27,16 @@ router.get(
 
       const params: any[] = [];
 
-      if (rol === 'cliente') {
-        query += ' WHERE c.empresa_id = $1';
-        params.push(empresa_id);
+      if (user.rol === 'cliente') {
+        query += ` WHERE c.empresa_id = $1`;
+        params.push(user.empresa_id);
       }
 
-      query += ' ORDER BY c.id DESC LIMIT 100';
+      query += ` ORDER BY c.id DESC LIMIT 100`;
 
-      const result = await pool.query(query, params);
+      const { rows } = await pool.query(query, params);
 
-      res.json({ clientes: result.rows });
+      res.json({ clientes: rows });
     } catch (error) {
       console.error('Error al listar clientes:', error);
       res.status(500).json({ error: 'Error al listar clientes' });
@@ -59,5 +45,3 @@ router.get(
 );
 
 export default router;
-
-
