@@ -1,13 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import axios from 'axios';
 import { useRouter } from 'next/navigation';
 
 interface Cliente {
   id: number;
-  nombre_completo: string;
-  email: string;
+  nombre_entidad: string;
+  tipo_cliente: string;
+  nacionalidad: string | null;
+  porcentaje_cumplimiento: number;
+  estado: 'activo' | 'inactivo';
 }
 
 export default function ClientesPage() {
@@ -17,36 +19,32 @@ export default function ClientesPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-
     const fetchClientes = async () => {
       try {
-        const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+        const token = localStorage.getItem('token');
+        if (!token) {
+          router.push('/login');
+          return;
+        }
 
-        const response = await axios.get(
-          `${backendUrl}/api/cliente/clientes`,
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/cliente/mis-clientes`,
           {
             headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            timeout: 5000,
+              Authorization: `Bearer ${token}`
+            }
           }
         );
 
-        setClientes(response.data.clientes || []);
-      } catch (err: any) {
-        console.error('⛔ Error cargando clientes:', err);
-
-        if (err.code === 'ECONNABORTED') {
-          setError('El servidor tardó demasiado en responder.');
-        } else {
-          setError('Error al cargar clientes.');
+        if (!res.ok) {
+          throw new Error('Error al cargar clientes');
         }
+
+        const data = await res.json();
+        setClientes(data.clientes ?? []);
+      } catch (err) {
+        console.error(err);
+        setError('Error al cargar clientes');
       } finally {
         setLoading(false);
       }
@@ -64,31 +62,58 @@ export default function ClientesPage() {
   }
 
   return (
-    <div className="p-6">
-      <h1 className="text-xl font-semibold mb-4">Gestión de Clientes</h1>
+    <div className="p-6 bg-gray-50 min-h-screen">
+      <div className="bg-white p-6 rounded shadow">
+        <h1 className="text-2xl font-semibold mb-4">Gestión de Clientes</h1>
 
-      {clientes.length === 0 ? (
-        <p>No hay clientes registrados.</p>
-      ) : (
-        <table className="min-w-full border">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="border px-2 py-1">ID</th>
-              <th className="border px-2 py-1">Nombre</th>
-              <th className="border px-2 py-1">Email</th>
-            </tr>
-          </thead>
-          <tbody>
-            {clientes.map((c) => (
-              <tr key={c.id}>
-                <td className="border px-2 py-1">{c.id}</td>
-                <td className="border px-2 py-1">{c.nombre_completo}</td>
-                <td className="border px-2 py-1">{c.email}</td>
+        {clientes.length === 0 ? (
+          <p>No hay clientes registrados.</p>
+        ) : (
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-gray-100 text-left">
+                <th className="p-2 border">ID</th>
+                <th className="p-2 border">Nombre</th>
+                <th className="p-2 border">Tipo</th>
+                <th className="p-2 border">Nacionalidad</th>
+                <th className="p-2 border">% Cumplimiento</th>
+                <th className="p-2 border">Estado</th>
+                <th className="p-2 border">Acciones</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+            </thead>
+            <tbody>
+              {clientes.map((c) => (
+                <tr key={c.id} className="hover:bg-gray-50">
+                  <td className="p-2 border">{c.id}</td>
+                  <td className="p-2 border">{c.nombre_entidad}</td>
+                  <td className="p-2 border">{c.tipo_cliente}</td>
+                  <td className="p-2 border">{c.nacionalidad ?? '-'}</td>
+                  <td className="p-2 border">{c.porcentaje_cumplimiento}%</td>
+                  <td className="p-2 border">
+                    <span
+                      className={`px-2 py-1 rounded text-xs font-semibold ${
+                        c.estado === 'activo'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}
+                    >
+                      {c.estado}
+                    </span>
+                  </td>
+                  <td className="p-2 border">
+                    <button
+                      onClick={() => router.push(`/cliente/clientes/${c.id}`)}
+                      className="text-blue-600 hover:underline"
+                    >
+                      Ver / Editar
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 }
