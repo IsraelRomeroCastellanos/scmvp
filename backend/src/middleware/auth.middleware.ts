@@ -1,22 +1,40 @@
 // backend/src/middleware/auth.middleware.ts
 import { Request, Response, NextFunction } from 'express';
-import { verifyToken } from '../services/auth.service';
+import jwt from 'jsonwebtoken';
 
-export const authenticate = (req: Request, res: Response, next: NextFunction) => {
+export type UserRole = 'admin' | 'consultor' | 'cliente';
+
+export interface AuthRequest extends Request {
+  user?: {
+    id: number;
+    email: string;
+    rol: UserRole;
+    empresa_id: number | null;
+  };
+}
+
+export const authenticate = (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
   const authHeader = req.headers.authorization;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (!authHeader) {
     return res.status(401).json({ error: 'Token no proporcionado' });
   }
 
   const token = authHeader.split(' ')[1];
-  const payload = verifyToken(token);
 
-  if (!payload) {
+  try {
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET as string
+    ) as AuthRequest['user'];
+
+    req.user = decoded;
+    next();
+  } catch (error) {
     return res.status(401).json({ error: 'Token inválido o expirado' });
   }
-
-  // Adjunta el usuario al request
-  (req as any).user = payload;
-  next();
 };
