@@ -102,7 +102,7 @@ export default function ClientesPage() {
                   </td>
                   <td className="p-2 border">
                     <button
-                      onClick={() => router.push(`/cliente/clientes/${c.id}`)}
+                      onClick={() => router.push(`/cliente/editar-cliente/${c.id}`)}
                       className="text-blue-600 hover:underline"
                     >
                       Ver / Editar
