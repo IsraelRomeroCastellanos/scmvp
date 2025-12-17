@@ -123,7 +123,7 @@ export default function Navbar() {
     },
     {
       // Módulo unificado de clientes
-      href: '/clientes',
+      href: '/cliente/clientes',
       baseLabel: 'Gestión de Clientes',
       roles: ['administrador', 'consultor', 'cliente'],
     },
@@ -151,7 +151,7 @@ export default function Navbar() {
   const homeHref = user ? '/dashboard' : '/login';
 
   const getItemLabel = (item: (typeof menuItems)[number]) => {
-    if (item.href === '/clientes' && role === 'cliente') {
+    if (item.href === '/cliente/clientes' && role === 'cliente') {
       return 'Mis Clientes';
     }
     return item.baseLabel;
