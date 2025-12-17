@@ -1,19 +1,21 @@
 // backend/src/routes/cliente.routes.ts
-import { Router } from 'express';
+import { Router, Response } from 'express';
 import pool from '../db';
-import { authenticate } from '../middleware/auth.middleware';
-import { authorizeRoles } from '../middleware/role.middleware';
+import { authenticate, AuthRequest } from '../middleware/auth.middleware';
 
 const router = Router();
 
 /**
+ * =========================================
  * GET /api/cliente/mis-clientes
- * Listado rápido para tabla (limitado).
+ * =========================================
+ * - admin / consultor → todos los clientes
+ * - cliente → solo clientes de su empresa
  */
 router.get(
   '/api/cliente/mis-clientes',
   authenticate,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const user = req.user;
 
@@ -23,25 +25,24 @@ router.get(
 
       let query = `
         SELECT
-          c.id,
-          c.nombre_entidad,
-          c.tipo_cliente,
-          c.estado,
-          c.porcentaje_cumplimiento,
-          e.nombre_legal AS empresa
-        FROM clientes c
-        INNER JOIN empresas e ON e.id = c.empresa_id
+          id,
+          nombre_entidad,
+          tipo_cliente,
+          nacionalidad,
+          porcentaje_cumplimiento,
+          estado
+        FROM clientes
       `;
 
       const params: any[] = [];
 
-      // 🔐 Si el usuario es cliente, solo ve los de su empresa
+      // Si es cliente → solo su empresa
       if (user.rol === 'cliente') {
-        query += ' WHERE c.empresa_id = $1';
+        query += ' WHERE empresa_id = $1';
         params.push(user.empresa_id);
       }
 
-      query += ' ORDER BY c.nombre_entidad';
+      query += ' ORDER BY creado_en DESC';
 
       const result = await pool.query(query, params);
 
@@ -52,4 +53,5 @@ router.get(
     }
   }
 );
+
 export default router;
