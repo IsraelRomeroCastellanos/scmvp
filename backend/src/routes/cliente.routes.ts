@@ -6,14 +6,10 @@ import { authenticate, AuthRequest } from '../middleware/auth.middleware';
 const router = Router();
 
 /**
- * =========================================
- * GET /api/cliente/mis-clientes
- * =========================================
- * - admin / consultor → todos los clientes
- * - cliente → solo clientes de su empresa
+ * GET /mis-clientes
  */
 router.get(
-  '/api/cliente/mis-clientes',
+  '/mis-clientes',
   authenticate,
   async (req: AuthRequest, res: Response) => {
     try {
@@ -36,7 +32,6 @@ router.get(
 
       const params: any[] = [];
 
-      // Si es cliente → solo su empresa
       if (user.rol === 'cliente') {
         query += ' WHERE empresa_id = $1';
         params.push(user.empresa_id);
