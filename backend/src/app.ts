@@ -14,9 +14,10 @@ app.get('/', (_req, res) => {
   res.json({ ok: true });
 });
 
+console.log('👉 Mounting routes');
+
 app.use('/api/auth', authRoutes);
-app.use(adminRoutes);
-console.log('Cliente routes mounted');
+app.use('/api/admin', adminRoutes);
 app.use('/api/cliente', clienteRoutes);
 
 export default app;
