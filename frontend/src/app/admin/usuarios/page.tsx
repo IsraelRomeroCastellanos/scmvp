@@ -2,24 +2,31 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 interface Usuario {
   id: number;
   email: string;
   nombre_completo: string;
   rol: string;
+  empresa_id: number | null;
   activo: boolean;
 }
 
-export default function UsuariosPage() {
+export default function GestionUsuarios() {
+  const router = useRouter();
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     const fetchUsuarios = async () => {
       try {
         const token = localStorage.getItem('token');
+        if (!token) {
+          router.push('/login');
+          return;
+        }
 
         const res = await fetch(
           `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/admin/usuarios`,
@@ -30,96 +37,68 @@ export default function UsuariosPage() {
           }
         );
 
-        if (!res.ok) throw new Error();
+        if (!res.ok) {
+          throw new Error('Error al cargar usuarios');
+        }
 
         const data = await res.json();
-        setUsuarios(data.usuarios);
-      } catch {
-        setError('Error al cargar usuarios.');
+        setUsuarios(data.usuarios || []);
+      } catch (err) {
+        setError('Error al cargar usuarios');
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchUsuarios();
-  }, []);
+  }, [router]);
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="max-w-7xl mx-auto bg-white rounded-lg shadow-sm p-6">
+      <h1 className="text-2xl font-semibold mb-1">Gestión de Usuarios</h1>
+      <p className="text-sm text-gray-600 mb-4">
+        Listado general de usuarios del sistema
+      </p>
 
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-semibold">Gestión de Usuarios</h1>
-            <p className="text-sm text-gray-500">
-              Listado general de usuarios del sistema
-            </p>
-          </div>
+      {loading && <p>Cargando usuarios…</p>}
+      {error && <p className="text-red-600">{error}</p>}
 
-          <Link
-            href="/admin/crear-usuario"
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-          >
-            Crear usuario
-          </Link>
-        </div>
-
-        {/* Tabla */}
-        <div className="bg-gray-50 rounded-lg p-4">
-          {error && (
-            <div className="text-red-600 bg-red-50 p-3 rounded">
-              {error}
-            </div>
-          )}
-
-          {!error && (
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b text-left text-sm text-gray-600">
-                  <th className="py-2">ID</th>
-                  <th>Nombre</th>
-                  <th>Email</th>
-                  <th>Rol</th>
-                  <th>Estado</th>
-                  <th className="text-right">Acciones</th>
+      {!loading && !error && (
+        <div className="bg-white rounded shadow">
+          <table className="min-w-full border">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="px-4 py-2 border">ID</th>
+                <th className="px-4 py-2 border">Email</th>
+                <th className="px-4 py-2 border">Nombre</th>
+                <th className="px-4 py-2 border">Rol</th>
+                <th className="px-4 py-2 border">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {usuarios.map((u) => (
+                <tr key={u.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-2 border">{u.id}</td>
+                  <td className="px-4 py-2 border">{u.email}</td>
+                  <td className="px-4 py-2 border">{u.nombre_completo}</td>
+                  <td className="px-4 py-2 border capitalize">{u.rol}</td>
+                  <td className="px-4 py-2 border">
+                    <span
+                      className={`px-2 py-1 rounded text-xs font-semibold ${
+                        u.activo
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}
+                    >
+                      {u.activo ? 'Activo' : 'Inactivo'}
+                    </span>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {usuarios.map((u) => (
-                  <tr
-                    key={u.id}
-                    className="border-b text-sm hover:bg-white"
-                  >
-                    <td className="py-2">{u.id}</td>
-                    <td>{u.nombre_completo}</td>
-                    <td>{u.email}</td>
-                    <td>{u.rol}</td>
-                    <td>
-                      <span
-                        className={`px-2 py-1 rounded text-xs ${
-                          u.activo
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-gray-200 text-gray-600'
-                        }`}
-                      >
-                        {u.activo ? 'activo' : 'inactivo'}
-                      </span>
-                    </td>
-                    <td className="text-right">
-                      <Link
-                        href={`/admin/usuarios/${u.id}`}
-                        className="text-blue-600 hover:underline"
-                      >
-                        Editar
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+              ))}
+            </tbody>
+          </table>
         </div>
-
-      </div>
+      )}
     </div>
   );
 }
