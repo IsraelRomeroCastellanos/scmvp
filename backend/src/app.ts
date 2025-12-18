@@ -7,17 +7,30 @@ import clienteRoutes from './routes/cliente.routes';
 
 const app = express();
 
+/**
+ * ===============================
+ * Middlewares globales
+ * ===============================
+ */
 app.use(cors());
 app.use(express.json());
 
+/**
+ * ===============================
+ * Health check
+ * ===============================
+ */
 app.get('/', (_req, res) => {
   res.json({ ok: true });
 });
 
-console.log('👉 Mounting routes');
-
+/**
+ * ===============================
+ * Rutas del sistema
+ * ===============================
+ */
 app.use('/api/auth', authRoutes);
-app.use('/api/admin', adminRoutes);
+app.use('/api/admin', adminRoutes);   // ✅ ESTA ES LA CLAVE
 app.use('/api/cliente', clienteRoutes);
 
 export default app;
