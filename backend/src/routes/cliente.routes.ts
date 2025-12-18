@@ -1,8 +1,7 @@
 // backend/src/routes/cliente.routes.ts
 import { Router, Response } from 'express';
 import pool from '../db';
-import { authenticate } from '../middleware/auth.middleware';
-import { AuthRequest } from '../middleware/auth.middleware';
+import { authenticate, AuthRequest } from '../middleware/auth.middleware';
 
 const router = Router();
 
@@ -12,7 +11,7 @@ const router = Router();
  * ===============================
  */
 router.get(
-  '/api/cliente/mis-clientes',
+  '/mis-clientes',
   authenticate,
   async (req: AuthRequest, res: Response) => {
     try {
@@ -35,7 +34,6 @@ router.get(
 
       const params: any[] = [];
 
-      // Si es cliente, filtra por su empresa
       if (user.rol === 'cliente' && user.empresa_id) {
         query += ' WHERE empresa_id = $1';
         params.push(user.empresa_id);
@@ -55,11 +53,10 @@ router.get(
 /**
  * ===============================
  * PUT /api/cliente/:id
- * Editar cliente
  * ===============================
  */
 router.put(
-  '/api/cliente/:id',
+  '/:id',
   authenticate,
   async (req: AuthRequest, res: Response) => {
     try {
