@@ -16,6 +16,7 @@ app.get('/', (_req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use(adminRoutes);
+console.log('Cliente routes mounted');
 app.use('/api/cliente', clienteRoutes);
 
 export default app;
