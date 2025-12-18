@@ -1,23 +1,23 @@
 // backend/src/routes/cliente.routes.ts
-import { Router } from 'express';
-import  pool  from '../db';
+import { Router, Response } from 'express';
+import pool from '../db';
 import { authenticate } from '../middleware/auth.middleware';
-import { authorizeRoles } from '../middleware/role.middleware';
+import { AuthRequest } from '../middleware/auth.middleware';
 
 const router = Router();
 
 /**
  * ===============================
- * LISTAR CLIENTES
+ * GET /api/cliente/mis-clientes
  * ===============================
  */
 router.get(
   '/api/cliente/mis-clientes',
   authenticate,
-  authorizeRoles('admin', 'consultor', 'cliente'),
-  async (req, res) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const user = req.user;
+
       if (!user) {
         return res.status(401).json({ error: 'Usuario no autenticado' });
       }
@@ -32,9 +32,11 @@ router.get(
           estado
         FROM clientes
       `;
+
       const params: any[] = [];
 
-      if (user.rol === 'cliente') {
+      // Si es cliente, filtra por su empresa
+      if (user.rol === 'cliente' && user.empresa_id) {
         query += ' WHERE empresa_id = $1';
         params.push(user.empresa_id);
       }
@@ -43,8 +45,8 @@ router.get(
 
       const result = await pool.query(query, params);
       res.json({ clientes: result.rows });
-    } catch (error) {
-      console.error('Error al listar clientes:', error);
+    } catch (err) {
+      console.error('Error al listar clientes:', err);
       res.status(500).json({ error: 'Error al listar clientes' });
     }
   }
@@ -52,63 +54,50 @@ router.get(
 
 /**
  * ===============================
- * EDITAR CLIENTE (PUT)
+ * PUT /api/cliente/:id
+ * Editar cliente
  * ===============================
  */
 router.put(
   '/api/cliente/:id',
   authenticate,
-  authorizeRoles('admin', 'consultor'),
-  async (req, res) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const { id } = req.params;
       const {
         nombre_entidad,
-        alias,
         tipo_cliente,
         nacionalidad,
-        domicilio_mexico,
-        ocupacion,
-        actividad_economica,
         estado
       } = req.body;
 
-      const result = await pool.query(
+      if (!nombre_entidad || !tipo_cliente) {
+        return res.status(400).json({ error: 'Campos obligatorios faltantes' });
+      }
+
+      await pool.query(
         `
         UPDATE clientes
         SET
           nombre_entidad = $1,
-          alias = $2,
-          tipo_cliente = $3,
-          nacionalidad = $4,
-          domicilio_mexico = $5,
-          ocupacion = $6,
-          actividad_economica = $7,
-          estado = $8,
+          tipo_cliente = $2,
+          nacionalidad = $3,
+          estado = $4,
           actualizado_en = NOW()
-        WHERE id = $9
-        RETURNING *
+        WHERE id = $5
         `,
         [
           nombre_entidad,
-          alias,
           tipo_cliente,
-          nacionalidad,
-          domicilio_mexico,
-          ocupacion,
-          actividad_economica,
-          estado,
+          nacionalidad || null,
+          estado || 'activo',
           id
         ]
       );
 
-      if (result.rowCount === 0) {
-        return res.status(404).json({ error: 'Cliente no encontrado' });
-      }
-
-      res.json({ ok: true, cliente: result.rows[0] });
-    } catch (error) {
-      console.error('Error al actualizar cliente:', error);
+      res.json({ ok: true });
+    } catch (err) {
+      console.error('Error al actualizar cliente:', err);
       res.status(500).json({ error: 'Error al actualizar cliente' });
     }
   }
