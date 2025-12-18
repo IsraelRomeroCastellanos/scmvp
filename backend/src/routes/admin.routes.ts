@@ -15,6 +15,36 @@ router.get('/__debug', (_req, res) => {
   res.json({ ok: true, router: 'admin' });
 });
 
+// ===============================
+// LISTAR USUARIOS (ADMIN)
+// ===============================
+router.get(
+  '/usuarios',
+  authenticate,
+  authorizeRoles('admin'),
+  async (_req, res) => {
+    try {
+      const result = await pool.query(`
+        SELECT
+          id,
+          email,
+          nombre_completo,
+          rol,
+          empresa_id,
+          activo
+        FROM usuarios
+        ORDER BY id ASC
+      `);
+
+      res.json({ usuarios: result.rows });
+    } catch (error) {
+      console.error('Error al listar usuarios:', error);
+      res.status(500).json({ error: 'Error al listar usuarios' });
+    }
+  }
+);
+
+
 /**
  * ===============================
  * LISTAR EMPRESAS
