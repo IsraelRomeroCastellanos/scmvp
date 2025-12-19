@@ -1,29 +1,24 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 interface Cliente {
   id: number;
   nombre_entidad: string;
   tipo_cliente: string;
   nacionalidad: string | null;
-  porcentaje_cumplimiento: number;
   estado: 'activo' | 'inactivo';
 }
 
-export default function EditarClientePage() {
+export default function ClientesPage() {
   const router = useRouter();
-  const params = useParams();
-  const id = params.id as string;
-
-  const [cliente, setCliente] = useState<Cliente | null>(null);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const fetchCliente = async () => {
+    const fetchClientes = async () => {
       try {
         const token = localStorage.getItem('token');
         if (!token) {
@@ -41,147 +36,74 @@ export default function EditarClientePage() {
         );
 
         if (!res.ok) {
-          throw new Error('Error al cargar cliente');
+          throw new Error('Error al cargar clientes');
         }
 
         const data = await res.json();
-        const encontrado = data.clientes.find(
-          (c: Cliente) => c.id === Number(id)
-        );
-
-        if (!encontrado) {
-          throw new Error('Cliente no encontrado');
-        }
-
-        setCliente(encontrado);
+        setClientes(data.clientes ?? []);
       } catch (err) {
         console.error(err);
-        setError('Error al cargar cliente');
+        setError('Error al cargar clientes');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchCliente();
-  }, [id, router]);
+    fetchClientes();
+  }, [router]);
 
-  const handleChange = (field: keyof Cliente, value: any) => {
-    if (!cliente) return;
-    setCliente({ ...cliente, [field]: value });
-  };
-
-  const handleSave = async () => {
-    if (!cliente) return;
-
-    try {
-      setSaving(true);
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/cliente/${cliente.id}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify(cliente)
-        }
-      );
-
-      if (!res.ok) {
-        throw new Error('Error al guardar cambios');
-      }
-
-      router.push('/cliente/clientes');
-    } catch (err) {
-      console.error(err);
-      alert('Error al guardar cambios');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading) return <p className="p-6">Cargando cliente…</p>;
+  if (loading) return <p className="p-6">Cargando clientes…</p>;
   if (error) return <p className="p-6 text-red-600">{error}</p>;
-  if (!cliente) return null;
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="bg-white p-6 rounded shadow max-w-xl">
-        <h1 className="text-2xl font-semibold mb-4">
-          Editar Cliente #{cliente.id}
-        </h1>
+      <div className="bg-white p-6 rounded shadow">
+        <h1 className="text-2xl font-semibold mb-1">Gestión de Clientes</h1>
+        <p className="text-sm text-gray-500 mb-4">
+          Listado general de clientes del sistema
+        </p>
 
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium">Nombre</label>
-            <input
-              value={cliente.nombre_entidad}
-              onChange={(e) =>
-                handleChange('nombre_entidad', e.target.value)
-              }
-              className="w-full border p-2 rounded"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium">Tipo</label>
-            <select
-              value={cliente.tipo_cliente}
-              onChange={(e) =>
-                handleChange('tipo_cliente', e.target.value)
-              }
-              className="w-full border p-2 rounded"
-            >
-              <option value="persona_fisica">Persona Física</option>
-              <option value="persona_moral">Persona Moral</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium">Nacionalidad</label>
-            <input
-              value={cliente.nacionalidad ?? ''}
-              onChange={(e) =>
-                handleChange('nacionalidad', e.target.value)
-              }
-              className="w-full border p-2 rounded"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium">Estado</label>
-            <select
-              value={cliente.estado}
-              onChange={(e) =>
-                handleChange('estado', e.target.value)
-              }
-              className="w-full border p-2 rounded"
-            >
-              <option value="activo">Activo</option>
-              <option value="inactivo">Inactivo</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="mt-6 flex gap-4">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="bg-blue-600 text-white px-4 py-2 rounded"
-          >
-            Guardar cambios
-          </button>
-
-          <button
-            onClick={() => router.push('/cliente/clientes')}
-            className="bg-gray-200 px-4 py-2 rounded"
-          >
-            Cancelar
-          </button>
-        </div>
+        {clientes.length === 0 ? (
+          <p>No hay clientes registrados.</p>
+        ) : (
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-gray-100 text-left">
+                <th className="p-2 border">ID</th>
+                <th className="p-2 border">Nombre</th>
+                <th className="p-2 border">Tipo</th>
+                <th className="p-2 border">Nacionalidad</th>
+                <th className="p-2 border">Estado</th>
+                <th className="p-2 border">Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {clientes.map((c) => (
+                <tr key={c.id} className="hover:bg-gray-50">
+                  <td className="p-2 border">{c.id}</td>
+                  <td className="p-2 border">{c.nombre_entidad}</td>
+                  <td className="p-2 border">{c.tipo_cliente}</td>
+                  <td className="p-2 border">{c.nacionalidad ?? '-'}</td>
+                  <td className="p-2 border">
+                    <span className="px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-800">
+                      {c.estado}
+                    </span>
+                  </td>
+                  <td className="p-2 border">
+                    <button
+                      onClick={() =>
+                        router.push(`/cliente/editar-cliente/${c.id}`)
+                      }
+                      className="text-blue-600 hover:underline"
+                    >
+                      Ver
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

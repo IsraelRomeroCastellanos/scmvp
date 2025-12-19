@@ -8,7 +8,6 @@ interface Cliente {
   nombre_entidad: string;
   tipo_cliente: string;
   nacionalidad: string | null;
-  porcentaje_cumplimiento: number;
   estado: 'activo' | 'inactivo';
 }
 
@@ -53,18 +52,16 @@ export default function ClientesPage() {
     fetchClientes();
   }, [router]);
 
-  if (loading) {
-    return <p className="p-6">Cargando clientes…</p>;
-  }
-
-  if (error) {
-    return <p className="p-6 text-red-600">{error}</p>;
-  }
+  if (loading) return <p className="p-6">Cargando clientes…</p>;
+  if (error) return <p className="p-6 text-red-600">{error}</p>;
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="bg-white p-6 rounded shadow">
-        <h1 className="text-2xl font-semibold mb-4">Gestión de Clientes</h1>
+        <h1 className="text-2xl font-semibold mb-1">Gestión de Clientes</h1>
+        <p className="text-sm text-gray-500 mb-4">
+          Listado general de clientes del sistema
+        </p>
 
         {clientes.length === 0 ? (
           <p>No hay clientes registrados.</p>
@@ -76,9 +73,8 @@ export default function ClientesPage() {
                 <th className="p-2 border">Nombre</th>
                 <th className="p-2 border">Tipo</th>
                 <th className="p-2 border">Nacionalidad</th>
-                <th className="p-2 border">% Cumplimiento</th>
                 <th className="p-2 border">Estado</th>
-                <th className="p-2 border">Acciones</th>
+                <th className="p-2 border">Acción</th>
               </tr>
             </thead>
             <tbody>
@@ -88,24 +84,19 @@ export default function ClientesPage() {
                   <td className="p-2 border">{c.nombre_entidad}</td>
                   <td className="p-2 border">{c.tipo_cliente}</td>
                   <td className="p-2 border">{c.nacionalidad ?? '-'}</td>
-                  <td className="p-2 border">{c.porcentaje_cumplimiento}%</td>
                   <td className="p-2 border">
-                    <span
-                      className={`px-2 py-1 rounded text-xs font-semibold ${
-                        c.estado === 'activo'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}
-                    >
+                    <span className="px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-800">
                       {c.estado}
                     </span>
                   </td>
                   <td className="p-2 border">
                     <button
-                      onClick={() => router.push(`/cliente/editar-cliente/${c.id}`)}
+                      onClick={() =>
+                        router.push(`/cliente/editar-cliente/${c.id}`)
+                      }
                       className="text-blue-600 hover:underline"
                     >
-                      Ver / Editar
+                      Ver
                     </button>
                   </td>
                 </tr>
