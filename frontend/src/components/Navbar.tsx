@@ -133,7 +133,7 @@ export default function Navbar() {
       roles: ['administrador', 'cliente'],
     },
     {
-      href: '/registrar-cliente',
+      href: '/cliente/registrar-cliente',
       baseLabel: 'Registrar Cliente',
       roles: ['administrador', 'cliente'],
     },
