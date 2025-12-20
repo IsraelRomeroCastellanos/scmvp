@@ -52,16 +52,15 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Credenciales inválidas' });
     }
 
-    const token = jwt.sign(
-      {
-        id: user.id,
-        email: user.email,
-        rol: user.rol,
-        empresa_id: user.empresa_id
-      },
-      process.env.JWT_SECRET || 'secret',
-      { expiresIn: '8h' }
-    );
+    const secret = process.env.JWT_SECRET;
+if (!secret) throw new Error('JWT_SECRET no definido');
+
+const token = jwt.sign(
+  { id: user.id, email: user.email, rol: user.rol, empresa_id: user.empresa_id },
+  secret,
+  { expiresIn: '8h' }
+);
+
 
     return res.json({
       token,
