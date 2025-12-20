@@ -18,19 +18,24 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
     return res.status(500).json({ error: 'Configuración inválida: JWT_SECRET no definido' });
   }
 
-  
+  // Fingerprint seguro (no imprime el secreto)
+  try {
     console.log('JWT_SECRET fp (verify):', secretFingerprint(secret));
+  } catch {
+    // por si crypto llegara a fallar (raro)
+  }
 
+  try {
     const decoded = jwt.verify(token, secret) as any;
     (req as any).user = decoded;
     return next();
   } catch (err: any) {
-    // log útil (no expone token ni secreto)
     console.error('❌ JWT verify error:', err?.name, err?.message);
 
     if (err?.name === 'TokenExpiredError') {
       return res.status(401).json({ error: 'Token expirado' });
     }
+
     return res.status(401).json({ error: 'Token inválido (firma/secret)' });
   }
 };
