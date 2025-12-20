@@ -5,7 +5,6 @@ import jwt from 'jsonwebtoken';
 import pool from '../db';
 import { secretFingerprint } from '../utils/secretFingerprint';
 
-
 const router = Router();
 
 /**
@@ -49,39 +48,34 @@ router.post('/login', async (req, res) => {
     }
 
     const passwordOk = await bcrypt.compare(password, user.password_hash);
-
     if (!passwordOk) {
       return res.status(401).json({ error: 'Credenciales inválidas' });
     }
 
-    const secret = process.env.JWT_SECRET;
-if (!secret) throw new Error('JWT_SECRET no definido');
+    // ✅ Un único secreto, sin fallback
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      console.error('❌ JWT_SECRET no definido en Render Environment');
+      return res.status(500).json({ error: 'Configuración inválida: JWT_SECRET no definido' });
+    }
 
-const jwtSecret = process.env.JWT_SECRET;
-if (!jwtSecret) {
-  console.error('❌ JWT_SECRET no definido en Render Environment');
-  return res.status(500).json({ error: 'Configuración inválida: JWT_SECRET no definido' });
-}
+    // ✅ Fingerprint seguro (no imprime el secreto)
+    try {
+      console.log('JWT_SECRET fp (login):', secretFingerprint(jwtSecret));
+    } catch {
+      // ignore
+    }
 
-const jwtSecret = process.env.JWT_SECRET;
-if (!jwtSecret) {
-console.error('❌ JWT_SECRET no definido en Render Environment');
-  return res.status(500).json({ error: 'Configuración inválida: JWT_SECRET no definido' });
-}
-
-console.log('JWT_SECRET fp (login):', secretFingerprint(jwtSecret));
-
-const token = jwt.sign(
-  {
-    id: user.id,
-    email: user.email,
-    rol: user.rol,
-    empresa_id: user.empresa_id
-  },
-  jwtSecret,
-  { expiresIn: '8h' }
-);
-
+    const token = jwt.sign(
+      {
+        id: user.id,
+        email: user.email,
+        rol: user.rol,
+        empresa_id: user.empresa_id
+      },
+      jwtSecret,
+      { expiresIn: '8h' }
+    );
 
     return res.json({
       token,
