@@ -27,11 +27,12 @@ export default function ClientesPage() {
         }
 
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/cliente/mis-clientes`,
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/cliente/clientes`,
           {
             headers: {
               Authorization: `Bearer ${token}`
-            }
+            },
+            cache: 'no-store'
           }
         );
 
@@ -58,10 +59,21 @@ export default function ClientesPage() {
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="bg-white p-6 rounded shadow">
-        <h1 className="text-2xl font-semibold mb-1">Gestión de Clientes</h1>
-        <p className="text-sm text-gray-500 mb-4">
-          Listado general de clientes del sistema
-        </p>
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div>
+            <h1 className="text-2xl font-semibold mb-1">Gestión de Clientes</h1>
+            <p className="text-sm text-gray-500">
+              Listado general de clientes del sistema
+            </p>
+          </div>
+
+          <button
+            onClick={() => router.push('/cliente/registrar-cliente')}
+            className="rounded border px-4 py-2 text-sm hover:bg-gray-50"
+          >
+            Registrar cliente
+          </button>
+        </div>
 
         {clientes.length === 0 ? (
           <p>No hay clientes registrados.</p>
@@ -74,7 +86,7 @@ export default function ClientesPage() {
                 <th className="p-2 border">Tipo</th>
                 <th className="p-2 border">Nacionalidad</th>
                 <th className="p-2 border">Estado</th>
-                <th className="p-2 border">Acción</th>
+                <th className="p-2 border">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -89,15 +101,27 @@ export default function ClientesPage() {
                       {c.estado}
                     </span>
                   </td>
+
                   <td className="p-2 border">
-                    <button
-                      onClick={() =>
-                        router.push(`/cliente/editar-cliente/${c.id}`)
-                      }
-                      className="text-blue-600 hover:underline"
-                    >
-                      Ver
-                    </button>
+                    <div className="flex gap-3">
+                      {/* ✅ Ver detalle completo */}
+                      <button
+                        onClick={() => router.push(`/cliente/clientes/${c.id}`)}
+                        className="text-blue-600 hover:underline"
+                      >
+                        Ver
+                      </button>
+
+                      {/* (Opcional) Si todavía tienes pantalla de edición */}
+                      <button
+                        onClick={() =>
+                          router.push(`/cliente/editar-cliente/${c.id}`)
+                        }
+                        className="text-gray-700 hover:underline"
+                      >
+                        Editar
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
