@@ -7,28 +7,27 @@ import clienteRoutes from './routes/cliente.routes';
 
 const app = express();
 
-// Middlewares base
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
-// Logging de requests (útil para Render)
+// Logging de requests (útil en Render)
 app.use((req, _res, next) => {
   console.log(`[REQ] ${req.method} ${req.originalUrl}`);
   next();
 });
 
-// Healthcheck simple
+// Healthcheck
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
 });
 
-// Rutas
+// Auth
 app.use('/api/auth', authRoutes);
 
-// OJO: tu adminRoutes probablemente ya incluye el prefijo /api/admin internamente
-// por eso antes lo tenías como app.use(adminRoutes)
-app.use(adminRoutes);
+// ✅ IMPORTANTE: Admin montado con prefijo /api/admin
+app.use('/api/admin', adminRoutes);
 
+// Cliente
 app.use('/api/cliente', clienteRoutes);
 
 export default app;
