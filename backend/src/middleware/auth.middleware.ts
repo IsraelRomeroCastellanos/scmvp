@@ -1,6 +1,7 @@
 // backend/src/middleware/auth.middleware.ts
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { secretFingerprint } from '../utils/secretFingerprint';
 
 export const authenticate = (req: Request, res: Response, next: NextFunction) => {
   const header = req.headers.authorization;
@@ -17,7 +18,9 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
     return res.status(500).json({ error: 'Configuración inválida: JWT_SECRET no definido' });
   }
 
-  try {
+  
+    console.log('JWT_SECRET fp (verify):', secretFingerprint(secret));
+
     const decoded = jwt.verify(token, secret) as any;
     (req as any).user = decoded;
     return next();

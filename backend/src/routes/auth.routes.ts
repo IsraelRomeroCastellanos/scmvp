@@ -3,6 +3,8 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import pool from '../db';
+import { secretFingerprint } from '../utils/secretFingerprint';
+
 
 const router = Router();
 
@@ -60,6 +62,14 @@ if (!jwtSecret) {
   console.error('❌ JWT_SECRET no definido en Render Environment');
   return res.status(500).json({ error: 'Configuración inválida: JWT_SECRET no definido' });
 }
+
+const jwtSecret = process.env.JWT_SECRET;
+if (!jwtSecret) {
+console.error('❌ JWT_SECRET no definido en Render Environment');
+  return res.status(500).json({ error: 'Configuración inválida: JWT_SECRET no definido' });
+}
+
+console.log('JWT_SECRET fp (login):', secretFingerprint(jwtSecret));
 
 const token = jwt.sign(
   {
