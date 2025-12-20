@@ -55,9 +55,20 @@ router.post('/login', async (req, res) => {
     const secret = process.env.JWT_SECRET;
 if (!secret) throw new Error('JWT_SECRET no definido');
 
+const jwtSecret = process.env.JWT_SECRET;
+if (!jwtSecret) {
+  console.error('❌ JWT_SECRET no definido en Render Environment');
+  return res.status(500).json({ error: 'Configuración inválida: JWT_SECRET no definido' });
+}
+
 const token = jwt.sign(
-  { id: user.id, email: user.email, rol: user.rol, empresa_id: user.empresa_id },
-  secret,
+  {
+    id: user.id,
+    email: user.email,
+    rol: user.rol,
+    empresa_id: user.empresa_id
+  },
+  jwtSecret,
   { expiresIn: '8h' }
 );
 
