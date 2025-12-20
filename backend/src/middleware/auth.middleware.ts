@@ -2,34 +2,28 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-function getJwtSecret() {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    // No imprimimos el secreto, solo avisamos que falta
-    console.error('❌ JWT_SECRET no está definido en variables de entorno');
-    throw new Error('JWT_SECRET no definido');
-  }
-  return secret;
-}
-
 export const authenticate = (req: Request, res: Response, next: NextFunction) => {
   try {
-    const authHeader = req.headers.authorization;
+    const header = req.headers.authorization;
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!header || !header.startsWith('Bearer ')) {
       return res.status(401).json({ error: 'Token no proporcionado' });
     }
 
-    const token = authHeader.substring('Bearer '.length).trim();
-    const secret = getJwtSecret();
+    const token = header.slice('Bearer '.length).trim();
+    const secret = process.env.JWT_SECRET;
+
+    // Si falta secreto, es error de configuración (no 401)
+    if (!secret) {
+      console.error('❌ JWT_SECRET no definido en Render Environment');
+      return res.status(500).json({ error: 'Configuración inválida: JWT_SECRET no definido' });
+    }
 
     const decoded = jwt.verify(token, secret) as any;
-
-    // Guardamos el usuario para rutas posteriores
     (req as any).user = decoded;
 
     return next();
-  } catch (err) {
+  } catch (_err) {
     return res.status(401).json({ error: 'Token inválido o expirado' });
   }
 };
