@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import type { CatalogItem } from '../../../lib/catalogos';
+import { loadActividadesEconomicas, loadGiroMercantil, loadPaises } from '../../../lib/catalogos';
 
 type Empresa = { id: number; nombre_legal: string };
 type TipoCliente = 'persona_fisica' | 'persona_moral' | 'fideicomiso';
@@ -15,9 +17,15 @@ function getToken() {
   return localStorage.getItem('token');
 }
 
+function findByText(items: CatalogItem[], text: string) {
+  const t = text.toLowerCase();
+  return items.find((x) => x.descripcion.toLowerCase().includes(t)) || null;
+}
+
 export default function RegistrarClientePage() {
   const router = useRouter();
   const apiBase = useMemo(() => getApiBase(), []);
+
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -26,15 +34,19 @@ export default function RegistrarClientePage() {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [empresaId, setEmpresaId] = useState<number | ''>('');
 
+  // Catálogos
+  const [paises, setPaises] = useState<CatalogItem[]>([]);
+  const [actividades, setActividades] = useState<CatalogItem[]>([]);
+  const [giros, setGiros] = useState<CatalogItem[]>([]);
+  const [catalogErr, setCatalogErr] = useState<string | null>(null);
+
   // Tipo
   const [tipoCliente, setTipoCliente] = useState<TipoCliente>('persona_fisica');
 
   // Base
   const [nombreEntidad, setNombreEntidad] = useState('');
-  const [nacionalidad, setNacionalidad] = useState('México');
-
-  // Contacto (común)
-  const [pais, setPais] = useState('México');
+  const [nacionalidadClave, setNacionalidadClave] = useState<string>(''); // selección única
+  const [paisContactoClave, setPaisContactoClave] = useState<string>(''); // selección única
   const [telefono, setTelefono] = useState('');
 
   // PF
@@ -44,22 +56,50 @@ export default function RegistrarClientePage() {
   const [pfFechaNac, setPfFechaNac] = useState(''); // YYYY-MM-DD
   const [pfRfc, setPfRfc] = useState('');
   const [pfCurp, setPfCurp] = useState('');
-  const [pfOcupacion, setPfOcupacion] = useState('');
-  const [pfActividad, setPfActividad] = useState('');
+  const [pfOcupacion, setPfOcupacion] = useState(''); // texto libre (opcional)
+
+  // Actividad económica (buscable)
+  const [actQuery, setActQuery] = useState('');
+  const [actSelected, setActSelected] = useState<CatalogItem | null>(null);
 
   // PM
   const [pmRfc, setPmRfc] = useState('');
   const [pmFechaConst, setPmFechaConst] = useState(''); // YYYY-MM-DD
-  const [pmGiro, setPmGiro] = useState('');
 
-  // Representante (para PM y futuro fideicomiso)
+  // Giro mercantil (buscable)
+  const [giroQuery, setGiroQuery] = useState('');
+  const [giroSelected, setGiroSelected] = useState<CatalogItem | null>(null);
+
+  // Representante (PM)
   const [repNombres, setRepNombres] = useState('');
   const [repApPaterno, setRepApPaterno] = useState('');
   const [repApMaterno, setRepApMaterno] = useState('');
   const [repRfc, setRepRfc] = useState('');
   const [repCurp, setRepCurp] = useState('');
 
-  // Cargar empresas (si no eres admin/consultor, esto podría 403 y lo ignoramos)
+  // Cargar catálogos locales (public/)
+  useEffect(() => {
+    (async () => {
+      try {
+        setCatalogErr(null);
+        const [p, a, g] = await Promise.all([loadPaises(), loadActividadesEconomicas(), loadGiroMercantil()]);
+        setPaises(p);
+        setActividades(a);
+        setGiros(g);
+
+        // defaults: si existe México, lo preseleccionamos
+        const mx = findByText(p, 'mexico') || findByText(p, 'méxico') || p[0] || null;
+        if (mx) {
+          setNacionalidadClave((prev) => prev || mx.clave);
+          setPaisContactoClave((prev) => prev || mx.clave);
+        }
+      } catch (e: any) {
+        setCatalogErr(e?.message || 'No se pudieron cargar catálogos locales');
+      }
+    })();
+  }, []);
+
+  // Cargar empresas (si no eres admin/consultor, podría 403 y lo ignoramos)
   useEffect(() => {
     const token = getToken();
     if (!token) return;
@@ -70,88 +110,114 @@ export default function RegistrarClientePage() {
           headers: { Authorization: `Bearer ${token}` },
           cache: 'no-store'
         });
-
-        if (!res.ok) return; // si 403, ignorar
-        const data = await res.json();
-        if (Array.isArray(data?.empresas)) {
-          setEmpresas(
-            data.empresas.map((e: any) => ({ id: e.id, nombre_legal: e.nombre_legal }))
-          );
-        }
+        if (!res.ok) return;
+        const data = await res.json().catch(() => ({}));
+        if (Array.isArray(data?.empresas)) setEmpresas(data.empresas);
       } catch {
-        // ignore
+        // no bloquea registrar cliente
       }
     })();
   }, [apiBase]);
 
-  function validate(): string | null {
-    if (!nombreEntidad.trim()) return 'nombre_entidad es obligatorio';
+  const actResults = useMemo(() => {
+    const q = actQuery.trim().toLowerCase();
+    if (!q) return [];
+    return actividades
+      .filter((x) => x.descripcion.toLowerCase().includes(q) || x.clave.toLowerCase().includes(q))
+      .slice(0, 30);
+  }, [actQuery, actividades]);
+
+  const giroResults = useMemo(() => {
+    const q = giroQuery.trim().toLowerCase();
+    if (!q) return [];
+    return giros
+      .filter((x) => x.descripcion.toLowerCase().includes(q) || x.clave.toLowerCase().includes(q))
+      .slice(0, 30);
+  }, [giroQuery, giros]);
+
+  function getItemByClave(list: CatalogItem[], clave: string) {
+    return list.find((x) => x.clave === clave) || null;
+  }
+
+  function validate() {
+    if (!nombreEntidad.trim()) return 'Nombre / Entidad es obligatorio';
     if (!telefono.trim()) return 'Teléfono es obligatorio';
 
-    // DB aún no permite fideicomiso (te dejo SQL)
-    if (tipoCliente === 'fideicomiso') {
-      return 'Fideicomiso aún no está habilitado en DB. Activa el constraint primero.';
-    }
+    if (!paisContactoClave) return 'Selecciona País (contacto)';
+    if (!nacionalidadClave) return 'Selecciona Nacionalidad';
 
-    // Requeridos por tipo
+    // si el usuario es admin/consultor, normalmente debe elegir empresa
+    if (empresas.length > 0 && empresaId === '') return 'Selecciona una empresa';
+
     if (tipoCliente === 'persona_fisica') {
       if (!pfNombres.trim()) return 'Nombres (PF) es obligatorio';
       if (!pfApPaterno.trim()) return 'Apellido paterno (PF) es obligatorio';
-      if (!pfFechaNac.trim()) return 'Fecha de nacimiento (PF) es obligatoria';
+      if (!actSelected) return 'Selecciona Actividad económica';
     }
 
     if (tipoCliente === 'persona_moral') {
       if (!pmRfc.trim()) return 'RFC (PM) es obligatorio';
-      if (!pmFechaConst.trim()) return 'Fecha de constitución (PM) es obligatoria';
-      if (!repNombres.trim() || !repApPaterno.trim()) return 'Representante (PM) es obligatorio (nombres y apellido paterno)';
+      if (!pmFechaConst.trim()) return 'Fecha constitución (PM) es obligatoria';
+      if (!giroSelected) return 'Selecciona Giro mercantil';
+      if (!repNombres.trim()) return 'Nombres representante es obligatorio';
+      if (!repApPaterno.trim()) return 'Apellido paterno representante es obligatorio';
     }
 
-    // Para admin/consultor: empresa_id requerido (porque usuario admin suele tener empresa_id null)
-    // No tenemos rol aquí sin decodificar JWT, así que si hay empresas cargadas asumimos admin/consultor y exigimos empresaId.
-    if (empresas.length > 0 && empresaId === '') return 'Selecciona una empresa';
+    if (tipoCliente === 'fideicomiso') {
+      return 'Fideicomiso: pendiente (DB actualmente solo permite persona_fisica | persona_moral).';
+    }
 
     return null;
   }
 
   function buildPayload() {
+    const paisContacto = getItemByClave(paises, paisContactoClave);
+    const nacionalidad = getItemByClave(paises, nacionalidadClave);
+
     const datos_completos: any = {
-      contacto: { pais, telefono }
+      contacto: {
+        pais: paisContacto?.descripcion || null,
+        pais_clave: paisContacto?.clave || null,
+        telefono: telefono.trim()
+      },
+      nacionalidad: nacionalidad?.descripcion || null,
+      nacionalidad_clave: nacionalidad?.clave || null
     };
 
     if (tipoCliente === 'persona_fisica') {
       datos_completos.persona = {
         tipo: 'persona_fisica',
-        nombres: pfNombres,
-        apellido_paterno: pfApPaterno,
-        apellido_materno: pfApMaterno || null,
-        fecha_nacimiento: pfFechaNac,
-        rfc: pfRfc || null,
-        curp: pfCurp || null,
-        ocupacion: pfOcupacion || null,
-        actividad_economica: pfActividad || null
+        nombres: pfNombres.trim(),
+        apellido_paterno: pfApPaterno.trim(),
+        apellido_materno: pfApMaterno.trim() || null,
+        fecha_nacimiento: pfFechaNac || null,
+        rfc: pfRfc.trim() || null,
+        curp: pfCurp.trim() || null,
+        ocupacion: pfOcupacion.trim() || null,
+        actividad_economica: actSelected ? { clave: actSelected.clave, descripcion: actSelected.descripcion } : null
       };
     }
 
     if (tipoCliente === 'persona_moral') {
       datos_completos.empresa = {
         tipo: 'persona_moral',
-        rfc: pmRfc,
+        rfc: pmRfc.trim(),
         fecha_constitucion: pmFechaConst,
-        giro: pmGiro || null
+        giro_mercantil: giroSelected ? { clave: giroSelected.clave, descripcion: giroSelected.descripcion } : null
       };
       datos_completos.representante = {
-        nombres: repNombres,
-        apellido_paterno: repApPaterno,
-        apellido_materno: repApMaterno || null,
-        rfc: repRfc || null,
-        curp: repCurp || null
+        nombres: repNombres.trim(),
+        apellido_paterno: repApPaterno.trim(),
+        apellido_materno: repApMaterno.trim() || null,
+        rfc: repRfc.trim() || null,
+        curp: repCurp.trim() || null
       };
     }
 
     const payload: any = {
       tipo_cliente: tipoCliente,
       nombre_entidad: nombreEntidad.trim(),
-      nacionalidad: nacionalidad || null,
+      nacionalidad: nacionalidad?.descripcion || null,
       datos_completos
     };
 
@@ -160,7 +226,7 @@ export default function RegistrarClientePage() {
     return payload;
   }
 
-  async function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setMsg(null);
     setErr(null);
@@ -190,15 +256,13 @@ export default function RegistrarClientePage() {
       });
 
       const data = await res.json().catch(() => ({}));
-
       if (!res.ok) {
         setErr(data?.error || `Error HTTP ${res.status}`);
         return;
       }
 
-      setMsg(`Cliente creado ✅ (id: ${data?.cliente?.id ?? 'N/A'})`);
-      // Enviar a detalle si existe, si no, al listado
       const id = data?.cliente?.id;
+      setMsg(`Cliente creado ✅ (id: ${id ?? 'N/A'})`);
       if (id) router.push(`/cliente/clientes/${id}`);
       else router.push('/cliente/clientes');
     } catch (e: any) {
@@ -212,28 +276,40 @@ export default function RegistrarClientePage() {
     <div className="max-w-3xl mx-auto p-6">
       <h1 className="text-2xl font-semibold mb-4">Registrar Cliente</h1>
 
+      {catalogErr && (
+        <div className="mb-4 rounded border p-3 text-sm">
+          <div className="font-medium mb-1">⚠️ Catálogos no disponibles</div>
+          <div className="opacity-80">{catalogErr}</div>
+          <div className="mt-2 text-xs opacity-70">
+            Revisa que existan:
+            <code className="ml-1">/frontend/public/catalogos/sat/c_pais.json</code>,
+            <code className="ml-1">c_actividad_economica.json</code>,
+            <code className="ml-1">/frontend/public/catalogos/internos/giro_mercantil.json</code>
+          </div>
+        </div>
+      )}
+
       {msg && <div className="mb-4 rounded border p-3 text-sm">{msg}</div>}
       {err && <div className="mb-4 rounded border p-3 text-sm">{err}</div>}
 
       <form onSubmit={onSubmit} className="space-y-6">
-        {/* Tipo */}
         <div className="rounded border p-4 space-y-3">
           <label className="block text-sm font-medium">Tipo de cliente</label>
           <select
             className="w-full rounded border p-2"
             value={tipoCliente}
-            onChange={(e) => setTipoCliente(e.target.value as TipoCliente)}
+            onChange={(e) => {
+              setTipoCliente(e.target.value as TipoCliente);
+              setErr(null);
+              setMsg(null);
+            }}
           >
             <option value="persona_fisica">Persona Física</option>
             <option value="persona_moral">Persona Moral</option>
-            <option value="fideicomiso">Fideicomiso (pendiente habilitar DB)</option>
+            <option value="fideicomiso">Fideicomiso (pendiente)</option>
           </select>
-          <p className="text-xs opacity-70">
-            PF/PM guardan expediente en <code>datos_completos</code>. Fideicomiso requiere actualizar constraint en DB.
-          </p>
         </div>
 
-        {/* Empresa (si cargaron empresas, pedimos selección) */}
         {empresas.length > 0 && (
           <div className="rounded border p-4 space-y-3">
             <label className="block text-sm font-medium">Empresa</label>
@@ -249,50 +325,64 @@ export default function RegistrarClientePage() {
                 </option>
               ))}
             </select>
-            <p className="text-xs opacity-70">
-              Para admin/consultor es obligatorio porque su <code>empresa_id</code> suele ser null.
-            </p>
           </div>
         )}
 
-        {/* Datos base */}
         <div className="rounded border p-4 space-y-3">
           <label className="block text-sm font-medium">Nombre / Entidad</label>
           <input
             className="w-full rounded border p-2"
             value={nombreEntidad}
             onChange={(e) => setNombreEntidad(e.target.value)}
-            placeholder="Ej. Juan Pérez o Comercializadora SA de CV"
           />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium">Nacionalidad</label>
-              <input
+              <select
                 className="w-full rounded border p-2"
-                value={nacionalidad}
-                onChange={(e) => setNacionalidad(e.target.value)}
-              />
+                value={nacionalidadClave}
+                onChange={(e) => setNacionalidadClave(e.target.value)}
+                disabled={paises.length === 0}
+              >
+                <option value="">Selecciona...</option>
+                {paises.map((p) => (
+                  <option key={p.clave} value={p.clave}>
+                    {p.descripcion}
+                  </option>
+                ))}
+              </select>
             </div>
+
             <div>
-              <label className="block text-sm font-medium">Teléfono (obligatorio)</label>
-              <input
+              <label className="block text-sm font-medium">País (contacto)</label>
+              <select
                 className="w-full rounded border p-2"
-                value={telefono}
-                onChange={(e) => setTelefono(e.target.value)}
-                placeholder="5512345678"
-              />
+                value={paisContactoClave}
+                onChange={(e) => setPaisContactoClave(e.target.value)}
+                disabled={paises.length === 0}
+              >
+                <option value="">Selecciona...</option>
+                {paises.map((p) => (
+                  <option key={p.clave} value={p.clave}>
+                    {p.descripcion}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs opacity-70">Obligatorio por validación BE</p>
             </div>
           </div>
 
-          <label className="block text-sm font-medium">País (contacto)</label>
-          <input className="w-full rounded border p-2" value={pais} onChange={(e) => setPais(e.target.value)} />
+          <div>
+            <label className="block text-sm font-medium">Teléfono (obligatorio)</label>
+            <input className="w-full rounded border p-2" value={telefono} onChange={(e) => setTelefono(e.target.value)} />
+          </div>
         </div>
 
-        {/* PF */}
         {tipoCliente === 'persona_fisica' && (
-          <div className="rounded border p-4 space-y-3">
+          <div className="rounded border p-4 space-y-4">
             <h2 className="text-lg font-medium">Persona Física</h2>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <label className="block text-sm font-medium">Nombres *</label>
@@ -310,7 +400,7 @@ export default function RegistrarClientePage() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
-                <label className="block text-sm font-medium">Fecha nacimiento *</label>
+                <label className="block text-sm font-medium">Fecha nacimiento</label>
                 <input type="date" className="w-full rounded border p-2" value={pfFechaNac} onChange={(e) => setPfFechaNac(e.target.value)} />
               </div>
               <div>
@@ -323,25 +413,63 @@ export default function RegistrarClientePage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium">Ocupación</label>
-                <input className="w-full rounded border p-2" value={pfOcupacion} onChange={(e) => setPfOcupacion(e.target.value)} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium">Actividad económica</label>
-                <input className="w-full rounded border p-2" value={pfActividad} onChange={(e) => setPfActividad(e.target.value)} />
-              </div>
+            <div>
+              <label className="block text-sm font-medium">Ocupación (opcional)</label>
+              <input className="w-full rounded border p-2" value={pfOcupacion} onChange={(e) => setPfOcupacion(e.target.value)} />
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">Actividad económica *</label>
+
+              {actSelected ? (
+                <div className="flex items-center justify-between rounded border p-2 text-sm">
+                  <div>
+                    <div className="font-medium">{actSelected.descripcion}</div>
+                    <div className="text-xs opacity-70">Clave: {actSelected.clave}</div>
+                  </div>
+                  <button type="button" className="rounded border px-3 py-1 text-xs" onClick={() => setActSelected(null)}>
+                    Cambiar
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <input
+                    className="w-full rounded border p-2"
+                    value={actQuery}
+                    onChange={(e) => setActQuery(e.target.value)}
+                    placeholder="Busca actividad…"
+                    disabled={actividades.length === 0}
+                  />
+
+                  {actResults.length > 0 && (
+                    <div className="rounded border max-h-56 overflow-auto">
+                      {actResults.map((a) => (
+                        <button
+                          key={`${a.clave}-${a.descripcion}`}
+                          type="button"
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                          onClick={() => {
+                            setActSelected(a);
+                            setActQuery('');
+                          }}
+                        >
+                          <div className="font-medium">{a.descripcion}</div>
+                          <div className="text-xs opacity-70">Clave: {a.clave}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
         )}
 
-        {/* PM */}
         {tipoCliente === 'persona_moral' && (
-          <div className="rounded border p-4 space-y-3">
+          <div className="rounded border p-4 space-y-4">
             <h2 className="text-lg font-medium">Persona Moral</h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium">RFC *</label>
                 <input className="w-full rounded border p-2" value={pmRfc} onChange={(e) => setPmRfc(e.target.value)} />
@@ -350,14 +478,55 @@ export default function RegistrarClientePage() {
                 <label className="block text-sm font-medium">Fecha constitución *</label>
                 <input type="date" className="w-full rounded border p-2" value={pmFechaConst} onChange={(e) => setPmFechaConst(e.target.value)} />
               </div>
-              <div>
-                <label className="block text-sm font-medium">Giro</label>
-                <input className="w-full rounded border p-2" value={pmGiro} onChange={(e) => setPmGiro(e.target.value)} />
-              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">Giro mercantil *</label>
+
+              {giroSelected ? (
+                <div className="flex items-center justify-between rounded border p-2 text-sm">
+                  <div>
+                    <div className="font-medium">{giroSelected.descripcion}</div>
+                    <div className="text-xs opacity-70">Clave: {giroSelected.clave}</div>
+                  </div>
+                  <button type="button" className="rounded border px-3 py-1 text-xs" onClick={() => setGiroSelected(null)}>
+                    Cambiar
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <input
+                    className="w-full rounded border p-2"
+                    value={giroQuery}
+                    onChange={(e) => setGiroQuery(e.target.value)}
+                    placeholder="Busca giro…"
+                    disabled={giros.length === 0}
+                  />
+                  {giroResults.length > 0 && (
+                    <div className="rounded border max-h-56 overflow-auto">
+                      {giroResults.map((g) => (
+                        <button
+                          key={`${g.clave}-${g.descripcion}`}
+                          type="button"
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                          onClick={() => {
+                            setGiroSelected(g);
+                            setGiroQuery('');
+                          }}
+                        >
+                          <div className="font-medium">{g.descripcion}</div>
+                          <div className="text-xs opacity-70">Clave: {g.clave}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
 
             <div className="rounded border p-3 space-y-3">
               <h3 className="font-medium">Representante *</h3>
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-sm font-medium">Nombres *</label>
@@ -388,19 +557,10 @@ export default function RegistrarClientePage() {
         )}
 
         <div className="flex gap-3">
-          <button
-            type="submit"
-            disabled={loading}
-            className="rounded border px-4 py-2 text-sm"
-          >
+          <button type="submit" disabled={loading} className="rounded border px-4 py-2 text-sm">
             {loading ? 'Guardando...' : 'Registrar'}
           </button>
-
-          <button
-            type="button"
-            className="rounded border px-4 py-2 text-sm"
-            onClick={() => router.push('/cliente/clientes')}
-          >
+          <button type="button" className="rounded border px-4 py-2 text-sm" onClick={() => router.push('/cliente/clientes')}>
             Volver
           </button>
         </div>

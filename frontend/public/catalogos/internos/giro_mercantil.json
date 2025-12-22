@@ -1,0 +1,534 @@
+[
+  {
+    "clave": "asociaciones-organizaciones-civiles-8370023",
+    "descripcion": "ASOCIACIONES - ORGANIZACIONES CIVILES||8370023"
+  },
+  {
+    "clave": "asociaciones-organizaciones-de-actividades-recreativas-8340023",
+    "descripcion": "ASOCIACIONES - ORGANIZACIONES DE ACTIVIDADES RECREATIVAS||8340023"
+  },
+  {
+    "clave": "asociaciones-organizaciones-de-profesionistas-8330023",
+    "descripcion": "ASOCIACIONES - ORGANIZACIONES DE PROFESIONISTAS||8330023"
+  },
+  {
+    "clave": "asociaciones-organizaciones-laborales-y-sindicales-8320023",
+    "descripcion": "ASOCIACIONES - ORGANIZACIONES LABORALES Y SINDICALES||8320023"
+  },
+  {
+    "clave": "asociaciones-organizaciones-politicas-8360023",
+    "descripcion": "ASOCIACIONES - ORGANIZACIONES POLITICAS||8360023"
+  },
+  {
+    "clave": "asociaciones-organizaciones-religiosas-8350023",
+    "descripcion": "ASOCIACIONES - ORGANIZACIONES RELIGIOSAS||8350023"
+  },
+  {
+    "clave": "asociaciones-organizaciones-y-camaras-de-productores-comerciantes-y-prestadores-de-servicios-8310023",
+    "descripcion": "ASOCIACIONES - ORGANIZACIONES Y CAMARAS DE PRODUCTORES, COMERCIANTES Y PRESTADORES DE SERVICIOS||8310023"
+  },
+  {
+    "clave": "comercio-a-traves-de-internet-y-catalogos-impresos-television-y-similares-4760006",
+    "descripcion": "COMERCIO - A TRAVES DE INTERNET, Y CATALOGOS IMPRESOS, TELEVISION Y SIMILARES||4760006"
+  },
+  {
+    "clave": "comercio-abarrotes-alimentos-bebidas-hielo-y-tabaco-4310006",
+    "descripcion": "COMERCIO - ABARROTES, ALIMENTOS, BEBIDAS, HIELO Y TABACO||4310006"
+  },
+  {
+    "clave": "comercio-antiguedades-y-obras-de-arte-4680006",
+    "descripcion": "COMERCIO - ANTIGÜEDADES Y OBRAS DE ARTE||4680006"
+  },
+  {
+    "clave": "comercio-articulos-de-ferreteria-tlapaleria-y-vidrios-4710006",
+    "descripcion": "COMERCIO - ARTICULOS DE FERRETERIA, TLAPALERIA Y VIDRIOS||4710006"
+  },
+  {
+    "clave": "comercio-articulos-de-joyeria-y-relojes-4660026",
+    "descripcion": "COMERCIO - ARTICULOS DE JOYERIA Y RELOJES||4660026"
+  },
+  {
+    "clave": "comercio-articulos-de-papeleria-4650006",
+    "descripcion": "COMERCIO - ARTICULOS DE PAPELERIA||4650006"
+  },
+  {
+    "clave": "comercio-articulos-para-la-decoracion-de-interiores-4670006",
+    "descripcion": "COMERCIO - ARTICULOS PARA LA DECORACION DE INTERIORES||4670006"
+  },
+  {
+    "clave": "comercio-combustibles-y-lubricantes-4750006",
+    "descripcion": "COMERCIO - COMBUSTIBLES Y LUBRICANTES||4750006"
+  },
+  {
+    "clave": "comercio-maquinaria-equipo-de-computo-y-mobiliario-de-uso-general-4340006",
+    "descripcion": "COMERCIO - MAQUINARIA, EQUIPO DE COMPUTO Y MOBILIARIO DE USO GENERAL||4340006"
+  },
+  {
+    "clave": "comercio-materias-primas-agropecuarias-y-forestales-para-la-industria-y-materiales-de-desecho-4330006",
+    "descripcion": "COMERCIO - MATERIAS PRIMAS AGROPECUARIAS Y FORESTALES, PARA LA INDUSTRIA, Y MATERIALES DE DESECHO||4330006"
+  },
+  {
+    "clave": "comercio-partes-y-refacciones-para-vehiculos-4740006",
+    "descripcion": "COMERCIO - PARTES Y REFACCIONES PARA VEHICULOS||4740006"
+  },
+  {
+    "clave": "comercio-productos-farmaceuticos-de-perfumeria-articulos-para-el-esparcimiento-electrodomesticos-y-aparatos-de-linea-blanca-4320006",
+    "descripcion": "COMERCIO - PRODUCTOS FARMACEUTICOS, DE PERFUMERIA, ARTICULOS PARA EL ESPARCIMIENTO, ELECTRODOMESTICOS Y APARATOS DE LINEA BLANCA||4320006"
+  },
+  {
+    "clave": "comercio-productos-textiles-bisuteria-accesorios-de-vestir-y-calzado-4630006",
+    "descripcion": "COMERCIO - PRODUCTOS TEXTILES, BISUTERIA, ACCESORIOS DE VESTIR Y CALZADO||4630006"
+  },
+  {
+    "clave": "comercio-tiendas-de-autoservicio-y-departamentales-4620006",
+    "descripcion": "COMERCIO - TIENDAS DE AUTOSERVICIO Y DEPARTAMENTALES||4620006"
+  },
+  {
+    "clave": "comercio-vehiculos-nuevos-4720006",
+    "descripcion": "COMERCIO - VEHICULOS NUEVOS||4720006"
+  },
+  {
+    "clave": "comercio-vehiculos-usados-4730006",
+    "descripcion": "COMERCIO - VEHICULOS USADOS||4730006"
+  },
+  {
+    "clave": "construccion-edificacion-residencial-y-no-residencial-2720004",
+    "descripcion": "CONSTRUCCION - EDIFICACION RESIDENCIAL Y NO RESIDENCIAL||2720004"
+  },
+  {
+    "clave": "construccion-obras-de-ingenieria-civil-2730004",
+    "descripcion": "CONSTRUCCION - OBRAS DE INGENIERIA CIVIL||2730004"
+  },
+  {
+    "clave": "construccion-otras-actividades-relacionadas-con-la-construccion-2710004",
+    "descripcion": "CONSTRUCCION - OTRAS ACTIVIDADES RELACIONADAS CON LA CONSTRUCCION||2710004"
+  },
+  {
+    "clave": "construccion-servicios-de-blindaje-parcial-o-total-de-inmuebles-2754004",
+    "descripcion": "CONSTRUCCION - SERVICIOS DE BLINDAJE PARCIAL O TOTAL DE INMUEBLES||2754004"
+  },
+  {
+    "clave": "construccion-trabajos-especializados-para-la-construccion-2740004",
+    "descripcion": "CONSTRUCCION - TRABAJOS ESPECIALIZADOS PARA LA CONSTRUCCION||2740004"
+  },
+  {
+    "clave": "generacion-transmision-y-distribucion-de-energia-electrica-suministro-de-agua-y-de-gas-2600003",
+    "descripcion": "GENERACION, TRANSMISION Y DISTRIBUCION DE ENERGIA ELECTRICA, SUMINISTRO DE AGUA Y DE GAS||2600003"
+  },
+  {
+    "clave": "industria-accesorios-aparatos-electricos-y-equipo-de-generacion-de-energia-electrica-3350005",
+    "descripcion": "INDUSTRIA - ACCESORIOS, APARATOS ELECTRICOS Y EQUIPO DE GENERACION DE ENERGIA ELECTRICA||3350005"
+  },
+  {
+    "clave": "industria-alimentaria-3110005",
+    "descripcion": "INDUSTRIA - ALIMENTARIA||3110005"
+  },
+  {
+    "clave": "industria-automotriz-3370005",
+    "descripcion": "INDUSTRIA - AUTOMOTRIZ||3370005"
+  },
+  {
+    "clave": "industria-bebidas-y-del-tabaco-3120005",
+    "descripcion": "INDUSTRIA - BEBIDAS Y DEL TABACO||3120005"
+  },
+  {
+    "clave": "industria-equipo-de-computacion-comunicacion-medicion-y-de-otros-equipos-componentes-y-accesorios-electronicos-3340005",
+    "descripcion": "INDUSTRIA - EQUIPO DE COMPUTACION, COMUNICACION, MEDICION Y DE OTROS EQUIPOS, COMPONENTES Y ACCESORIOS ELECTRONICOS||3340005"
+  },
+  {
+    "clave": "industria-equipo-de-transporte-sin-motor-3360005",
+    "descripcion": "INDUSTRIA - EQUIPO DE TRANSPORTE SIN MOTOR||3360005"
+  },
+  {
+    "clave": "industria-impresion-e-industrias-conexas-3230005",
+    "descripcion": "INDUSTRIA - IMPRESION E INDUSTRIAS CONEXAS||3230005"
+  },
+  {
+    "clave": "industria-joyeria-de-metales-y-piedras-no-preciosos-y-de-otros-materiales-3440005",
+    "descripcion": "INDUSTRIA - JOYERIA DE METALES Y PIEDRAS NO PRECIOSOS Y DE OTROS MATERIALES||3440005"
+  },
+  {
+    "clave": "industria-madera-3210005",
+    "descripcion": "INDUSTRIA - MADERA||3210005"
+  },
+  {
+    "clave": "industria-maquinaria-y-equipo-3330005",
+    "descripcion": "INDUSTRIA - MAQUINARIA Y EQUIPO||3330005"
+  },
+  {
+    "clave": "industria-metalicas-basicas-3310005",
+    "descripcion": "INDUSTRIA - METALICAS BASICAS||3310005"
+  },
+  {
+    "clave": "industria-muebles-colchones-y-persianas-3410005",
+    "descripcion": "INDUSTRIA - MUEBLES, COLCHONES Y PERSIANAS||3410005"
+  },
+  {
+    "clave": "industria-orfebreria-y-joyeria-de-metales-y-piedras-preciosos-3430005",
+    "descripcion": "INDUSTRIA - ORFEBRERIA Y JOYERIA DE METALES Y PIEDRAS PRECIOSOS||3430005"
+  },
+  {
+    "clave": "industria-otras-industrias-manufactureras-3420005",
+    "descripcion": "INDUSTRIA - OTRAS INDUSTRIAS MANUFACTURERAS||3420005"
+  },
+  {
+    "clave": "industria-papel-3220005",
+    "descripcion": "INDUSTRIA - PAPEL||3220005"
+  },
+  {
+    "clave": "industria-plastico-y-del-hule-3260005",
+    "descripcion": "INDUSTRIA - PLASTICO Y DEL HULE||3260005"
+  },
+  {
+    "clave": "industria-prendas-de-vestir-3150005",
+    "descripcion": "INDUSTRIA - PRENDAS DE VESTIR||3150005"
+  },
+  {
+    "clave": "industria-productos-a-base-de-minerales-no-metalicos-alfareria-porcelana-loza-vidrio-cemento-3270005",
+    "descripcion": "INDUSTRIA - PRODUCTOS A BASE DE MINERALES NO METALICOS (ALFARERIA, PORCELANA, LOZA, VIDRIO, CEMENTO)||3270005"
+  },
+  {
+    "clave": "industria-productos-derivados-del-petroleo-y-del-carbon-3240005",
+    "descripcion": "INDUSTRIA - PRODUCTOS DERIVADOS DEL PETROLEO Y DEL CARBON||3240005"
+  },
+  {
+    "clave": "industria-productos-metalicos-herramientas-utensilios-estructuras-piezas-3320005",
+    "descripcion": "INDUSTRIA - PRODUCTOS METALICOS (HERRAMIENTAS, UTENSILIOS, ESTRUCTURAS, PIEZAS)||3320005"
+  },
+  {
+    "clave": "industria-productos-textiles-3140005",
+    "descripcion": "INDUSTRIA - PRODUCTOS TEXTILES||3140005"
+  },
+  {
+    "clave": "industria-quimica-3250005",
+    "descripcion": "INDUSTRIA - QUIMICA||3250005"
+  },
+  {
+    "clave": "industria-vehiculos-blindados-y-equipo-para-el-blindaje-de-vehiculos-3380005",
+    "descripcion": "INDUSTRIA - VEHICULOS BLINDADOS Y EQUIPO PARA EL BLINDAJE DE VEHICULOS||3380005"
+  },
+  {
+    "clave": "informacion-en-medios-masivos-5100011",
+    "descripcion": "INFORMACION EN MEDIOS MASIVOS||5100011"
+  },
+  {
+    "clave": "mineria-actividades-relacionadas-con-el-petroleo-y-el-gas-2200002",
+    "descripcion": "MINERIA - ACTIVIDADES RELACIONADAS CON EL PETROLEO Y EL GAS||2200002"
+  },
+  {
+    "clave": "mineria-mineria-de-otros-recursos-2100002",
+    "descripcion": "MINERIA - MINERIA DE OTROS RECURSOS||2100002"
+  },
+  {
+    "clave": "mineria-oro-2300003",
+    "descripcion": "MINERIA - ORO||2300003"
+  },
+  {
+    "clave": "mineria-piedras-preciosas-2500002",
+    "descripcion": "MINERIA - PIEDRAS PRECIOSAS||2500002"
+  },
+  {
+    "clave": "mineria-plata-2400002",
+    "descripcion": "MINERIA - PLATA||2400002"
+  },
+  {
+    "clave": "organismos-internacionales-y-extraterritoriales-9100025",
+    "descripcion": "ORGANISMOS INTERNACIONALES Y EXTRATERRITORIALES||9100025"
+  },
+  {
+    "clave": "otras-empresas-de-intermediacion-crediticia-no-financieras-5340013",
+    "descripcion": "OTRAS EMPRESAS DE INTERMEDIACION CREDITICIA NO FINANCIERAS||5340013"
+  },
+  {
+    "clave": "procesamiento-electronico-de-informacion-y-otros-servicios-web-5180012",
+    "descripcion": "PROCESAMIENTO ELECTRONICO DE INFORMACION Y OTROS SERVICIOS WEB||5180012"
+  },
+  {
+    "clave": "sector-primario-agricultura-1100001",
+    "descripcion": "SECTOR PRIMARIO - AGRICULTURA||1100001"
+  },
+  {
+    "clave": "sector-primario-aprovechamiento-forestal-1400002",
+    "descripcion": "SECTOR PRIMARIO - APROVECHAMIENTO FORESTAL||1400002"
+  },
+  {
+    "clave": "sector-primario-explotacion-de-otros-animales-avicultura-apicultura-etc-1300001",
+    "descripcion": "SECTOR PRIMARIO - EXPLOTACION DE OTROS ANIMALES (AVICULTURA, APICULTURA, ETC.)||1300001"
+  },
+  {
+    "clave": "sector-primario-ganaderia-1200001",
+    "descripcion": "SECTOR PRIMARIO - GANADERIA||1200001"
+  },
+  {
+    "clave": "sector-primario-pesca-1500001",
+    "descripcion": "SECTOR PRIMARIO - PESCA||1500001"
+  },
+  {
+    "clave": "sector-publico-organos-autonomos-y-entidades-paraestatales-9880024",
+    "descripcion": "SECTOR PUBLICO - ORGANOS AUTONOMOS Y ENTIDADES PARAESTATALES||9880024"
+  },
+  {
+    "clave": "sector-publico-poder-ejecutivo-estatal-y-del-distrito-federal-9820024",
+    "descripcion": "SECTOR PUBLICO - PODER EJECUTIVO ESTATAL Y DEL DISTRITO FEDERAL||9820024"
+  },
+  {
+    "clave": "sector-publico-poder-ejecutivo-federal-9810024",
+    "descripcion": "SECTOR PUBLICO - PODER EJECUTIVO FEDERAL||9810024"
+  },
+  {
+    "clave": "sector-publico-poder-ejecutivo-municipal-y-delegacional-9830024",
+    "descripcion": "SECTOR PUBLICO - PODER EJECUTIVO MUNICIPAL Y DELEGACIONAL||9830024"
+  },
+  {
+    "clave": "sector-publico-poder-judicial-estatal-y-del-distrito-federal-9850024",
+    "descripcion": "SECTOR PUBLICO - PODER JUDICIAL ESTATAL Y DEL DISTRITO FEDERAL||9850024"
+  },
+  {
+    "clave": "sector-publico-poder-judicial-federal-9840024",
+    "descripcion": "SECTOR PUBLICO - PODER JUDICIAL FEDERAL||9840024"
+  },
+  {
+    "clave": "sector-publico-poder-legislativo-estatal-y-del-distrito-federal-9870024",
+    "descripcion": "SECTOR PUBLICO - PODER LEGISLATIVO ESTATAL Y DEL DISTRITO FEDERAL||9870024"
+  },
+  {
+    "clave": "sector-publico-poder-legislativo-federal-9860024",
+    "descripcion": "SECTOR PUBLICO - PODER LEGISLATIVO FEDERAL||9860024"
+  },
+  {
+    "clave": "servicios-de-almacenamiento-4930010",
+    "descripcion": "SERVICIOS DE ALMACENAMIENTO||4930010"
+  },
+  {
+    "clave": "servicios-de-alojamiento-temporal-y-de-preparacion-de-alimentos-y-bebidas-7200020",
+    "descripcion": "SERVICIOS DE ALOJAMIENTO TEMPORAL Y DE PREPARACION DE ALIMENTOS Y BEBIDAS||7200020"
+  },
+  {
+    "clave": "servicios-de-apoyo-a-los-negocios-agencias-de-cobranza-despachos-de-investigacion-5730016",
+    "descripcion": "SERVICIOS DE APOYO A LOS NEGOCIOS - AGENCIAS DE COBRANZA, DESPACHOS DE INVESTIGACION||5730016"
+  },
+  {
+    "clave": "servicios-de-apoyo-a-los-negocios-otros-servicios-5750016",
+    "descripcion": "SERVICIOS DE APOYO A LOS NEGOCIOS - OTROS SERVICIOS||5750016"
+  },
+  {
+    "clave": "servicios-de-apoyo-a-los-negocios-servicios-de-administracion-de-negocios-5720016",
+    "descripcion": "SERVICIOS DE APOYO A LOS NEGOCIOS - SERVICIOS DE ADMINISTRACION DE NEGOCIOS||5720016"
+  },
+  {
+    "clave": "servicios-de-apoyo-a-los-negocios-servicios-de-limpieza-y-mantenimiento-5750016",
+    "descripcion": "SERVICIOS DE APOYO A LOS NEGOCIOS - SERVICIOS DE LIMPIEZA Y MANTENIMIENTO||5750016"
+  },
+  {
+    "clave": "servicios-de-apoyo-a-los-negocios-servicios-de-proteccion-y-seguridad-5740016",
+    "descripcion": "SERVICIOS DE APOYO A LOS NEGOCIOS - SERVICIOS DE PROTECCION Y SEGURIDAD||5740016"
+  },
+  {
+    "clave": "servicios-de-esparcimiento-casas-de-juegos-electronicos-7130019",
+    "descripcion": "SERVICIOS DE ESPARCIMIENTO - CASAS DE JUEGOS ELECTRONICOS||7130019"
+  },
+  {
+    "clave": "servicios-de-esparcimiento-casinos-o-centros-de-apuesta-7140019",
+    "descripcion": "SERVICIOS DE ESPARCIMIENTO - CASINOS O CENTROS DE APUESTA||7140019"
+  },
+  {
+    "clave": "servicios-de-esparcimiento-museos-sitios-historicos-zoologicos-y-similares-7120019",
+    "descripcion": "SERVICIOS DE ESPARCIMIENTO - MUSEOS, SITIOS HISTORICOS, ZOOLOGICOS Y SIMILARES||7120019"
+  },
+  {
+    "clave": "servicios-de-esparcimiento-venta-de-billetes-de-loteria-pronosticos-deportivos-u-otros-sorteos-7150019",
+    "descripcion": "SERVICIOS DE ESPARCIMIENTO - VENTA DE BILLETES DE LOTERIA, PRONOSTICOS DEPORTIVOS U OTROS SORTEOS||7150019"
+  },
+  {
+    "clave": "servicios-de-esparcimiento-culturales-y-deportivos-y-otros-servicios-recreativos-7110019",
+    "descripcion": "SERVICIOS DE ESPARCIMIENTO CULTURALES Y DEPORTIVOS, Y OTROS SERVICIOS RECREATIVOS||7110019"
+  },
+  {
+    "clave": "servicios-de-mensajeria-y-paqueteria-4920009",
+    "descripcion": "SERVICIOS DE MENSAJERIA Y PAQUETERIA||4920009"
+  },
+  {
+    "clave": "servicios-de-reparacion-y-mantenimiento-equipo-industrial-comercial-servicios-y-automotriz-8100021",
+    "descripcion": "SERVICIOS DE REPARACION Y MANTENIMIENTO - EQUIPO INDUSTRIAL, COMERCIAL, SERVICIOS Y AUTOMOTRIZ||8100021"
+  },
+  {
+    "clave": "servicios-de-salud-y-de-asistencia-social-6200018",
+    "descripcion": "SERVICIOS DE SALUD Y DE ASISTENCIA SOCIAL||6200018"
+  },
+  {
+    "clave": "servicios-educativos-6100017",
+    "descripcion": "SERVICIOS EDUCATIVOS||6100017"
+  },
+  {
+    "clave": "servicios-financieros-administracion-de-fondos-para-el-retiro-5430013",
+    "descripcion": "SERVICIOS FINANCIEROS - ADMINISTRACION DE FONDOS PARA EL RETIRO||5430013"
+  },
+  {
+    "clave": "servicios-financieros-agentes-ajustadores-y-gestores-de-seguros-y-fianzas-5420013",
+    "descripcion": "SERVICIOS FINANCIEROS - AGENTES, AJUSTADORES Y GESTORES DE SEGUROS Y FIANZAS||5420013"
+  },
+  {
+    "clave": "servicios-financieros-banca-central-5210013",
+    "descripcion": "SERVICIOS FINANCIEROS - BANCA CENTRAL||5210013"
+  },
+  {
+    "clave": "servicios-financieros-banca-de-desarrollo-5230013",
+    "descripcion": "SERVICIOS FINANCIEROS - BANCA DE DESARROLLO||5230013"
+  },
+  {
+    "clave": "servicios-financieros-banca-multiple-5220013",
+    "descripcion": "SERVICIOS FINANCIEROS - BANCA MULTIPLE||5220013"
+  },
+  {
+    "clave": "servicios-financieros-casas-de-cambio-y-centros-cambiarios-5350013",
+    "descripcion": "SERVICIOS FINANCIEROS - CASAS DE CAMBIO Y CENTROS CAMBIARIOS||5350013"
+  },
+  {
+    "clave": "servicios-financieros-casas-de-empeno-5320013",
+    "descripcion": "SERVICIOS FINANCIEROS - CASAS DE EMPEÑO||5320013"
+  },
+  {
+    "clave": "servicios-financieros-companias-afianzadoras-5410013",
+    "descripcion": "SERVICIOS FINANCIEROS - COMPAÑIAS AFIANZADORAS||5410013"
+  },
+  {
+    "clave": "servicios-financieros-companias-de-autofinanciamiento-5290013",
+    "descripcion": "SERVICIOS FINANCIEROS - COMPAÑIAS DE AUTOFINANCIAMIENTO||5290013"
+  },
+  {
+    "clave": "servicios-financieros-companias-de-seguros-5390013",
+    "descripcion": "SERVICIOS FINANCIEROS - COMPAÑIAS DE SEGUROS||5390013"
+  },
+  {
+    "clave": "servicios-financieros-emisora-y-o-comercializacion-de-cheques-de-viajero-5440013",
+    "descripcion": "SERVICIOS FINANCIEROS - EMISORA Y/O COMERCIALIZACION DE CHEQUES DE VIAJERO||5440013"
+  },
+  {
+    "clave": "servicios-financieros-fondos-y-fideicomisos-financieros-5240013",
+    "descripcion": "SERVICIOS FINANCIEROS - FONDOS Y FIDEICOMISOS FINANCIEROS||5240013"
+  },
+  {
+    "clave": "servicios-financieros-montepios-5310013",
+    "descripcion": "SERVICIOS FINANCIEROS - MONTEPIOS||5310013"
+  },
+  {
+    "clave": "servicios-financieros-otras-instituciones-de-ahorro-y-prestamo-5280013",
+    "descripcion": "SERVICIOS FINANCIEROS - OTRAS INSTITUCIONES DE AHORRO Y PRESTAMO||5280013"
+  },
+  {
+    "clave": "servicios-financieros-otras-instituciones-de-intermediacion-crediticia-y-financiera-no-bursatil-operacion-y-promocion-de-tarjetas-de-credito-no-bancarias-financiamiento-de-bienes-duraderos-sociedades-financieras-de-objeto-limitado-5270013",
+    "descripcion": "SERVICIOS FINANCIEROS - OTRAS INSTITUCIONES DE INTERMEDIACION CREDITICIA Y FINANCIERA NO BURSATIL (OPERACION Y PROMOCION DE TARJETAS DE CREDITO NO BANCARIAS,  FINANCIAMIENTO DE BIENES DURADEROS), SOCIEDADES FINANCIERAS DE OBJETO LIMITADO||5270013"
+  },
+  {
+    "clave": "servicios-financieros-otros-servicios-relacionados-con-la-intermediacion-bursatil-5370013",
+    "descripcion": "SERVICIOS FINANCIEROS - OTROS SERVICIOS RELACIONADOS CON LA INTERMEDIACION BURSATIL||5370013"
+  },
+  {
+    "clave": "servicios-financieros-sociedades-financieras-de-objeto-multiple-5330013",
+    "descripcion": "SERVICIOS FINANCIEROS - SOCIEDADES FINANCIERAS DE OBJETO MULTIPLE||5330013"
+  },
+  {
+    "clave": "servicios-financieros-transmisores-de-dinero-5360013",
+    "descripcion": "SERVICIOS FINANCIEROS - TRANSMISORES DE DINERO||5360013"
+  },
+  {
+    "clave": "servicios-financieros-uniones-de-credito-5250013",
+    "descripcion": "SERVICIOS FINANCIEROS - UNIONES DE CREDITO||5250013"
+  },
+  {
+    "clave": "servicios-inmobiliarios-y-de-alquiler-alquiler-de-vehiculos-5540014",
+    "descripcion": "SERVICIOS INMOBILIARIOS Y DE ALQUILER - ALQUILER DE VEHICULOS||5540014"
+  },
+  {
+    "clave": "servicios-inmobiliarios-y-de-alquiler-alquiler-sin-intermediacion-de-bienes-raices-5510014",
+    "descripcion": "SERVICIOS INMOBILIARIOS Y DE ALQUILER - ALQUILER SIN INTERMEDIACION DE BIENES RAICES||5510014"
+  },
+  {
+    "clave": "servicios-inmobiliarios-y-de-alquiler-inmobiliarias-y-corredores-de-bienes-raices-5520014",
+    "descripcion": "SERVICIOS INMOBILIARIOS Y DE ALQUILER - INMOBILIARIAS Y CORREDORES DE BIENES RAICES||5520014"
+  },
+  {
+    "clave": "servicios-inmobiliarios-y-de-alquiler-servicios-de-alquiler-de-bienes-muebles-excepto-vehiculos-5530014",
+    "descripcion": "SERVICIOS INMOBILIARIOS Y DE ALQUILER - SERVICIOS DE ALQUILER DE BIENES MUEBLES EXCEPTO VEHICULOS||5530014"
+  },
+  {
+    "clave": "servicios-inmobiliarios-y-de-alquiler-servicios-de-alquiler-de-marcas-registradas-patentes-y-franquicias-5550014",
+    "descripcion": "SERVICIOS INMOBILIARIOS Y DE ALQUILER - SERVICIOS DE ALQUILER DE MARCAS REGISTRADAS, PATENTES Y FRANQUICIAS||5550014"
+  },
+  {
+    "clave": "servicios-personales-lavanderias-servicios-funerarios-banos-publicos-servicios-de-estacionamiento-revelado-e-impresion-de-fotografias-8200022",
+    "descripcion": "SERVICIOS PERSONALES - LAVANDERIAS, SERVICIOS FUNERARIOS, BAÑOS PUBLICOS, SERVICIOS DE ESTACIONAMIENTO, REVELADO E IMPRESION DE FOTOGRAFIAS||8200022"
+  },
+  {
+    "clave": "servicios-postales-4910008",
+    "descripcion": "SERVICIOS POSTALES||4910008"
+  },
+  {
+    "clave": "servicios-profesionales-y-tecnicos-arquitectura-ingenieria-y-actividades-relacionadas-5630015",
+    "descripcion": "SERVICIOS PROFESIONALES Y TECNICOS - ARQUITECTURA, INGENIERIA Y ACTIVIDADES RELACIONADAS||5630015"
+  },
+  {
+    "clave": "servicios-profesionales-y-tecnicos-consultoria-administrativa-cientifica-y-tecnica-5650015",
+    "descripcion": "SERVICIOS PROFESIONALES Y TECNICOS - CONSULTORIA ADMINISTRATIVA, CIENTIFICA Y TECNICA||5650015"
+  },
+  {
+    "clave": "servicios-profesionales-y-tecnicos-contabilidad-y-auditoria-5690015",
+    "descripcion": "SERVICIOS PROFESIONALES Y TECNICOS - CONTABILIDAD Y AUDITORIA||5690015"
+  },
+  {
+    "clave": "servicios-profesionales-y-tecnicos-diseno-de-sistemas-de-computo-y-servicios-relacionados-5640015",
+    "descripcion": "SERVICIOS PROFESIONALES Y TECNICOS - DISEÑO DE SISTEMAS DE COMPUTO Y SERVICIOS RELACIONADOS||5640015"
+  },
+  {
+    "clave": "servicios-profesionales-y-tecnicos-investigacion-cientifica-y-desarrollo-5660015",
+    "descripcion": "SERVICIOS PROFESIONALES Y TECNICOS - INVESTIGACION CIENTIFICA Y DESARROLLO||5660015"
+  },
+  {
+    "clave": "servicios-profesionales-y-tecnicos-notaria-y-correduria-publica-5620015",
+    "descripcion": "SERVICIOS PROFESIONALES Y TECNICOS - NOTARIA Y CORREDURIA PUBLICA||5620015"
+  },
+  {
+    "clave": "servicios-profesionales-y-tecnicos-otros-servicios-de-outsourcing-5710016",
+    "descripcion": "SERVICIOS PROFESIONALES Y TECNICOS - OTROS SERVICIOS DE OUTSOURCING||5710016"
+  },
+  {
+    "clave": "servicios-profesionales-y-tecnicos-publicidad-y-actividades-relacionadas-5670015",
+    "descripcion": "SERVICIOS PROFESIONALES Y TECNICOS - PUBLICIDAD Y ACTIVIDADES RELACIONADAS||5670015"
+  },
+  {
+    "clave": "servicios-profesionales-y-tecnicos-servicios-juridicos-5610015",
+    "descripcion": "SERVICIOS PROFESIONALES Y TECNICOS - SERVICIOS JURIDICOS||5610015"
+  },
+  {
+    "clave": "srevicios-financieros-cajas-de-ahorro-popular-5260013",
+    "descripcion": "SREVICIOS FINANCIEROS - CAJAS DE AHORRO POPULAR||5260013"
+  },
+  {
+    "clave": "transporte-aereo-4810007",
+    "descripcion": "TRANSPORTE - AEREO||4810007"
+  },
+  {
+    "clave": "transporte-ferroviario-4820007",
+    "descripcion": "TRANSPORTE - FERROVIARIO||4820007"
+  },
+  {
+    "clave": "transporte-maritimo-y-fluvial-4830007",
+    "descripcion": "TRANSPORTE - MARITIMO Y FLUVIAL||4830007"
+  },
+  {
+    "clave": "transporte-servicios-de-agencias-aduanales-4880007",
+    "descripcion": "TRANSPORTE - SERVICIOS DE AGENCIAS ADUANALES||4880007"
+  },
+  {
+    "clave": "transporte-servicios-de-transporte-y-o-custodia-de-valores-4840007",
+    "descripcion": "TRANSPORTE - SERVICIOS DE TRANSPORTE Y/O CUSTODIA DE VALORES||4840007"
+  },
+  {
+    "clave": "transporte-servicios-relacionados-con-el-transporte-4860007",
+    "descripcion": "TRANSPORTE - SERVICIOS RELACIONADOS CON EL TRANSPORTE||4860007"
+  },
+  {
+    "clave": "transporte-transportacion-y-distribucion-por-ductos-4850007",
+    "descripcion": "TRANSPORTE - TRANSPORTACION Y DISTRIBUCION POR DUCTOS||4850007"
+  }
+]

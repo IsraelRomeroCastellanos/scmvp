@@ -1,1010 +1,990 @@
 [
   {
-    "clave": "ABW",
-    "descripcion": "ABW"
+    "clave": "albania-al",
+    "descripcion": "ALBANIA,AL"
   },
   {
-    "clave": "AFG",
-    "descripcion": "AFG"
+    "clave": "alemania-de",
+    "descripcion": "ALEMANIA,DE"
   },
   {
-    "clave": "AGO",
-    "descripcion": "AGO"
+    "clave": "andorra-ad",
+    "descripcion": "ANDORRA,AD"
   },
   {
-    "clave": "AIA",
-    "descripcion": "AIA"
+    "clave": "angola-ao",
+    "descripcion": "ANGOLA,AO"
   },
   {
-    "clave": "ALA",
-    "descripcion": "ALA"
+    "clave": "anguila-ai",
+    "descripcion": "ANGUILA,AI"
   },
   {
-    "clave": "ALB",
-    "descripcion": "ALB"
+    "clave": "antartida-aq",
+    "descripcion": "ANTARTIDA,AQ"
   },
   {
-    "clave": "AND",
-    "descripcion": "AND"
+    "clave": "antigua-y-barbuda-ag",
+    "descripcion": "ANTIGUA Y BARBUDA,AG"
   },
   {
-    "clave": "ARE",
-    "descripcion": "ARE"
+    "clave": "antillas-neerlandesas-an",
+    "descripcion": "ANTILLAS NEERLANDESAS,AN"
   },
   {
-    "clave": "ARG",
-    "descripcion": "ARG"
+    "clave": "arabia-saudi-sa",
+    "descripcion": "ARABIA SAUDI,SA"
   },
   {
-    "clave": "ARM",
-    "descripcion": "ARM"
+    "clave": "argelia-dz",
+    "descripcion": "ARGELIA,DZ"
   },
   {
-    "clave": "ASM",
-    "descripcion": "ASM"
+    "clave": "argentina-ar",
+    "descripcion": "ARGENTINA,AR"
   },
   {
-    "clave": "ATA",
-    "descripcion": "ATA"
+    "clave": "armenia-am",
+    "descripcion": "ARMENIA,AM"
   },
   {
-    "clave": "ATF",
-    "descripcion": "ATF"
+    "clave": "aruba-aw",
+    "descripcion": "ARUBA,AW"
   },
   {
-    "clave": "ATG",
-    "descripcion": "ATG"
+    "clave": "australia-au",
+    "descripcion": "AUSTRALIA,AU"
   },
   {
-    "clave": "AUS",
-    "descripcion": "AUS"
+    "clave": "austria-at",
+    "descripcion": "AUSTRIA,AT"
   },
   {
-    "clave": "AUT",
-    "descripcion": "AUT"
+    "clave": "azerbaiyan-az",
+    "descripcion": "AZERBAIYAN,AZ"
   },
   {
-    "clave": "AZE",
-    "descripcion": "AZE"
+    "clave": "bahamas-bs",
+    "descripcion": "BAHAMAS,BS"
   },
   {
-    "clave": "BDI",
-    "descripcion": "BDI"
+    "clave": "bahrein-bh",
+    "descripcion": "BAHREIN,BH"
   },
   {
-    "clave": "BEL",
-    "descripcion": "BEL"
+    "clave": "bangladesh-bd",
+    "descripcion": "BANGLADESH,BD"
   },
   {
-    "clave": "BEN",
-    "descripcion": "BEN"
+    "clave": "barbados-bb",
+    "descripcion": "BARBADOS,BB"
   },
   {
-    "clave": "BES",
-    "descripcion": "BES"
+    "clave": "belarus-by",
+    "descripcion": "BELARUS,BY"
   },
   {
-    "clave": "BFA",
-    "descripcion": "BFA"
+    "clave": "belgica-be",
+    "descripcion": "BELGICA,BE"
   },
   {
-    "clave": "BGD",
-    "descripcion": "BGD"
+    "clave": "belice-bz",
+    "descripcion": "BELICE,BZ"
   },
   {
-    "clave": "BGR",
-    "descripcion": "BGR"
+    "clave": "benin-bj",
+    "descripcion": "BENIN,BJ"
   },
   {
-    "clave": "BHR",
-    "descripcion": "BHR"
+    "clave": "bermudas-bm",
+    "descripcion": "BERMUDAS,BM"
   },
   {
-    "clave": "BHS",
-    "descripcion": "BHS"
+    "clave": "bhutan-bt",
+    "descripcion": "BHUTAN,BT"
   },
   {
-    "clave": "BIH",
-    "descripcion": "BIH"
+    "clave": "bolivia-bo",
+    "descripcion": "BOLIVIA,BO"
   },
   {
-    "clave": "BLM",
-    "descripcion": "BLM"
+    "clave": "bosnia-y-herzegovina-ba",
+    "descripcion": "BOSNIA Y HERZEGOVINA,BA"
   },
   {
-    "clave": "BLR",
-    "descripcion": "BLR"
+    "clave": "botsuana-bw",
+    "descripcion": "BOTSUANA,BW"
   },
   {
-    "clave": "BLZ",
-    "descripcion": "BLZ"
+    "clave": "brasil-br",
+    "descripcion": "BRASIL,BR"
   },
   {
-    "clave": "BMU",
-    "descripcion": "BMU"
+    "clave": "brunei-bn",
+    "descripcion": "BRUNEI,BN"
   },
   {
-    "clave": "BOL",
-    "descripcion": "BOL"
+    "clave": "bulgaria-bg",
+    "descripcion": "BULGARIA,BG"
   },
   {
-    "clave": "BRA",
-    "descripcion": "BRA"
+    "clave": "burkina-faso-bf",
+    "descripcion": "BURKINA FASO,BF"
   },
   {
-    "clave": "BRB",
-    "descripcion": "BRB"
+    "clave": "burundi-bi",
+    "descripcion": "BURUNDI,BI"
   },
   {
-    "clave": "BRN",
-    "descripcion": "BRN"
+    "clave": "cabo-verde-cv",
+    "descripcion": "CABO VERDE,CV"
   },
   {
-    "clave": "BTN",
-    "descripcion": "BTN"
+    "clave": "camboya-kh",
+    "descripcion": "CAMBOYA,KH"
   },
   {
-    "clave": "BVT",
-    "descripcion": "BVT"
+    "clave": "camerun-cm",
+    "descripcion": "CAMERUN,CM"
   },
   {
-    "clave": "BWA",
-    "descripcion": "BWA"
+    "clave": "canada-ca",
+    "descripcion": "CANADA,CA"
   },
   {
-    "clave": "CAF",
-    "descripcion": "CAF"
+    "clave": "chad-td",
+    "descripcion": "CHAD,TD"
   },
   {
-    "clave": "CAN",
-    "descripcion": "CAN"
+    "clave": "chequia-cz",
+    "descripcion": "CHEQUIA,CZ"
   },
   {
-    "clave": "CCK",
-    "descripcion": "CCK"
+    "clave": "chile-cl",
+    "descripcion": "CHILE,CL"
   },
   {
-    "clave": "CHE",
-    "descripcion": "CHE"
+    "clave": "china-cn",
+    "descripcion": "CHINA,CN"
   },
   {
-    "clave": "CHL",
-    "descripcion": "CHL"
+    "clave": "chipre-cy",
+    "descripcion": "CHIPRE,CY"
   },
   {
-    "clave": "CHN",
-    "descripcion": "CHN"
+    "clave": "clipperton-cp",
+    "descripcion": "CLIPPERTON,CP"
   },
   {
-    "clave": "CIV",
-    "descripcion": "CIV"
+    "clave": "colombia-co",
+    "descripcion": "COLOMBIA,CO"
   },
   {
-    "clave": "CMR",
-    "descripcion": "CMR"
+    "clave": "comoras-km",
+    "descripcion": "COMORAS,KM"
   },
   {
-    "clave": "COD",
-    "descripcion": "COD"
+    "clave": "congo-cg",
+    "descripcion": "CONGO,CG"
   },
   {
-    "clave": "COG",
-    "descripcion": "COG"
+    "clave": "corea-del-norte-kp",
+    "descripcion": "COREA DEL NORTE,KP"
   },
   {
-    "clave": "COK",
-    "descripcion": "COK"
+    "clave": "corea-del-sur-kr",
+    "descripcion": "COREA DEL SUR,KR"
   },
   {
-    "clave": "COL",
-    "descripcion": "COL"
+    "clave": "costa-de-marfil-ci",
+    "descripcion": "COSTA DE MARFIL,CI"
   },
   {
-    "clave": "COM",
-    "descripcion": "COM"
+    "clave": "costa-rica-cr",
+    "descripcion": "COSTA RICA,CR"
   },
   {
-    "clave": "CPV",
-    "descripcion": "CPV"
+    "clave": "croacia-hr",
+    "descripcion": "CROACIA,HR"
   },
   {
-    "clave": "CRI",
-    "descripcion": "CRI"
+    "clave": "cuba-cu",
+    "descripcion": "CUBA,CU"
   },
   {
-    "clave": "CUB",
-    "descripcion": "CUB"
+    "clave": "curazao-cw",
+    "descripcion": "CURAZAO,CW"
   },
   {
-    "clave": "CUW",
-    "descripcion": "CUW"
+    "clave": "dinamarca-dk",
+    "descripcion": "DINAMARCA,DK"
   },
   {
-    "clave": "CXR",
-    "descripcion": "CXR"
+    "clave": "dominica-dm",
+    "descripcion": "DOMINICA,DM"
   },
   {
-    "clave": "CYM",
-    "descripcion": "CYM"
+    "clave": "ecuador-ec",
+    "descripcion": "ECUADOR,EC"
   },
   {
-    "clave": "CYP",
-    "descripcion": "CYP"
+    "clave": "egipto-eg",
+    "descripcion": "EGIPTO,EG"
   },
   {
-    "clave": "CZE",
-    "descripcion": "CZE"
+    "clave": "el-salvador-sv",
+    "descripcion": "EL SALVADOR,SV"
   },
   {
-    "clave": "DEU",
-    "descripcion": "DEU"
+    "clave": "emiratos-arabes-unidos-ae",
+    "descripcion": "EMIRATOS ARABES UNIDOS,AE"
   },
   {
-    "clave": "DJI",
-    "descripcion": "DJI"
+    "clave": "eritrea-er",
+    "descripcion": "ERITREA,ER"
   },
   {
-    "clave": "DMA",
-    "descripcion": "DMA"
+    "clave": "eslovaquia-sk",
+    "descripcion": "ESLOVAQUIA,SK"
   },
   {
-    "clave": "DNK",
-    "descripcion": "DNK"
+    "clave": "eslovenia-si",
+    "descripcion": "ESLOVENIA,SI"
   },
   {
-    "clave": "DOM",
-    "descripcion": "DOM"
+    "clave": "espana-es",
+    "descripcion": "ESPAÑA,ES"
   },
   {
-    "clave": "DZA",
-    "descripcion": "DZA"
+    "clave": "estados-unidos-us",
+    "descripcion": "ESTADOS UNIDOS,US"
   },
   {
-    "clave": "ECU",
-    "descripcion": "ECU"
+    "clave": "estonia-ee",
+    "descripcion": "ESTONIA,EE"
   },
   {
-    "clave": "EGY",
-    "descripcion": "EGY"
+    "clave": "etiopia-et",
+    "descripcion": "ETIOPIA,ET"
   },
   {
-    "clave": "ERI",
-    "descripcion": "ERI"
+    "clave": "filipinas-ph",
+    "descripcion": "FILIPINAS,PH"
   },
   {
-    "clave": "ESH",
-    "descripcion": "ESH"
+    "clave": "finlandia-fi",
+    "descripcion": "FINLANDIA,FI"
   },
   {
-    "clave": "ESP",
-    "descripcion": "ESP"
+    "clave": "fiyi-fj",
+    "descripcion": "FIYI,FJ"
   },
   {
-    "clave": "EST",
-    "descripcion": "EST"
+    "clave": "francia-fr",
+    "descripcion": "FRANCIA,FR"
   },
   {
-    "clave": "ETH",
-    "descripcion": "ETH"
+    "clave": "gabon-ga",
+    "descripcion": "GABON,GA"
   },
   {
-    "clave": "Fecha inicio de vigencia",
-    "descripcion": "Fecha inicio de vigencia"
+    "clave": "gambia-gm",
+    "descripcion": "GAMBIA,GM"
   },
   {
-    "clave": "FIN",
-    "descripcion": "FIN"
+    "clave": "georgia-del-sur-e-islas-sandwich-del-sur-gs",
+    "descripcion": "GEORGIA DEL SUR E ISLAS SANDWICH DEL SUR,GS"
   },
   {
-    "clave": "FJI",
-    "descripcion": "FJI"
+    "clave": "georgia-ge",
+    "descripcion": "GEORGIA,GE"
   },
   {
-    "clave": "FLK",
-    "descripcion": "FLK"
+    "clave": "ghana-gh",
+    "descripcion": "GHANA,GH"
   },
   {
-    "clave": "FRA",
-    "descripcion": "FRA"
+    "clave": "gibraltar-gi",
+    "descripcion": "GIBRALTAR,GI"
   },
   {
-    "clave": "FRO",
-    "descripcion": "FRO"
+    "clave": "granada-gd",
+    "descripcion": "GRANADA,GD"
   },
   {
-    "clave": "FSM",
-    "descripcion": "FSM"
+    "clave": "grecia-el",
+    "descripcion": "GRECIA,EL"
   },
   {
-    "clave": "GAB",
-    "descripcion": "GAB"
+    "clave": "groenlandia-gl",
+    "descripcion": "GROENLANDIA,GL"
   },
   {
-    "clave": "GBR",
-    "descripcion": "GBR"
+    "clave": "guadalupe-gp",
+    "descripcion": "GUADALUPE,GP"
   },
   {
-    "clave": "GEO",
-    "descripcion": "GEO"
+    "clave": "guam-gu",
+    "descripcion": "GUAM,GU"
   },
   {
-    "clave": "GGY",
-    "descripcion": "GGY"
+    "clave": "guatemala-gt",
+    "descripcion": "GUATEMALA,GT"
   },
   {
-    "clave": "GHA",
-    "descripcion": "GHA"
+    "clave": "guayana-francesa-gf",
+    "descripcion": "GUAYANA FRANCESA,GF"
   },
   {
-    "clave": "GIB",
-    "descripcion": "GIB"
+    "clave": "guernesey-gg",
+    "descripcion": "GUERNESEY,GG"
   },
   {
-    "clave": "GIN",
-    "descripcion": "GIN"
+    "clave": "guinea-ecuatorial-gq",
+    "descripcion": "GUINEA ECUATORIAL,GQ"
   },
   {
-    "clave": "GLP",
-    "descripcion": "GLP"
+    "clave": "guinea-bissau-gw",
+    "descripcion": "GUINEA-BISSAU,GW"
   },
   {
-    "clave": "GMB",
-    "descripcion": "GMB"
+    "clave": "guinea-gn",
+    "descripcion": "GUINEA,GN"
   },
   {
-    "clave": "GNB",
-    "descripcion": "GNB"
+    "clave": "guyana-gy",
+    "descripcion": "GUYANA,GY"
   },
   {
-    "clave": "GNQ",
-    "descripcion": "GNQ"
+    "clave": "haiti-ht",
+    "descripcion": "HAITI,HT"
   },
   {
-    "clave": "GRC",
-    "descripcion": "GRC"
+    "clave": "honduras-hn",
+    "descripcion": "HONDURAS,HN"
   },
   {
-    "clave": "GRD",
-    "descripcion": "GRD"
+    "clave": "hong-kong-hk",
+    "descripcion": "HONG KONG,HK"
   },
   {
-    "clave": "GRL",
-    "descripcion": "GRL"
+    "clave": "hungria-hu",
+    "descripcion": "HUNGRIA,HU"
   },
   {
-    "clave": "GTM",
-    "descripcion": "GTM"
+    "clave": "india-in",
+    "descripcion": "INDIA,IN"
   },
   {
-    "clave": "GUF",
-    "descripcion": "GUF"
+    "clave": "indonesia-id",
+    "descripcion": "INDONESIA,ID"
   },
   {
-    "clave": "GUM",
-    "descripcion": "GUM"
+    "clave": "iran-ir",
+    "descripcion": "IRAN,IR"
   },
   {
-    "clave": "GUY",
-    "descripcion": "GUY"
+    "clave": "iraq-iq",
+    "descripcion": "IRAQ,IQ"
   },
   {
-    "clave": "HKG",
-    "descripcion": "HKG"
+    "clave": "irlanda-ie",
+    "descripcion": "IRLANDA,IE"
   },
   {
-    "clave": "HMD",
-    "descripcion": "HMD"
+    "clave": "isla-bouvet-bv",
+    "descripcion": "ISLA BOUVET,BV"
   },
   {
-    "clave": "HND",
-    "descripcion": "HND"
+    "clave": "isla-christmas-cx",
+    "descripcion": "ISLA CHRISTMAS,CX"
   },
   {
-    "clave": "HRV",
-    "descripcion": "HRV"
+    "clave": "isla-de-man-im",
+    "descripcion": "ISLA DE MAN,IM"
   },
   {
-    "clave": "HTI",
-    "descripcion": "HTI"
+    "clave": "isla-norfolk-nf",
+    "descripcion": "ISLA NORFOLK,NF"
   },
   {
-    "clave": "HUN",
-    "descripcion": "HUN"
+    "clave": "islandia-is",
+    "descripcion": "ISLANDIA,IS"
   },
   {
-    "clave": "IDN",
-    "descripcion": "IDN"
+    "clave": "islas-aland-ax",
+    "descripcion": "ISLAS ÅLAND,AX"
   },
   {
-    "clave": "IMN",
-    "descripcion": "IMN"
+    "clave": "islas-caiman-ky",
+    "descripcion": "ISLAS CAIMAN,KY"
   },
   {
-    "clave": "IND",
-    "descripcion": "IND"
+    "clave": "islas-cocos-cc",
+    "descripcion": "ISLAS COCOS,CC"
   },
   {
-    "clave": "IOT",
-    "descripcion": "IOT"
+    "clave": "islas-cook-ck",
+    "descripcion": "ISLAS COOK,CK"
   },
   {
-    "clave": "IRL",
-    "descripcion": "IRL"
+    "clave": "islas-feroe-fo",
+    "descripcion": "ISLAS FEROE,FO"
   },
   {
-    "clave": "IRN",
-    "descripcion": "IRN"
+    "clave": "islas-heard-y-mcdonald-hm",
+    "descripcion": "ISLAS HEARD Y MCDONALD,HM"
   },
   {
-    "clave": "IRQ",
-    "descripcion": "IRQ"
+    "clave": "islas-malvinas-fk",
+    "descripcion": "ISLAS MALVINAS,FK"
   },
   {
-    "clave": "ISL",
-    "descripcion": "ISL"
+    "clave": "islas-marianas-del-norte-mp",
+    "descripcion": "ISLAS MARIANAS DEL NORTE,MP"
   },
   {
-    "clave": "ISR",
-    "descripcion": "ISR"
+    "clave": "islas-marshall-mh",
+    "descripcion": "ISLAS MARSHALL,MH"
   },
   {
-    "clave": "ITA",
-    "descripcion": "ITA"
+    "clave": "islas-menores-alejadas-de-los-estados-unidos-um",
+    "descripcion": "ISLAS MENORES ALEJADAS DE LOS ESTADOS UNIDOS,UM"
   },
   {
-    "clave": "JAM",
-    "descripcion": "JAM"
+    "clave": "islas-pitcairn-pn",
+    "descripcion": "ISLAS PITCAIRN,PN"
   },
   {
-    "clave": "JEY",
-    "descripcion": "JEY"
+    "clave": "islas-salomon-sb",
+    "descripcion": "ISLAS SALOMON,SB"
   },
   {
-    "clave": "JOR",
-    "descripcion": "JOR"
+    "clave": "islas-turcas-y-caicos-tc",
+    "descripcion": "ISLAS TURCAS Y CAICOS,TC"
   },
   {
-    "clave": "JPN",
-    "descripcion": "JPN"
+    "clave": "islas-virgenes-britanicas-vg",
+    "descripcion": "ISLAS VIRGENES BRITANICAS,VG"
   },
   {
-    "clave": "KAZ",
-    "descripcion": "KAZ"
+    "clave": "islas-virgenes-de-los-estados-unidos-vi",
+    "descripcion": "ISLAS VIRGENES DE LOS ESTADOS UNIDOS,VI"
   },
   {
-    "clave": "KEN",
-    "descripcion": "KEN"
+    "clave": "israel-il",
+    "descripcion": "ISRAEL,IL"
   },
   {
-    "clave": "KGZ",
-    "descripcion": "KGZ"
+    "clave": "italia-it",
+    "descripcion": "ITALIA,IT"
   },
   {
-    "clave": "KHM",
-    "descripcion": "KHM"
+    "clave": "jamaica-jm",
+    "descripcion": "JAMAICA,JM"
   },
   {
-    "clave": "KIR",
-    "descripcion": "KIR"
+    "clave": "japon-jp",
+    "descripcion": "JAPON,JP"
   },
   {
-    "clave": "KNA",
-    "descripcion": "KNA"
+    "clave": "jersey-je",
+    "descripcion": "JERSEY,JE"
   },
   {
-    "clave": "KOR",
-    "descripcion": "KOR"
+    "clave": "jordania-jo",
+    "descripcion": "JORDANIA,JO"
   },
   {
-    "clave": "KWT",
-    "descripcion": "KWT"
+    "clave": "kazajstan-kz",
+    "descripcion": "KAZAJSTAN,KZ"
   },
   {
-    "clave": "LAO",
-    "descripcion": "LAO"
+    "clave": "kenia-ke",
+    "descripcion": "KENIA,KE"
   },
   {
-    "clave": "LBN",
-    "descripcion": "LBN"
+    "clave": "kirguistan-kg",
+    "descripcion": "KIRGUISTAN,KG"
   },
   {
-    "clave": "LBR",
-    "descripcion": "LBR"
+    "clave": "kiribati-ki",
+    "descripcion": "KIRIBATI,KI"
   },
   {
-    "clave": "LBY",
-    "descripcion": "LBY"
+    "clave": "kosovo-xk",
+    "descripcion": "KOSOVO,XK"
   },
   {
-    "clave": "LCA",
-    "descripcion": "LCA"
+    "clave": "kuwait-kw",
+    "descripcion": "KUWAIT,KW"
   },
   {
-    "clave": "LIE",
-    "descripcion": "LIE"
+    "clave": "laos-la",
+    "descripcion": "LAOS,LA"
   },
   {
-    "clave": "LKA",
-    "descripcion": "LKA"
+    "clave": "lesotho-ls",
+    "descripcion": "LESOTHO,LS"
   },
   {
-    "clave": "LSO",
-    "descripcion": "LSO"
+    "clave": "letonia-lv",
+    "descripcion": "LETONIA,LV"
   },
   {
-    "clave": "LTU",
-    "descripcion": "LTU"
+    "clave": "libano-lb",
+    "descripcion": "LIBANO,LB"
   },
   {
-    "clave": "LUX",
-    "descripcion": "LUX"
+    "clave": "liberia-lr",
+    "descripcion": "LIBERIA,LR"
   },
   {
-    "clave": "LVA",
-    "descripcion": "LVA"
+    "clave": "libia-ly",
+    "descripcion": "LIBIA,LY"
   },
   {
-    "clave": "MAC",
-    "descripcion": "MAC"
+    "clave": "liechtenstein-li",
+    "descripcion": "LIECHTENSTEIN,LI"
   },
   {
-    "clave": "MAF",
-    "descripcion": "MAF"
+    "clave": "lituania-lt",
+    "descripcion": "LITUANIA,LT"
   },
   {
-    "clave": "MAR",
-    "descripcion": "MAR"
+    "clave": "luxemburgo-lu",
+    "descripcion": "LUXEMBURGO,LU"
   },
   {
-    "clave": "MCO",
-    "descripcion": "MCO"
+    "clave": "macao-mo",
+    "descripcion": "MACAO,MO"
   },
   {
-    "clave": "MDA",
-    "descripcion": "MDA"
+    "clave": "macedonia-mk",
+    "descripcion": "MACEDONIA,MK"
   },
   {
-    "clave": "MDG",
-    "descripcion": "MDG"
+    "clave": "madagascar-mg",
+    "descripcion": "MADAGASCAR,MG"
   },
   {
-    "clave": "MDV",
-    "descripcion": "MDV"
+    "clave": "malasia-my",
+    "descripcion": "MALASIA,MY"
   },
   {
-    "clave": "MEX",
-    "descripcion": "MEX"
+    "clave": "malawi-mw",
+    "descripcion": "MALAWI,MW"
   },
   {
-    "clave": "MHL",
-    "descripcion": "MHL"
+    "clave": "maldivas-mv",
+    "descripcion": "MALDIVAS,MV"
   },
   {
-    "clave": "MKD",
-    "descripcion": "MKD"
+    "clave": "mali-ml",
+    "descripcion": "MALI,ML"
   },
   {
-    "clave": "MLI",
-    "descripcion": "MLI"
+    "clave": "malta-mt",
+    "descripcion": "MALTA,MT"
   },
   {
-    "clave": "MLT",
-    "descripcion": "MLT"
+    "clave": "marruecos-ma",
+    "descripcion": "MARRUECOS,MA"
   },
   {
-    "clave": "MMR",
-    "descripcion": "MMR"
+    "clave": "martinica-mq",
+    "descripcion": "MARTINICA,MQ"
   },
   {
-    "clave": "MNE",
-    "descripcion": "MNE"
+    "clave": "mauricio-mu",
+    "descripcion": "MAURICIO,MU"
   },
   {
-    "clave": "MNG",
-    "descripcion": "MNG"
+    "clave": "mauritania-mr",
+    "descripcion": "MAURITANIA,MR"
   },
   {
-    "clave": "MNP",
-    "descripcion": "MNP"
+    "clave": "mayotte-yt",
+    "descripcion": "MAYOTTE,YT"
   },
   {
-    "clave": "MOZ",
-    "descripcion": "MOZ"
+    "clave": "mexico-mx",
+    "descripcion": "MEXICO,MX"
   },
   {
-    "clave": "MRT",
-    "descripcion": "MRT"
+    "clave": "micronesia-fm",
+    "descripcion": "MICRONESIA,FM"
   },
   {
-    "clave": "MSR",
-    "descripcion": "MSR"
+    "clave": "moldova-md",
+    "descripcion": "MOLDOVA,MD"
   },
   {
-    "clave": "MTQ",
-    "descripcion": "MTQ"
+    "clave": "monaco-mc",
+    "descripcion": "MONACO,MC"
   },
   {
-    "clave": "MUS",
-    "descripcion": "MUS"
+    "clave": "mongolia-mn",
+    "descripcion": "MONGOLIA,MN"
   },
   {
-    "clave": "MWI",
-    "descripcion": "MWI"
+    "clave": "montenegro-me",
+    "descripcion": "MONTENEGRO,ME"
   },
   {
-    "clave": "MYS",
-    "descripcion": "MYS"
+    "clave": "montserrat-ms",
+    "descripcion": "MONTSERRAT,MS"
   },
   {
-    "clave": "MYT",
-    "descripcion": "MYT"
+    "clave": "mozambique-mz",
+    "descripcion": "MOZAMBIQUE,MZ"
   },
   {
-    "clave": "NAM",
-    "descripcion": "NAM"
+    "clave": "myanmar-mm",
+    "descripcion": "MYANMAR,MM"
   },
   {
-    "clave": "NCL",
-    "descripcion": "NCL"
+    "clave": "namibia-na",
+    "descripcion": "NAMIBIA,NA"
   },
   {
-    "clave": "NER",
-    "descripcion": "NER"
+    "clave": "nauru-nr",
+    "descripcion": "NAURU,NR"
   },
   {
-    "clave": "NFK",
-    "descripcion": "NFK"
+    "clave": "nepal-np",
+    "descripcion": "NEPAL,NP"
   },
   {
-    "clave": "NGA",
-    "descripcion": "NGA"
+    "clave": "nicaragua-ni",
+    "descripcion": "NICARAGUA,NI"
   },
   {
-    "clave": "NIC",
-    "descripcion": "NIC"
+    "clave": "niger-ne",
+    "descripcion": "NIGER,NE"
   },
   {
-    "clave": "NIU",
-    "descripcion": "NIU"
+    "clave": "nigeria-ng",
+    "descripcion": "NIGERIA,NG"
   },
   {
-    "clave": "NLD",
-    "descripcion": "NLD"
+    "clave": "niue-nu",
+    "descripcion": "NIUE,NU"
   },
   {
-    "clave": "NOR",
-    "descripcion": "NOR"
+    "clave": "noruega-no",
+    "descripcion": "NORUEGA,NO"
   },
   {
-    "clave": "NPL",
-    "descripcion": "NPL"
+    "clave": "nueva-caledonia-nc",
+    "descripcion": "NUEVA CALEDONIA,NC"
   },
   {
-    "clave": "NRU",
-    "descripcion": "NRU"
+    "clave": "nueva-zelanda-nz",
+    "descripcion": "NUEVA ZELANDA,NZ"
   },
   {
-    "clave": "NZL",
-    "descripcion": "NZL"
+    "clave": "oman-om",
+    "descripcion": "OMAN,OM"
   },
   {
-    "clave": "OMN",
-    "descripcion": "OMN"
+    "clave": "pakistan-pk",
+    "descripcion": "PAKISTAN,PK"
   },
   {
-    "clave": "PAK",
-    "descripcion": "PAK"
+    "clave": "palaos-pw",
+    "descripcion": "PALAOS,PW"
   },
   {
-    "clave": "PAN",
-    "descripcion": "PAN"
+    "clave": "panama-pa",
+    "descripcion": "PANAMA,PA"
   },
   {
-    "clave": "PCN",
-    "descripcion": "PCN"
+    "clave": "papua-nueva-guinea-pg",
+    "descripcion": "PAPUA NUEVA GUINEA,PG"
   },
   {
-    "clave": "PER",
-    "descripcion": "PER"
+    "clave": "paraguay-py",
+    "descripcion": "PARAGUAY,PY"
   },
   {
-    "clave": "PHL",
-    "descripcion": "PHL"
+    "clave": "peru-pe",
+    "descripcion": "PERU,PE"
   },
   {
-    "clave": "PLW",
-    "descripcion": "PLW"
+    "clave": "polinesia-francesa-pf",
+    "descripcion": "POLINESIA FRANCESA,PF"
   },
   {
-    "clave": "PNG",
-    "descripcion": "PNG"
+    "clave": "polonia-pl",
+    "descripcion": "POLONIA,PL"
   },
   {
-    "clave": "POL",
-    "descripcion": "POL"
+    "clave": "portugal-pt",
+    "descripcion": "PORTUGAL,PT"
   },
   {
-    "clave": "PRI",
-    "descripcion": "PRI"
+    "clave": "puerto-rico-pr",
+    "descripcion": "PUERTO RICO,PR"
   },
   {
-    "clave": "PRK",
-    "descripcion": "PRK"
+    "clave": "qatar-qa",
+    "descripcion": "QATAR,QA"
   },
   {
-    "clave": "PRT",
-    "descripcion": "PRT"
+    "clave": "reino-unido-uk",
+    "descripcion": "REINO UNIDO,UK"
   },
   {
-    "clave": "PRY",
-    "descripcion": "PRY"
+    "clave": "republica-centroafricana-cf",
+    "descripcion": "REPUBLICA CENTROAFRICANA,CF"
   },
   {
-    "clave": "PSE",
-    "descripcion": "PSE"
+    "clave": "republica-democratica-del-congo-cd",
+    "descripcion": "REPUBLICA DEMOCRATICA DEL CONGO,CD"
   },
   {
-    "clave": "PYF",
-    "descripcion": "PYF"
+    "clave": "republica-dominicana-do",
+    "descripcion": "REPUBLICA DOMINICANA,DO"
   },
   {
-    "clave": "QAT",
-    "descripcion": "QAT"
+    "clave": "reunion-re",
+    "descripcion": "REUNION,RE"
   },
   {
-    "clave": "REU",
-    "descripcion": "REU"
+    "clave": "ruanda-rw",
+    "descripcion": "RUANDA,RW"
   },
   {
-    "clave": "ROU",
-    "descripcion": "ROU"
+    "clave": "rumania-ro",
+    "descripcion": "RUMANIA,RO"
   },
   {
-    "clave": "RUS",
-    "descripcion": "RUS"
+    "clave": "rusia-ru",
+    "descripcion": "RUSIA,RU"
   },
   {
-    "clave": "RWA",
-    "descripcion": "RWA"
+    "clave": "sahara-occidental-eh",
+    "descripcion": "SAHARA OCCIDENTAL,EH"
   },
   {
-    "clave": "SAU",
-    "descripcion": "SAU"
+    "clave": "samoa-americana-as",
+    "descripcion": "SAMOA AMERICANA,AS"
   },
   {
-    "clave": "SDN",
-    "descripcion": "SDN"
+    "clave": "samoa-ws",
+    "descripcion": "SAMOA,WS"
   },
   {
-    "clave": "SEN",
-    "descripcion": "SEN"
+    "clave": "san-bartolome-bl",
+    "descripcion": "SAN BARTOLOME,BL"
   },
   {
-    "clave": "SGP",
-    "descripcion": "SGP"
+    "clave": "san-cristobal-y-nieves-kn",
+    "descripcion": "SAN CRISTOBAL Y NIEVES,KN"
   },
   {
-    "clave": "SGS",
-    "descripcion": "SGS"
+    "clave": "san-marino-sm",
+    "descripcion": "SAN MARINO,SM"
   },
   {
-    "clave": "SHN",
-    "descripcion": "SHN"
+    "clave": "san-martin-mf",
+    "descripcion": "SAN MARTIN,MF"
   },
   {
-    "clave": "SJM",
-    "descripcion": "SJM"
+    "clave": "san-pedro-y-miquelon-pm",
+    "descripcion": "SAN PEDRO Y MIQUELON,PM"
   },
   {
-    "clave": "SLB",
-    "descripcion": "SLB"
+    "clave": "san-vicente-y-las-granadinas-vc",
+    "descripcion": "SAN VICENTE Y LAS GRANADINAS,VC"
   },
   {
-    "clave": "SLE",
-    "descripcion": "SLE"
+    "clave": "santa-elena-sh",
+    "descripcion": "SANTA ELENA,SH"
   },
   {
-    "clave": "SLV",
-    "descripcion": "SLV"
+    "clave": "santa-lucia-lc",
+    "descripcion": "SANTA LUCIA,LC"
   },
   {
-    "clave": "SMR",
-    "descripcion": "SMR"
+    "clave": "santa-sede-estado-de-la-ciudad-del-vaticano-va",
+    "descripcion": "SANTA SEDE / ESTADO DE LA CIUDAD DEL VATICANO,VA"
   },
   {
-    "clave": "SOM",
-    "descripcion": "SOM"
+    "clave": "santo-tome-y-principe-st",
+    "descripcion": "SANTO TOME Y PRINCIPE,ST"
   },
   {
-    "clave": "SPM",
-    "descripcion": "SPM"
+    "clave": "senegal-sn",
+    "descripcion": "SENEGAL,SN"
   },
   {
-    "clave": "SRB",
-    "descripcion": "SRB"
+    "clave": "serbia-rs",
+    "descripcion": "SERBIA,RS"
   },
   {
-    "clave": "SSD",
-    "descripcion": "SSD"
+    "clave": "seychelles-sc",
+    "descripcion": "SEYCHELLES,SC"
   },
   {
-    "clave": "STP",
-    "descripcion": "STP"
+    "clave": "sierra-leona-sl",
+    "descripcion": "SIERRA LEONA,SL"
   },
   {
-    "clave": "Sun Jan 01 2017 00:00:00 GMT-0600 (Central Standard Time)",
-    "descripcion": "Sun Jan 01 2017 00:00:00 GMT-0600 (Central Standard Time)"
+    "clave": "singapur-sg",
+    "descripcion": "SINGAPUR,SG"
   },
   {
-    "clave": "SUR",
-    "descripcion": "SUR"
+    "clave": "siria-sy",
+    "descripcion": "SIRIA,SY"
   },
   {
-    "clave": "SVK",
-    "descripcion": "SVK"
+    "clave": "somalia-so",
+    "descripcion": "SOMALIA,SO"
   },
   {
-    "clave": "SVN",
-    "descripcion": "SVN"
+    "clave": "sri-lanka-lk",
+    "descripcion": "SRI LANKA,LK"
   },
   {
-    "clave": "SWE",
-    "descripcion": "SWE"
+    "clave": "suazilandia-sz",
+    "descripcion": "SUAZILANDIA,SZ"
   },
   {
-    "clave": "SWZ",
-    "descripcion": "SWZ"
+    "clave": "sudafrica-za",
+    "descripcion": "SUDAFRICA,ZA"
   },
   {
-    "clave": "SXM",
-    "descripcion": "SXM"
+    "clave": "sudan-sd",
+    "descripcion": "SUDAN,SD"
   },
   {
-    "clave": "SYC",
-    "descripcion": "SYC"
+    "clave": "suecia-se",
+    "descripcion": "SUECIA,SE"
   },
   {
-    "clave": "SYR",
-    "descripcion": "SYR"
+    "clave": "suiza-ch",
+    "descripcion": "SUIZA,CH"
   },
   {
-    "clave": "TCA",
-    "descripcion": "TCA"
+    "clave": "surinam-sr",
+    "descripcion": "SURINAM,SR"
   },
   {
-    "clave": "TCD",
-    "descripcion": "TCD"
+    "clave": "svalbard-y-jan-mayen-sj",
+    "descripcion": "SVALBARD Y JAN MAYEN,SJ"
   },
   {
-    "clave": "TGO",
-    "descripcion": "TGO"
+    "clave": "tailandia-th",
+    "descripcion": "TAILANDIA,TH"
   },
   {
-    "clave": "THA",
-    "descripcion": "THA"
+    "clave": "taiwan-tw",
+    "descripcion": "TAIWAN,TW"
   },
   {
-    "clave": "TJK",
-    "descripcion": "TJK"
+    "clave": "tanzania-tz",
+    "descripcion": "TANZANIA,TZ"
   },
   {
-    "clave": "TKL",
-    "descripcion": "TKL"
+    "clave": "tayikistan-tj",
+    "descripcion": "TAYIKISTAN,TJ"
   },
   {
-    "clave": "TKM",
-    "descripcion": "TKM"
+    "clave": "territorio-britanico-del-oceano-indico-io",
+    "descripcion": "TERRITORIO BRITANICO DEL OCEANO INDICO,IO"
   },
   {
-    "clave": "TLS",
-    "descripcion": "TLS"
+    "clave": "territorios-australes-franceses-tf",
+    "descripcion": "TERRITORIOS AUSTRALES FRANCESES,TF"
   },
   {
-    "clave": "TON",
-    "descripcion": "TON"
+    "clave": "territorios-palestinos-ps",
+    "descripcion": "TERRITORIOS PALESTINOS,PS"
   },
   {
-    "clave": "TTO",
-    "descripcion": "TTO"
+    "clave": "timor-oriental-tl",
+    "descripcion": "TIMOR ORIENTAL,TL"
   },
   {
-    "clave": "TUN",
-    "descripcion": "TUN"
+    "clave": "togo-tg",
+    "descripcion": "TOGO,TG"
   },
   {
-    "clave": "TUR",
-    "descripcion": "TUR"
+    "clave": "tokelau-tk",
+    "descripcion": "TOKELAU,TK"
   },
   {
-    "clave": "TUV",
-    "descripcion": "TUV"
+    "clave": "tonga-to",
+    "descripcion": "TONGA,TO"
   },
   {
-    "clave": "TWN",
-    "descripcion": "TWN"
+    "clave": "trinidad-y-tobago-tt",
+    "descripcion": "TRINIDAD Y TOBAGO,TT"
   },
   {
-    "clave": "TZA",
-    "descripcion": "TZA"
+    "clave": "tunez-tn",
+    "descripcion": "TUNEZ,TN"
   },
   {
-    "clave": "UGA",
-    "descripcion": "UGA"
+    "clave": "turkmenistan-tm",
+    "descripcion": "TURKMENISTAN,TM"
   },
   {
-    "clave": "UKR",
-    "descripcion": "UKR"
+    "clave": "turquia-tr",
+    "descripcion": "TURQUIA,TR"
   },
   {
-    "clave": "UMI",
-    "descripcion": "UMI"
+    "clave": "tuvalu-tv",
+    "descripcion": "TUVALU,TV"
   },
   {
-    "clave": "URY",
-    "descripcion": "URY"
+    "clave": "ucrania-ua",
+    "descripcion": "UCRANIA,UA"
   },
   {
-    "clave": "USA",
-    "descripcion": "USA"
+    "clave": "uganda-ug",
+    "descripcion": "UGANDA,UG"
   },
   {
-    "clave": "UZB",
-    "descripcion": "UZB"
+    "clave": "uruguay-uy",
+    "descripcion": "URUGUAY,UY"
   },
   {
-    "clave": "VAT",
-    "descripcion": "VAT"
+    "clave": "uzbekistan-uz",
+    "descripcion": "UZBEKISTAN,UZ"
   },
   {
-    "clave": "VCT",
-    "descripcion": "VCT"
+    "clave": "vanuatu-vu",
+    "descripcion": "VANUATU,VU"
   },
   {
-    "clave": "VEN",
-    "descripcion": "VEN"
+    "clave": "venezuela-ve",
+    "descripcion": "VENEZUELA,VE"
   },
   {
-    "clave": "VGB",
-    "descripcion": "VGB"
+    "clave": "vietnam-vn",
+    "descripcion": "VIETNAM,VN"
   },
   {
-    "clave": "VIR",
-    "descripcion": "VIR"
+    "clave": "wallis-y-futuna-wf",
+    "descripcion": "WALLIS Y FUTUNA,WF"
   },
   {
-    "clave": "VNM",
-    "descripcion": "VNM"
+    "clave": "yemen-ye",
+    "descripcion": "YEMEN,YE"
   },
   {
-    "clave": "VUT",
-    "descripcion": "VUT"
+    "clave": "yibuti-dj",
+    "descripcion": "YIBUTI,DJ"
   },
   {
-    "clave": "WLF",
-    "descripcion": "WLF"
+    "clave": "zambia-zm",
+    "descripcion": "ZAMBIA,ZM"
   },
   {
-    "clave": "WSM",
-    "descripcion": "WSM"
-  },
-  {
-    "clave": "YEM",
-    "descripcion": "YEM"
-  },
-  {
-    "clave": "ZAF",
-    "descripcion": "ZAF"
-  },
-  {
-    "clave": "ZMB",
-    "descripcion": "ZMB"
-  },
-  {
-    "clave": "ZWE",
-    "descripcion": "ZWE"
-  },
-  {
-    "clave": "ZZZ",
-    "descripcion": "ZZZ"
+    "clave": "zimbabue-zw",
+    "descripcion": "ZIMBABUE,ZW"
   }
 ]
