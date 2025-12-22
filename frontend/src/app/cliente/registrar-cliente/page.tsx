@@ -58,17 +58,19 @@ export default function RegistrarClientePage() {
   const [pfCurp, setPfCurp] = useState('');
   const [pfOcupacion, setPfOcupacion] = useState(''); // texto libre (opcional)
 
-  // Actividad económica (buscable)
+  // Actividad económica (dropdown + modo buscar)
+  const [actModoBuscar, setActModoBuscar] = useState(false);
   const [actQuery, setActQuery] = useState('');
-  const [actSelected, setActSelected] = useState<CatalogItem | null>(null);
+  const [actClave, setActClave] = useState<string>(''); // selección por clave
 
   // PM
   const [pmRfc, setPmRfc] = useState('');
   const [pmFechaConst, setPmFechaConst] = useState(''); // YYYY-MM-DD
 
-  // Giro mercantil (buscable)
+  // Giro mercantil (dropdown + modo buscar)
+  const [giroModoBuscar, setGiroModoBuscar] = useState(false);
   const [giroQuery, setGiroQuery] = useState('');
-  const [giroSelected, setGiroSelected] = useState<CatalogItem | null>(null);
+  const [giroClave, setGiroClave] = useState<string>(''); // selección por clave
 
   // Representante (PM)
   const [repNombres, setRepNombres] = useState('');
@@ -119,25 +121,23 @@ export default function RegistrarClientePage() {
     })();
   }, [apiBase]);
 
-  const actResults = useMemo(() => {
-    const q = actQuery.trim().toLowerCase();
-    if (!q) return [];
-    return actividades
-      .filter((x) => x.descripcion.toLowerCase().includes(q) || x.clave.toLowerCase().includes(q))
-      .slice(0, 30);
-  }, [actQuery, actividades]);
-
-  const giroResults = useMemo(() => {
-    const q = giroQuery.trim().toLowerCase();
-    if (!q) return [];
-    return giros
-      .filter((x) => x.descripcion.toLowerCase().includes(q) || x.clave.toLowerCase().includes(q))
-      .slice(0, 30);
-  }, [giroQuery, giros]);
-
   function getItemByClave(list: CatalogItem[], clave: string) {
     return list.find((x) => x.clave === clave) || null;
   }
+
+  const actividadesFiltradas = useMemo(() => {
+    if (!actModoBuscar) return actividades;
+    const q = actQuery.trim().toLowerCase();
+    if (!q) return actividades;
+    return actividades.filter((x) => x.descripcion.toLowerCase().includes(q) || x.clave.toLowerCase().includes(q));
+  }, [actModoBuscar, actQuery, actividades]);
+
+  const girosFiltrados = useMemo(() => {
+    if (!giroModoBuscar) return giros;
+    const q = giroQuery.trim().toLowerCase();
+    if (!q) return giros;
+    return giros.filter((x) => x.descripcion.toLowerCase().includes(q) || x.clave.toLowerCase().includes(q));
+  }, [giroModoBuscar, giroQuery, giros]);
 
   function validate() {
     if (!nombreEntidad.trim()) return 'Nombre / Entidad es obligatorio';
@@ -152,13 +152,13 @@ export default function RegistrarClientePage() {
     if (tipoCliente === 'persona_fisica') {
       if (!pfNombres.trim()) return 'Nombres (PF) es obligatorio';
       if (!pfApPaterno.trim()) return 'Apellido paterno (PF) es obligatorio';
-      if (!actSelected) return 'Selecciona Actividad económica';
+      if (!actClave) return 'Selecciona Actividad económica';
     }
 
     if (tipoCliente === 'persona_moral') {
       if (!pmRfc.trim()) return 'RFC (PM) es obligatorio';
       if (!pmFechaConst.trim()) return 'Fecha constitución (PM) es obligatoria';
-      if (!giroSelected) return 'Selecciona Giro mercantil';
+      if (!giroClave) return 'Selecciona Giro mercantil';
       if (!repNombres.trim()) return 'Nombres representante es obligatorio';
       if (!repApPaterno.trim()) return 'Apellido paterno representante es obligatorio';
     }
@@ -173,6 +173,9 @@ export default function RegistrarClientePage() {
   function buildPayload() {
     const paisContacto = getItemByClave(paises, paisContactoClave);
     const nacionalidad = getItemByClave(paises, nacionalidadClave);
+
+    const actSelected = actClave ? getItemByClave(actividades, actClave) : null;
+    const giroSelected = giroClave ? getItemByClave(giros, giroClave) : null;
 
     const datos_completos: any = {
       contacto: {
@@ -280,12 +283,6 @@ export default function RegistrarClientePage() {
         <div className="mb-4 rounded border p-3 text-sm">
           <div className="font-medium mb-1">⚠️ Catálogos no disponibles</div>
           <div className="opacity-80">{catalogErr}</div>
-          <div className="mt-2 text-xs opacity-70">
-            Revisa que existan:
-            <code className="ml-1">/frontend/public/catalogos/sat/c_pais.json</code>,
-            <code className="ml-1">c_actividad_economica.json</code>,
-            <code className="ml-1">/frontend/public/catalogos/internos/giro_mercantil.json</code>
-          </div>
         </div>
       )}
 
@@ -330,11 +327,7 @@ export default function RegistrarClientePage() {
 
         <div className="rounded border p-4 space-y-3">
           <label className="block text-sm font-medium">Nombre / Entidad</label>
-          <input
-            className="w-full rounded border p-2"
-            value={nombreEntidad}
-            onChange={(e) => setNombreEntidad(e.target.value)}
-          />
+          <input className="w-full rounded border p-2" value={nombreEntidad} onChange={(e) => setNombreEntidad(e.target.value)} />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
@@ -419,48 +412,45 @@ export default function RegistrarClientePage() {
             </div>
 
             <div className="space-y-2">
-              <label className="block text-sm font-medium">Actividad económica *</label>
-
-              {actSelected ? (
-                <div className="flex items-center justify-between rounded border p-2 text-sm">
-                  <div>
-                    <div className="font-medium">{actSelected.descripcion}</div>
-                    <div className="text-xs opacity-70">Clave: {actSelected.clave}</div>
-                  </div>
-                  <button type="button" className="rounded border px-3 py-1 text-xs" onClick={() => setActSelected(null)}>
-                    Cambiar
-                  </button>
-                </div>
-              ) : (
-                <>
+              <div className="flex items-center justify-between gap-3">
+                <label className="block text-sm font-medium">Actividad económica *</label>
+                <label className="flex items-center gap-2 text-sm">
                   <input
-                    className="w-full rounded border p-2"
-                    value={actQuery}
-                    onChange={(e) => setActQuery(e.target.value)}
-                    placeholder="Busca actividad…"
-                    disabled={actividades.length === 0}
+                    type="checkbox"
+                    checked={actModoBuscar}
+                    onChange={(e) => {
+                      setActModoBuscar(e.target.checked);
+                      setActQuery('');
+                    }}
                   />
+                  Buscar
+                </label>
+              </div>
 
-                  {actResults.length > 0 && (
-                    <div className="rounded border max-h-56 overflow-auto">
-                      {actResults.map((a) => (
-                        <button
-                          key={`${a.clave}-${a.descripcion}`}
-                          type="button"
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
-                          onClick={() => {
-                            setActSelected(a);
-                            setActQuery('');
-                          }}
-                        >
-                          <div className="font-medium">{a.descripcion}</div>
-                          <div className="text-xs opacity-70">Clave: {a.clave}</div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </>
+              {actModoBuscar && (
+                <input
+                  className="w-full rounded border p-2"
+                  value={actQuery}
+                  onChange={(e) => setActQuery(e.target.value)}
+                  placeholder="Filtra actividad…"
+                  disabled={actividades.length === 0}
+                />
               )}
+
+              <select
+                className="w-full rounded border p-2"
+                value={actClave}
+                onChange={(e) => setActClave(e.target.value)}
+                disabled={actividadesFiltradas.length === 0}
+              >
+                <option value="">Selecciona...</option>
+                {actividadesFiltradas.map((a) => (
+                  <option key={a.clave} value={a.clave}>
+                    {a.descripcion}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs opacity-70">Tip: activa “Buscar” si la lista es grande.</p>
             </div>
           </div>
         )}
@@ -481,47 +471,46 @@ export default function RegistrarClientePage() {
             </div>
 
             <div className="space-y-2">
-              <label className="block text-sm font-medium">Giro mercantil *</label>
-
-              {giroSelected ? (
-                <div className="flex items-center justify-between rounded border p-2 text-sm">
-                  <div>
-                    <div className="font-medium">{giroSelected.descripcion}</div>
-                    <div className="text-xs opacity-70">Clave: {giroSelected.clave}</div>
-                  </div>
-                  <button type="button" className="rounded border px-3 py-1 text-xs" onClick={() => setGiroSelected(null)}>
-                    Cambiar
-                  </button>
-                </div>
-              ) : (
-                <>
+              <div className="flex items-center justify-between gap-3">
+                <label className="block text-sm font-medium">Giro mercantil *</label>
+                <label className="flex items-center gap-2 text-sm">
                   <input
-                    className="w-full rounded border p-2"
-                    value={giroQuery}
-                    onChange={(e) => setGiroQuery(e.target.value)}
-                    placeholder="Busca giro…"
-                    disabled={giros.length === 0}
+                    type="checkbox"
+                    checked={giroModoBuscar}
+                    onChange={(e) => {
+                      setGiroModoBuscar(e.target.checked);
+                      setGiroQuery('');
+                    }}
                   />
-                  {giroResults.length > 0 && (
-                    <div className="rounded border max-h-56 overflow-auto">
-                      {giroResults.map((g) => (
-                        <button
-                          key={`${g.clave}-${g.descripcion}`}
-                          type="button"
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
-                          onClick={() => {
-                            setGiroSelected(g);
-                            setGiroQuery('');
-                          }}
-                        >
-                          <div className="font-medium">{g.descripcion}</div>
-                          <div className="text-xs opacity-70">Clave: {g.clave}</div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </>
+                  Buscar
+                </label>
+              </div>
+
+              {giroModoBuscar && (
+                <input
+                  className="w-full rounded border p-2"
+                  value={giroQuery}
+                  onChange={(e) => setGiroQuery(e.target.value)}
+                  placeholder="Filtra giro…"
+                  disabled={giros.length === 0}
+                />
               )}
+
+              <select
+                className="w-full rounded border p-2"
+                value={giroClave}
+                onChange={(e) => setGiroClave(e.target.value)}
+                disabled={girosFiltrados.length === 0}
+              >
+                <option value="">Selecciona...</option>
+                {girosFiltrados.map((g) => (
+                  <option key={g.clave} value={g.clave}>
+                    {g.descripcion}
+                  </option>
+                ))}
+              </select>
+
+              <p className="text-xs opacity-70">Tip: activa “Buscar” si la lista es grande.</p>
             </div>
 
             <div className="rounded border p-3 space-y-3">
