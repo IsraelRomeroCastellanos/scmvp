@@ -26,22 +26,18 @@ export default function ClientesPage() {
           return;
         }
 
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/cliente/clientes`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`
-            },
-            cache: 'no-store'
-          }
-        );
+        const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+        const res = await fetch(`${apiBase}/api/cliente/clientes`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store'
+        });
 
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          throw new Error('Error al cargar clientes');
+          throw new Error(data?.error || 'Error al cargar clientes');
         }
 
-        const data = await res.json();
-        setClientes(data.clientes ?? []);
+        setClientes(data?.clientes ?? []);
       } catch (err) {
         console.error(err);
         setError('Error al cargar clientes');
@@ -59,19 +55,17 @@ export default function ClientesPage() {
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="bg-white p-6 rounded shadow">
-        <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold mb-1">Gestión de Clientes</h1>
-            <p className="text-sm text-gray-500">
-              Listado general de clientes del sistema
-            </p>
+            <p className="text-sm text-gray-500 mb-4">Listado general de clientes del sistema</p>
           </div>
 
           <button
+            className="rounded border px-4 py-2 text-sm"
             onClick={() => router.push('/cliente/registrar-cliente')}
-            className="rounded border px-4 py-2 text-sm hover:bg-gray-50"
           >
-            Registrar cliente
+            + Registrar cliente
           </button>
         </div>
 
@@ -89,6 +83,7 @@ export default function ClientesPage() {
                 <th className="p-2 border">Acciones</th>
               </tr>
             </thead>
+
             <tbody>
               {clientes.map((c) => (
                 <tr key={c.id} className="hover:bg-gray-50">
@@ -103,21 +98,19 @@ export default function ClientesPage() {
                   </td>
 
                   <td className="p-2 border">
-                    <div className="flex gap-3">
-                      {/* ✅ Ver detalle completo */}
+                    <div className="flex flex-wrap gap-3">
                       <button
                         onClick={() => router.push(`/cliente/clientes/${c.id}`)}
-                        className="text-blue-600 hover:underline"
+                        className="text-blue-600 hover:underline text-sm"
+                        title="Ver detalle"
                       >
                         Ver
                       </button>
 
-                      {/* (Opcional) Si todavía tienes pantalla de edición */}
                       <button
-                        onClick={() =>
-                          router.push(`/cliente/editar-cliente/${c.id}`)
-                        }
-                        className="text-gray-700 hover:underline"
+                        onClick={() => router.push(`/cliente/editar-cliente/${c.id}`)}
+                        className="text-blue-600 hover:underline text-sm"
+                        title="Editar"
                       >
                         Editar
                       </button>
