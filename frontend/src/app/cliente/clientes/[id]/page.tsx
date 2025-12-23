@@ -10,12 +10,16 @@ function getToken() {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('token');
 }
-
 function fmtDate(v: any) {
   if (!v) return '-';
   const d = new Date(v);
   if (Number.isNaN(d.getTime())) return String(v);
   return d.toLocaleString('es-MX');
+}
+
+function safeStr(v: any) {
+  if (v === null || v === undefined || v === '') return '-';
+  return String(v);
 }
 
 function Row({ label, value }: { label: string; value: any }) {
@@ -57,7 +61,6 @@ export default function ClienteDetallePage() {
     (async () => {
       try {
         setLoading(true);
-
         const res = await fetch(`${apiBase}/api/cliente/clientes/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
           cache: 'no-store'
@@ -80,7 +83,7 @@ export default function ClienteDetallePage() {
     })();
   }, [apiBase, params, router]);
 
-  if (loading) return <div className="p-6 text-sm">Cargando cliente.</div>;
+  if (loading) return <div className="p-6 text-sm">Cargando cliente…</div>;
 
   if (err) {
     return (
@@ -93,21 +96,24 @@ export default function ClienteDetallePage() {
     );
   }
 
-  const expediente = cliente?.datos_completos ?? {};
-  const contacto = expediente?.contacto ?? {};
-  const persona = expediente?.persona ?? null;
-  const empresa = expediente?.empresa ?? null;
-  const representante = expediente?.representante ?? null;
+  const exp = cliente?.datos_completos ?? {};
+  const contacto = exp?.contacto ?? {};
+  const persona = exp?.persona ?? null;
+  const empresa = exp?.empresa ?? null;
+  const representante = exp?.representante ?? null;
 
-  const actividad =
-    persona?.actividad_economica?.descripcion ||
-    persona?.actividad_economica ||
+  // PF: actividad económica puede venir en persona.actividad_economica como {clave,descripcion} o string
+  const actObj = persona?.actividad_economica;
+  const actDesc =
+    actObj?.descripcion ||
+    (typeof actObj === 'string' ? actObj : null) ||
     cliente?.actividad_economica ||
     null;
 
-  const giro =
-    empresa?.giro_mercantil?.descripcion ||
-    empresa?.giro_mercantil ||
+  // PM: giro puede venir como empresa.giro (string) o empresa.giro_mercantil (obj/string)
+  const giroObj = empresa?.giro_mercantil;
+  const giroDesc =
+    (typeof giroObj === 'object' ? giroObj?.descripcion : giroObj) ||
     empresa?.giro ||
     cliente?.giro_mercantil ||
     null;
@@ -131,8 +137,9 @@ export default function ClienteDetallePage() {
         </div>
       </div>
 
-      {/* Resumen */}
+      {/* Base */}
       <div className="rounded border p-4">
+        <h2 className="text-lg font-medium mb-3">Información base</h2>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <Row label="ID" value={cliente?.id} />
           <Row label="Empresa ID" value={cliente?.empresa_id} />
@@ -142,9 +149,11 @@ export default function ClienteDetallePage() {
           <div className="md:col-span-2">
             <Row label="Nombre / Entidad" value={cliente?.nombre_entidad} />
           </div>
-          <Row label="Nacionalidad" value={expediente?.nacionalidad ?? cliente?.nacionalidad} />
-          <Row label="Nacionalidad (clave)" value={expediente?.nacionalidad_clave} />
+          <Row label="Alias" value={cliente?.alias} />
+          <Row label="Nacionalidad" value={cliente?.nacionalidad} />
 
+          <Row label="Cliente ID Externo" value={cliente?.cliente_id_externo} />
+          <Row label="Fecha nac/constitución (columna)" value={cliente?.fecha_nacimiento_constitucion} />
           <Row label="Creado" value={fmtDate(cliente?.creado_en)} />
           <Row label="Actualizado" value={fmtDate(cliente?.actualizado_en)} />
         </div>
@@ -155,7 +164,6 @@ export default function ClienteDetallePage() {
         <h2 className="text-lg font-medium mb-3">Contacto</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <Row label="País" value={contacto?.pais} />
-          <Row label="País (clave)" value={contacto?.pais_clave} />
           <Row label="Teléfono" value={contacto?.telefono} />
         </div>
       </div>
@@ -170,13 +178,13 @@ export default function ClienteDetallePage() {
             <Row label="Apellido paterno" value={persona?.apellido_paterno} />
             <Row label="Apellido materno" value={persona?.apellido_materno} />
 
-            <Row label="Fecha de nacimiento" value={persona?.fecha_nacimiento} />
             <Row label="RFC" value={persona?.rfc} />
             <Row label="CURP" value={persona?.curp} />
+            <Row label="Fecha nacimiento" value={persona?.fecha_nacimiento} />
 
             <Row label="Ocupación" value={persona?.ocupacion ?? cliente?.ocupacion} />
-            <Row label="Actividad económica" value={actividad} />
-            <Row label="Actividad (clave)" value={persona?.actividad_economica?.clave} />
+            <Row label="Actividad económica" value={actDesc} />
+            <Row label="Actividad (clave)" value={actObj?.clave} />
           </div>
         </div>
       )}
@@ -186,11 +194,11 @@ export default function ClienteDetallePage() {
         <div className="rounded border p-4 space-y-4">
           <div>
             <h2 className="text-lg font-medium">Persona Moral</h2>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
-              <Row label="RFC" value={empresa?.rfc} />
+              <Row label="RFC (empresa)" value={empresa?.rfc} />
               <Row label="Fecha constitución" value={empresa?.fecha_constitucion} />
-              <Row label="Giro mercantil" value={giro} />
-              <Row label="Giro (clave)" value={empresa?.giro_mercantil?.clave} />
+              <Row label="Giro mercantil" value={giroDesc} />
             </div>
           </div>
 
@@ -200,17 +208,17 @@ export default function ClienteDetallePage() {
               <Row label="Nombres" value={representante?.nombres} />
               <Row label="Apellido paterno" value={representante?.apellido_paterno} />
               <Row label="Apellido materno" value={representante?.apellido_materno} />
-              <Row label="RFC" value={representante?.rfc} />
-              <Row label="CURP" value={representante?.curp} />
+              <Row label="RFC" value={safeStr(representante?.rfc)} />
+              <Row label="CURP" value={safeStr(representante?.curp)} />
             </div>
           </div>
         </div>
       )}
 
-      {/* Raw JSON (toggle) */}
+      {/* Raw JSON */}
       <div className="rounded border p-4">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-medium">Expediente</h2>
+          <h2 className="text-lg font-medium">Expediente (datos_completos)</h2>
           <button className="rounded border px-3 py-1 text-sm" onClick={() => setShowRaw((v) => !v)}>
             {showRaw ? 'Ocultar JSON' : 'Ver JSON'}
           </button>
