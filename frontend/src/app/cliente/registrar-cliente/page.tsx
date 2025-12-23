@@ -195,9 +195,9 @@ export default function RegistrarClientePage() {
 
         // Ajusta rutas si tu loader usa index.json; aquí pedimos directo por nombre lógico
         const [p, a, g] = await Promise.all([
-          loadCatalogo('sat', 'c_pais'),
-          loadCatalogo('sat', 'c_actividad_economica'),
-          loadCatalogo('internos', 'giro_mercantil')
+          loadCatalogo('sat/c_pais'),
+          loadCatalogo('sat/c_actividad_economica'),
+          loadCatalogo('internos/giro_mercantil')
         ]);
 
         setPaises(p);
