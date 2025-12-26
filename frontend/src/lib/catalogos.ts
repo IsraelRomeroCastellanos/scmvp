@@ -22,12 +22,10 @@ export async function loadCatalogo(path: string): Promise<CatalogItem[]> {
   }
 
   const data = await res.json().catch(() => null);
-
   if (!Array.isArray(data)) {
     throw new Error(`Catálogo inválido (se esperaba array): ${url}`);
   }
 
-  // Normaliza/filtra para evitar basura
   return data
     .map((x: any) => ({
       clave: String(x?.clave ?? '').trim(),
@@ -50,12 +48,13 @@ export function loadGiroMercantil() {
 function normalizeCatalogUrl(path: string) {
   if (!path) throw new Error('Path de catálogo vacío');
 
-  // Si ya viene como URL absoluta/relativa desde raíz
   if (path.startsWith('/')) {
     return path.endsWith('.json') ? path : `${path}.json`;
   }
 
-  // Si viene sin /catalogos/
-  const withPrefix = path.startsWith('catalogos/') ? `/${path}` : `/catalogos/${path}`;
+  const withPrefix = path.startsWith('catalogos/')
+    ? `/${path}`
+    : `/catalogos/${path}`;
+
   return withPrefix.endsWith('.json') ? withPrefix : `${withPrefix}.json`;
 }
