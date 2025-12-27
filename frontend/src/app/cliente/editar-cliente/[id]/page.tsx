@@ -1,45 +1,46 @@
+// frontend/src/app/cliente/editar-cliente/[id]/page.tsx
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
-function getApiBase() {
-  return process.env.NEXT_PUBLIC_API_BASE_URL || '';
-}
-
-function getToken() {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('token');
-}
-
 type TipoCliente = 'persona_fisica' | 'persona_moral' | 'fideicomiso';
+type Cliente = any;
 
-function labelTipo(t: any) {
-  if (t === 'persona_fisica') return 'Persona Física';
-  if (t === 'persona_moral') return 'Persona Moral';
-  if (t === 'fideicomiso') return 'Fideicomiso';
-  return String(t ?? '-');
+function labelTipo(tipo: TipoCliente) {
+  if (tipo === 'persona_fisica') return 'Persona Física';
+  if (tipo === 'persona_moral') return 'Persona Moral';
+  return 'Fideicomiso';
 }
 
-export default function EditarClientePage() {
-  const apiBase = useMemo(() => getApiBase(), []);
+function toYYYYMMDD(value: string) {
+  const v = (value ?? '').trim();
+  if (!v) return '';
+  if (/^\d{8}$/.test(v)) return v;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v.replaceAll('-', '');
+  return v;
+}
+
+export default function Page() {
   const router = useRouter();
-  const params = useParams<{ id: string }>();
-  const id = params?.id;
+  const params = useParams();
+  const id = String((params as any)?.id ?? '');
+
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const [cliente, setCliente] = useState<any>(null);
+  const [cliente, setCliente] = useState<Cliente | null>(null);
 
-  // Campos base
+  // generales
   const [nombreEntidad, setNombreEntidad] = useState('');
   const [nacionalidad, setNacionalidad] = useState('');
   const [estado, setEstado] = useState<'activo' | 'inactivo'>('activo');
 
-  // Contacto (en datos_completos.contacto)
+  // contacto
   const [paisContacto, setPaisContacto] = useState('');
   const [telefono, setTelefono] = useState('');
   const [emailContacto, setEmailContacto] = useState('');
@@ -49,221 +50,266 @@ export default function EditarClientePage() {
   const [pfNombres, setPfNombres] = useState('');
   const [pfApPaterno, setPfApPaterno] = useState('');
   const [pfApMaterno, setPfApMaterno] = useState('');
-  const [pfFechaNac, setPfFechaNac] = useState(''); // YYYY-MM-DD
+  const [pfFechaNac, setPfFechaNac] = useState('');
   const [pfRfc, setPfRfc] = useState('');
   const [pfCurp, setPfCurp] = useState('');
   const [pfOcupacion, setPfOcupacion] = useState('');
 
   // PM
   const [pmRfc, setPmRfc] = useState('');
-  const [pmFechaConst, setPmFechaConst] = useState(''); // YYYY-MM-DD
+  const [pmFechaConst, setPmFechaConst] = useState('');
+
+  // Rep PM
   const [repNombres, setRepNombres] = useState('');
   const [repApPaterno, setRepApPaterno] = useState('');
   const [repApMaterno, setRepApMaterno] = useState('');
   const [repRfc, setRepRfc] = useState('');
   const [repCurp, setRepCurp] = useState('');
 
-  // Helpers para date -> input[type=date]
-  function toDateInput(v: any) {
-    if (!v) return '';
-    try {
-      const d = new Date(v);
-      if (Number.isNaN(d.getTime())) return String(v);
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      return `${yyyy}-${mm}-${dd}`;
-    } catch {
-      return '';
-    }
-  }
+  // Fideicomiso
+  const [fidDenominacion, setFidDenominacion] = useState('');
+  const [fidRfcFiduciario, setFidRfcFiduciario] = useState('');
+  const [fidIdentificador, setFidIdentificador] = useState('');
+
+  const [fidRepNombres, setFidRepNombres] = useState('');
+  const [fidRepApPaterno, setFidRepApPaterno] = useState('');
+  const [fidRepApMaterno, setFidRepApMaterno] = useState('');
+  const [fidRepFechaNac, setFidRepFechaNac] = useState(''); // date input
+  const [fidRepRfc, setFidRepRfc] = useState('');
+  const [fidRepCurp, setFidRepCurp] = useState('');
 
   useEffect(() => {
-    const token = getToken();
-    if (!token) {
-      router.replace('/login');
-      return;
-    }
-    if (!id) return;
+    let mounted = true;
 
-    (async () => {
+    async function run() {
       try {
         setLoading(true);
         setErr(null);
-        setMsg(null);
 
-        const res = await fetch(`${apiBase}/api/cliente/clientes/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: 'no-store'
-        });
-
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          setErr(data?.error || `Error HTTP ${res.status}`);
-          setCliente(null);
+        const token = localStorage.getItem('token');
+        if (!token) {
+          router.replace('/login');
           return;
         }
 
-        const c = data?.cliente;
+        const res = await fetch(`${apiBase}/api/cliente/clientes/${id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          if (res.status === 401) {
+            router.replace('/login');
+            return;
+          }
+          throw new Error(data?.error || `Error HTTP ${res.status}`);
+        }
+
+        if (!mounted) return;
+
+        const c = data?.cliente ?? null;
         setCliente(c);
 
-        // Base
         setNombreEntidad(c?.nombre_entidad ?? '');
         setNacionalidad(c?.nacionalidad ?? '');
-        setEstado((c?.estado === 'inactivo' ? 'inactivo' : 'activo') as any);
+        setEstado((c?.estado ?? 'activo') as any);
 
-        // datos_completos
         const dc = c?.datos_completos ?? {};
         const contacto = dc?.contacto ?? {};
-
         setPaisContacto(contacto?.pais ?? '');
         setTelefono(contacto?.telefono ?? '');
         setEmailContacto(contacto?.email ?? '');
-        setDomicilioContacto(contacto?.domicilio ?? contacto?.direccion ?? '');
+        setDomicilioContacto(contacto?.domicilio ?? '');
 
-        // PF
-        const persona = dc?.persona ?? {};
-        setPfNombres(persona?.nombres ?? '');
-        setPfApPaterno(persona?.apellido_paterno ?? '');
-        setPfApMaterno(persona?.apellido_materno ?? '');
-        setPfFechaNac(toDateInput(persona?.fecha_nacimiento));
-        setPfRfc(persona?.rfc ?? '');
-        setPfCurp(persona?.curp ?? '');
-        setPfOcupacion(persona?.ocupacion ?? '');
+        if (c?.tipo_cliente === 'persona_fisica') {
+          const pf = dc?.persona ?? {};
+          setPfNombres(pf?.nombres ?? '');
+          setPfApPaterno(pf?.apellido_paterno ?? '');
+          setPfApMaterno(pf?.apellido_materno ?? '');
+          // si venía AAAAMMDD, lo dejamos; si venía YYYY-MM-DD, igual
+          setPfFechaNac(pf?.fecha_nacimiento ?? '');
+          setPfRfc(pf?.rfc ?? '');
+          setPfCurp(pf?.curp ?? '');
+          setPfOcupacion(pf?.ocupacion ?? '');
+        }
 
-        // PM
-        const empresa = dc?.empresa ?? {};
-        setPmRfc(empresa?.rfc ?? '');
-        setPmFechaConst(toDateInput(empresa?.fecha_constitucion));
-        const rep = dc?.representante ?? {};
-        setRepNombres(rep?.nombres ?? '');
-        setRepApPaterno(rep?.apellido_paterno ?? '');
-        setRepApMaterno(rep?.apellido_materno ?? '');
-        setRepRfc(rep?.rfc ?? '');
-        setRepCurp(rep?.curp ?? '');
+        if (c?.tipo_cliente === 'persona_moral') {
+          const pm = dc?.empresa ?? {};
+          setPmRfc(pm?.rfc ?? '');
+          setPmFechaConst(pm?.fecha_constitucion ?? '');
+
+          const rep = dc?.representante ?? {};
+          setRepNombres(rep?.nombres ?? '');
+          setRepApPaterno(rep?.apellido_paterno ?? '');
+          setRepApMaterno(rep?.apellido_materno ?? '');
+          setRepRfc(rep?.rfc ?? '');
+          setRepCurp(rep?.curp ?? '');
+        }
+
+        if (c?.tipo_cliente === 'fideicomiso') {
+          const f = dc?.fideicomiso ?? {};
+          setFidIdentificador(f?.identificador ?? '');
+          setFidRfcFiduciario(f?.rfc_fiduciario ?? '');
+          setFidDenominacion(f?.denominacion_fiduciario ?? '');
+
+          const rep = dc?.representante ?? {};
+          setFidRepNombres(rep?.nombres ?? '');
+          setFidRepApPaterno(rep?.apellido_paterno ?? '');
+          setFidRepApMaterno(rep?.apellido_materno ?? '');
+          // si venía AAAAMMDD, lo dejamos (si quieres, luego lo convertimos a date)
+          setFidRepFechaNac(rep?.fecha_nacimiento ?? '');
+          setFidRepRfc(rep?.rfc ?? '');
+          setFidRepCurp(rep?.curp ?? '');
+        }
       } catch (e: any) {
-        setErr(e?.message || 'Error de red');
+        if (!mounted) return;
+        setErr(e?.message || 'No se pudo cargar el cliente');
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
-    })();
+    }
+
+    if (apiBase && id) run();
+    return () => {
+      mounted = false;
+    };
   }, [apiBase, id, router]);
 
-  function validate() {
-    if (!nombreEntidad.trim()) return 'Nombre / Entidad es obligatorio';
-    if (!paisContacto.trim()) return 'País (contacto) es obligatorio';
-    if (!telefono.trim()) return 'Teléfono es obligatorio';
+  const dcActual = useMemo(() => cliente?.datos_completos ?? {}, [cliente]);
 
-    const tipo = (cliente?.tipo_cliente ?? '') as TipoCliente;
-
-    if (tipo === 'persona_fisica') {
-      if (!pfNombres.trim()) return 'Nombres (PF) es obligatorio';
-      if (!pfApPaterno.trim()) return 'Apellido paterno (PF) es obligatorio';
-    }
-
-    if (tipo === 'persona_moral') {
-      if (!pmRfc.trim()) return 'RFC (PM) es obligatorio';
-      if (!pmFechaConst.trim()) return 'Fecha constitución (PM) es obligatoria';
-      if (!repNombres.trim()) return 'Nombres representante es obligatorio';
-      if (!repApPaterno.trim()) return 'Apellido paterno representante es obligatorio';
-    }
-
-    return null;
-  }
-
-  function buildPayload() {
-    // Clonar datos_completos actual para NO perder campos no pintados aún
-    const dcPrev = cliente?.datos_completos ?? {};
-    const dcNext: any = { ...dcPrev };
-
-    dcNext.contacto = {
-      ...(dcPrev?.contacto ?? {}),
-      pais: paisContacto.trim(),
-      telefono: telefono.trim(),
-      email: emailContacto.trim() || null,
-      domicilio: domicilioContacto.trim() || null
-    };
-
-    const tipo = (cliente?.tipo_cliente ?? '') as TipoCliente;
-
-    if (tipo === 'persona_fisica') {
-      dcNext.persona = {
-        ...(dcPrev?.persona ?? {}),
-        tipo: 'persona_fisica',
-        nombres: pfNombres.trim(),
-        apellido_paterno: pfApPaterno.trim(),
-        apellido_materno: pfApMaterno.trim() || null,
-        fecha_nacimiento: pfFechaNac || null,
-        rfc: pfRfc.trim() || null,
-        curp: pfCurp.trim() || null,
-        ocupacion: pfOcupacion.trim() || null
-      };
-    }
-
-    if (tipo === 'persona_moral') {
-      dcNext.empresa = {
-        ...(dcPrev?.empresa ?? {}),
-        tipo: 'persona_moral',
-        rfc: pmRfc.trim(),
-        fecha_constitucion: pmFechaConst || null
-      };
-      dcNext.representante = {
-        ...(dcPrev?.representante ?? {}),
-        nombres: repNombres.trim(),
-        apellido_paterno: repApPaterno.trim(),
-        apellido_materno: repApMaterno.trim() || null,
-        rfc: repRfc.trim() || null,
-        curp: repCurp.trim() || null
-      };
-    }
-
-    return {
-      // Campos top-level que tu backend ya maneja en el PUT
-      nombre_entidad: nombreEntidad.trim(),
-      tipo_cliente: cliente?.tipo_cliente,
-      nacionalidad: nacionalidad.trim() || null,
-      estado,
-      datos_completos: dcNext
-    };
-  }
-
-  async function onSubmit(e: FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
     setMsg(null);
 
-    const v = validate();
-    if (v) {
-      setErr(v);
-      return;
-    }
-
-    const token = getToken();
+    const token = localStorage.getItem('token');
     if (!token) {
       router.replace('/login');
       return;
     }
 
-    setSaving(true);
+    if (!nombreEntidad.trim()) {
+      setErr('Nombre / Entidad es obligatorio');
+      return;
+    }
+    if (!paisContacto.trim() || !telefono.trim()) {
+      setErr('Contacto (país y teléfono) es obligatorio');
+      return;
+    }
+
+    const tipo = (cliente?.tipo_cliente ?? 'persona_fisica') as TipoCliente;
+
+    // clon base de datos_completos existente para no perder nada
+    const datos_completos: any = { ...(dcActual || {}) };
+
+    datos_completos.contacto = {
+      ...(datos_completos.contacto || {}),
+      pais: paisContacto.trim(),
+      telefono: telefono.trim(),
+      email: emailContacto.trim() || undefined,
+      domicilio: domicilioContacto.trim() || undefined
+    };
+
+    if (tipo === 'persona_fisica') {
+      datos_completos.persona = {
+        ...(datos_completos.persona || {}),
+        tipo: 'persona_fisica',
+        nombres: pfNombres.trim(),
+        apellido_paterno: pfApPaterno.trim(),
+        apellido_materno: pfApMaterno.trim() || undefined,
+        fecha_nacimiento: pfFechaNac ? toYYYYMMDD(pfFechaNac) : undefined,
+        rfc: pfRfc.trim() || undefined,
+        curp: pfCurp.trim() || undefined,
+        ocupacion: pfOcupacion.trim() || undefined
+      };
+    }
+
+    if (tipo === 'persona_moral') {
+      datos_completos.empresa = {
+        ...(datos_completos.empresa || {}),
+        tipo: 'persona_moral',
+        rfc: pmRfc.trim(),
+        fecha_constitucion: pmFechaConst
+      };
+
+      datos_completos.representante = {
+        ...(datos_completos.representante || {}),
+        nombres: repNombres.trim(),
+        apellido_paterno: repApPaterno.trim(),
+        apellido_materno: repApMaterno.trim() || undefined,
+        rfc: repRfc.trim() || undefined,
+        curp: repCurp.trim() || undefined
+      };
+    }
+
+    if (tipo === 'fideicomiso') {
+      if (!fidDenominacion.trim() || !fidRfcFiduciario.trim() || !fidIdentificador.trim()) {
+        setErr('Fideicomiso: denominación, RFC fiduciario e identificador son obligatorios');
+        return;
+      }
+
+      const ymd = toYYYYMMDD(fidRepFechaNac);
+      if (!ymd || !/^\d{8}$/.test(ymd)) {
+        setErr('Fideicomiso: fecha de nacimiento del representante debe ser AAAAMMDD');
+        return;
+      }
+      if (!fidRepNombres.trim() || !fidRepApPaterno.trim() || !fidRepRfc.trim() || !fidRepCurp.trim()) {
+        setErr('Fideicomiso: datos mínimos del representante incompletos');
+        return;
+      }
+
+      datos_completos.fideicomiso = {
+        ...(datos_completos.fideicomiso || {}),
+        identificador: fidIdentificador.trim(),
+        rfc_fiduciario: fidRfcFiduciario.trim(),
+        denominacion_fiduciario: fidDenominacion.trim()
+      };
+
+      const nombreCompleto = `${fidRepNombres} ${fidRepApPaterno} ${fidRepApMaterno}`.replace(/\s+/g, ' ').trim();
+
+      datos_completos.representante = {
+        ...(datos_completos.representante || {}),
+        nombre_completo: nombreCompleto,
+        nombres: fidRepNombres.trim(),
+        apellido_paterno: fidRepApPaterno.trim(),
+        apellido_materno: fidRepApMaterno.trim() || undefined,
+        fecha_nacimiento: ymd,
+        rfc: fidRepRfc.trim(),
+        curp: fidRepCurp.trim()
+      };
+    }
+
+    const payload: any = {
+      nombre_entidad: nombreEntidad.trim(),
+      nacionalidad: nacionalidad.trim() || undefined,
+      estado,
+      datos_completos
+    };
+
     try {
+      setSaving(true);
+
       const res = await fetch(`${apiBase}/api/cliente/clientes/${id}`, {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(buildPayload())
+        body: JSON.stringify(payload)
       });
 
       const data = await res.json().catch(() => ({}));
+
       if (!res.ok) {
+        if (res.status === 401) {
+          router.replace('/login');
+          return;
+        }
         setErr(data?.error || `Error HTTP ${res.status}`);
         return;
       }
 
       setCliente(data?.cliente ?? cliente);
       setMsg('Cambios guardados ✅');
-      // opcional: regresar a detalle
       router.push(`/cliente/clientes/${id}`);
     } catch (e: any) {
       setErr(e?.message || 'Error de red');
@@ -375,7 +421,7 @@ export default function EditarClientePage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <label className="block text-sm font-medium">Fecha nacimiento</label>
-                <input type="date" className="w-full rounded border p-2" value={pfFechaNac} onChange={(e) => setPfFechaNac(e.target.value)} />
+                <input className="w-full rounded border p-2" value={pfFechaNac} onChange={(e) => setPfFechaNac(e.target.value)} placeholder="YYYY-MM-DD o AAAAMMDD" />
               </div>
               <div>
                 <label className="block text-sm font-medium">RFC</label>
@@ -393,7 +439,7 @@ export default function EditarClientePage() {
             </div>
 
             <p className="text-xs opacity-70">
-              Nota: actividad económica / catálogos se mantienen en datos_completos si ya existen; en este paso no la re-editamos aún.
+              Nota: actividad económica/catálogos se mantienen en datos_completos; aquí no la re-editamos aún.
             </p>
           </div>
         )}
@@ -414,7 +460,7 @@ export default function EditarClientePage() {
               </div>
 
               <p className="text-xs opacity-70 mt-2">
-                Nota: giro mercantil / catálogos se mantienen en datos_completos si ya existen; lo re-editamos en el siguiente bloque.
+                Nota: giro mercantil/catálogos se mantienen en datos_completos si ya existen.
               </p>
             </div>
 
@@ -448,6 +494,64 @@ export default function EditarClientePage() {
           </div>
         )}
 
+        {tipo === 'fideicomiso' && (
+          <div className="rounded border p-4 space-y-4">
+            <div className="font-medium">Fideicomiso (iteración 1)</div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium">Denominación fiduciario *</label>
+                <input className="w-full rounded border p-2" value={fidDenominacion} onChange={(e) => setFidDenominacion(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">RFC fiduciario *</label>
+                <input className="w-full rounded border p-2" value={fidRfcFiduciario} onChange={(e) => setFidRfcFiduciario(e.target.value)} />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium">Identificador *</label>
+              <input className="w-full rounded border p-2" value={fidIdentificador} onChange={(e) => setFidIdentificador(e.target.value)} />
+            </div>
+
+            <div className="rounded border p-3 space-y-3">
+              <div className="font-medium">Representante / Apoderado *</div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-sm font-medium">Nombre(s) *</label>
+                  <input className="w-full rounded border p-2" value={fidRepNombres} onChange={(e) => setFidRepNombres(e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium">Apellido paterno *</label>
+                  <input className="w-full rounded border p-2" value={fidRepApPaterno} onChange={(e) => setFidRepApPaterno(e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium">Apellido materno</label>
+                  <input className="w-full rounded border p-2" value={fidRepApMaterno} onChange={(e) => setFidRepApMaterno(e.target.value)} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-sm font-medium">Fecha nacimiento *</label>
+                  <input className="w-full rounded border p-2" value={fidRepFechaNac} onChange={(e) => setFidRepFechaNac(e.target.value)} placeholder="YYYY-MM-DD o AAAAMMDD" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium">RFC *</label>
+                  <input className="w-full rounded border p-2" value={fidRepRfc} onChange={(e) => setFidRepRfc(e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium">CURP *</label>
+                  <input className="w-full rounded border p-2" value={fidRepCurp} onChange={(e) => setFidRepCurp(e.target.value)} />
+                </div>
+              </div>
+
+              <p className="text-xs opacity-70">Se enviará fecha_nacimiento como AAAAMMDD.</p>
+            </div>
+          </div>
+        )}
+
         <div className="flex gap-3">
           <button type="submit" disabled={saving} className="rounded border px-4 py-2 text-sm">
             {saving ? 'Guardando...' : 'Guardar cambios'}
@@ -460,9 +564,7 @@ export default function EditarClientePage() {
         <div className="rounded border p-4">
           <details>
             <summary className="cursor-pointer select-none font-medium">Debug: datos_completos actual</summary>
-            <pre className="mt-3 text-xs overflow-auto whitespace-pre-wrap">
-              {JSON.stringify(cliente?.datos_completos ?? {}, null, 2)}
-            </pre>
+            <pre className="mt-3 text-xs overflow-auto whitespace-pre-wrap">{JSON.stringify(cliente?.datos_completos ?? {}, null, 2)}</pre>
           </details>
         </div>
       </form>
