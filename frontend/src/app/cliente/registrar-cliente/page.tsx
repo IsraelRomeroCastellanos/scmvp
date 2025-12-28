@@ -3,227 +3,195 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  loadPaises,
-  loadActividadesEconomicas,
-  loadGiroMercantil,
-  type CatalogItem
-} from '@/lib/catalogos';
+import { loadCatalogo, type CatalogItem } from '@/lib/catalogos';
 
 type TipoCliente = 'persona_fisica' | 'persona_moral' | 'fideicomiso';
 
-function labelTipo(tipo: TipoCliente) {
-  if (tipo === 'persona_fisica') return 'Persona Física';
-  if (tipo === 'persona_moral') return 'Persona Moral';
+function labelTipo(t: TipoCliente) {
+  if (t === 'persona_fisica') return 'Persona Física';
+  if (t === 'persona_moral') return 'Persona Moral';
   return 'Fideicomiso';
 }
 
-// Dropdown con búsqueda (simple y robusto)
+function toPaisValue(it: CatalogItem) {
+  // Normalizamos a "DESCRIPCION,CLAVE" (como ya estás usando: "MEXICO,MX")
+  return `${it.descripcion},${it.clave}`.toUpperCase();
+}
+
+function isValidRFC(raw: string) {
+  const v = String(raw ?? '').trim().toUpperCase();
+  return /^[A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3}$/.test(v);
+}
+
+function isValidCURP(raw: string) {
+  const v = String(raw ?? '').trim().toUpperCase();
+  return /^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]{2}$/.test(v);
+}
+
+function isYYYYMMDD(raw: string) {
+  return /^\d{8}$/.test(String(raw ?? '').trim());
+}
+
 function SearchSelect({
   label,
-  items,
   value,
   onChange,
+  items,
   placeholder,
-  required
+  required,
+  modoBusqueda,
+  onToggleModoBusqueda
 }: {
   label: string;
-  items: CatalogItem[];
   value: CatalogItem | null;
   onChange: (v: CatalogItem | null) => void;
+  items: CatalogItem[];
   placeholder?: string;
   required?: boolean;
+  modoBusqueda: boolean;
+  onToggleModoBusqueda: (v: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
 
   const filtered = useMemo(() => {
-    const qq = q.trim().toLowerCase();
-    if (!qq) return items;
-    return items.filter(
-      (x) =>
-        x.descripcion.toLowerCase().includes(qq) ||
-        x.clave.toLowerCase().includes(qq)
-    );
-  }, [items, q]);
+    const s = q.trim().toLowerCase();
+    if (!s) return items;
+    return items.filter((x) => {
+      const a = `${x.clave} ${x.descripcion}`.toLowerCase();
+      return a.includes(s);
+    });
+  }, [q, items]);
 
   return (
     <div className="space-y-1">
-      <label className="block text-sm font-medium">
-        {label} {required ? <span className="text-red-600">*</span> : null}
-      </label>
+      <div className="flex items-center justify-between gap-3">
+        <label className="block text-sm font-medium">
+          {label} {required ? '*' : ''}
+        </label>
 
-      <div className="relative">
-        <button
-          type="button"
-          className="w-full rounded border p-2 text-left"
-          onClick={() => setOpen((s) => !s)}
-        >
-          {value?.descripcion ?? placeholder ?? 'Selecciona…'}
-        </button>
-
-        {open && (
-          <div className="absolute z-20 mt-1 w-full rounded border bg-white shadow">
-            <div className="p-2 border-b">
-              <input
-                className="w-full rounded border p-2 text-sm"
-                placeholder="Buscar…"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-              />
-            </div>
-
-            <div className="max-h-64 overflow-auto">
-              <button
-                type="button"
-                className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-b"
-                onClick={() => {
-                  onChange(null);
-                  setOpen(false);
-                  setQ('');
-                }}
-              >
-                — Limpiar —
-              </button>
-
-              {filtered.map((it) => (
-                <button
-                  key={`${it.clave}-${it.descripcion}`}
-                  type="button"
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
-                  onClick={() => {
-                    onChange(it);
-                    setOpen(false);
-                    setQ('');
-                  }}
-                >
-                  <div className="font-medium">{it.descripcion}</div>
-                  <div className="text-xs opacity-60">{it.clave}</div>
-                </button>
-              ))}
-
-              {!filtered.length ? (
-                <div className="px-3 py-3 text-sm opacity-70">
-                  Sin resultados
-                </div>
-              ) : null}
-            </div>
-          </div>
-        )}
+        <label className="flex items-center gap-2 text-xs opacity-80 select-none">
+          <input
+            type="checkbox"
+            checked={modoBusqueda}
+            onChange={(e) => onToggleModoBusqueda(e.target.checked)}
+          />
+          activar búsqueda
+        </label>
       </div>
+
+      {modoBusqueda ? (
+        <input
+          className="w-full rounded border p-2"
+          placeholder="Escribe para buscar..."
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+      ) : null}
+
+      <select
+        className="w-full rounded border p-2"
+        value={value?.clave ?? ''}
+        onChange={(e) => {
+          const v = e.target.value;
+          const it = items.find((x) => x.clave === v) ?? null;
+          onChange(it);
+        }}
+      >
+        <option value="">{placeholder ?? 'Selecciona...'}</option>
+        {(modoBusqueda ? filtered : items).map((it) => (
+          <option key={it.clave} value={it.clave}>
+            {it.descripcion} ({it.clave})
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
 
-function toYYYYMMDD(value: string) {
-  // value puede venir como "YYYY-MM-DD" (input date) o "YYYYMMDD" (texto)
-  const v = (value ?? '').trim();
-  if (!v) return '';
-  if (/^\d{8}$/.test(v)) return v;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v.replaceAll('-', '');
-  return v; // lo dejamos tal cual y validamos aparte
-}
-
-function findMexico(paises: CatalogItem[]) {
-  // intentamos empatar con tus strings tipo "MEXICO,MX" o "México"
-  const byClave = paises.find((p) => p.clave.toUpperCase() === 'MX');
-  if (byClave) return byClave;
-
-  const byDesc =
-    paises.find((p) => p.descripcion.toUpperCase().includes('MEXICO')) ??
-    paises.find((p) => p.descripcion.toLowerCase().includes('méxico')) ??
-    null;
-
-  return byDesc;
-}
-
-export default function Page() {
+export default function RegistrarClientePage() {
   const router = useRouter();
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
 
-  const [loadingCats, setLoadingCats] = useState(true);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  // catálogos
+  // Carga de catálogos
   const [paises, setPaises] = useState<CatalogItem[]>([]);
   const [actividades, setActividades] = useState<CatalogItem[]>([]);
   const [giros, setGiros] = useState<CatalogItem[]>([]);
+  const [loadingCatalogos, setLoadingCatalogos] = useState(true);
 
-  // form base
-  const [empresaId, setEmpresaId] = useState<number>(1);
-  const [tipoCliente, setTipoCliente] = useState<TipoCliente>('persona_fisica');
+  // UI: toggles búsqueda por select
+  const [buscaNacionalidad, setBuscaNacionalidad] = useState(true);
+  const [buscaPaisContacto, setBuscaPaisContacto] = useState(true);
+  const [buscaActividad, setBuscaActividad] = useState(true);
+  const [buscaGiro, setBuscaGiro] = useState(true);
+
+  // Form: base
+  const [empresaId, setEmpresaId] = useState<number>(38); // ajusta tu default si quieres
+  const [tipo, setTipo] = useState<TipoCliente>('persona_fisica');
   const [nombreEntidad, setNombreEntidad] = useState('');
-
-  // contacto
-  const [paisContactoSel, setPaisContactoSel] = useState<CatalogItem | null>(null);
-  const [telefono, setTelefono] = useState('');
-
-  // nacionalidad (separada de país contacto)
   const [nacionalidadSel, setNacionalidadSel] = useState<CatalogItem | null>(null);
 
-  // PF
+  // Contacto
+  const [paisContactoSel, setPaisContactoSel] = useState<CatalogItem | null>(null);
+  const [telefono, setTelefono] = useState('');
+  const [emailContacto, setEmailContacto] = useState('');
+  const [domicilioContacto, setDomicilioContacto] = useState('');
+
+  // Persona física
   const [pfNombres, setPfNombres] = useState('');
   const [pfApPaterno, setPfApPaterno] = useState('');
   const [pfApMaterno, setPfApMaterno] = useState('');
-  const [pfFechaNac, setPfFechaNac] = useState(''); // YYYY-MM-DD opcional
-  const [pfRfc, setPfRfc] = useState('');
-  const [pfCurp, setPfCurp] = useState('');
-  const [actividadSel, setActividadSel] = useState<CatalogItem | null>(null);
+  const [pfActividadSel, setPfActividadSel] = useState<CatalogItem | null>(null);
 
-  // PM
+  // Persona moral
   const [pmRfc, setPmRfc] = useState('');
-  const [pmFechaConst, setPmFechaConst] = useState(''); // YYYY-MM-DD
-  const [giroSel, setGiroSel] = useState<CatalogItem | null>(null);
+  const [pmFechaConst, setPmFechaConst] = useState('');
+  const [pmGiroSel, setPmGiroSel] = useState<CatalogItem | null>(null);
 
-  // representante (PM)
   const [repNombres, setRepNombres] = useState('');
   const [repApPaterno, setRepApPaterno] = useState('');
   const [repApMaterno, setRepApMaterno] = useState('');
   const [repRfc, setRepRfc] = useState('');
   const [repCurp, setRepCurp] = useState('');
 
-  // FIDEICOMISO (iteración 1)
+  // Fideicomiso (iteración 1: mínimos reales)
+  const [fidIdentificador, setFidIdentificador] = useState('');
   const [fidDenominacion, setFidDenominacion] = useState('');
   const [fidRfcFiduciario, setFidRfcFiduciario] = useState('');
-  const [fidIdentificador, setFidIdentificador] = useState('');
 
-  const [fidRepNombres, setFidRepNombres] = useState('');
-  const [fidRepApPaterno, setFidRepApPaterno] = useState('');
-  const [fidRepApMaterno, setFidRepApMaterno] = useState('');
-  const [fidRepFechaNac, setFidRepFechaNac] = useState(''); // input date
+  const [fidRepNombreCompleto, setFidRepNombreCompleto] = useState('');
   const [fidRepRfc, setFidRepRfc] = useState('');
   const [fidRepCurp, setFidRepCurp] = useState('');
+  const [fidRepFechaNac, setFidRepFechaNac] = useState(''); // AAAAMMDD
+
+  // UX
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [okMsg, setOkMsg] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
     async function run() {
+      setLoadingCatalogos(true);
       try {
-        setLoadingCats(true);
-        setErrorMsg(null);
-
         const [p, a, g] = await Promise.all([
-          loadPaises(),
-          loadActividadesEconomicas(),
-          loadGiroMercantil()
+          loadCatalogo('sat/c_pais'),
+          loadCatalogo('sat/c_actividad_economica'),
+          loadCatalogo('internos/giro_mercantil')
         ]);
 
         if (!mounted) return;
-
         setPaises(p);
         setActividades(a);
         setGiros(g);
 
-        const mx = findMexico(p);
-        // defaults razonables
-        setPaisContactoSel(mx);
-        setNacionalidadSel(mx);
+        // defaults “seguros”
+        if (!nacionalidadSel && p.length) setNacionalidadSel(p[0]);
+        if (!paisContactoSel && p.length) setPaisContactoSel(p[0]);
       } catch (e: any) {
-        if (!mounted) return;
-        setErrorMsg(e?.message || 'No se pudieron cargar catálogos');
+        console.error(e);
+        if (mounted) setErr(e?.message || 'No se pudieron cargar catálogos');
       } finally {
-        if (mounted) setLoadingCats(false);
+        if (mounted) setLoadingCatalogos(false);
       }
     }
 
@@ -231,138 +199,146 @@ export default function Page() {
     return () => {
       mounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function validate(): string | null {
-    if (!apiBase) return 'NEXT_PUBLIC_API_BASE_URL no está configurado';
+  function validate(): string[] {
+    const errors: string[] = [];
 
-    if (!empresaId || Number.isNaN(empresaId)) return 'empresa_id es obligatorio';
-    if (!nombreEntidad.trim()) return 'Nombre / Entidad es obligatorio';
+    if (!empresaId || empresaId <= 0) errors.push('Empresa (empresa_id) es obligatoria');
+    if (!tipo) errors.push('Tipo de cliente es obligatorio');
+    if (!nombreEntidad.trim()) errors.push('Nombre / Entidad es obligatorio');
 
-    if (!paisContactoSel) return 'País (contacto) es obligatorio';
-    if (!telefono.trim()) return 'Teléfono es obligatorio';
-    if (!nacionalidadSel) return 'Nacionalidad es obligatoria';
+    if (!nacionalidadSel) errors.push('Nacionalidad es obligatoria');
+    if (!paisContactoSel) errors.push('País (contacto) es obligatorio');
+    if (!telefono.trim()) errors.push('Teléfono es obligatorio');
 
-    if (tipoCliente === 'persona_fisica') {
-      if (!pfNombres.trim()) return 'Nombres (PF) es obligatorio';
-      if (!pfApPaterno.trim()) return 'Apellido paterno (PF) es obligatorio';
-      if (!actividadSel) return 'Actividad económica (PF) es obligatoria (catálogo)';
+    if (tipo === 'persona_fisica') {
+      if (!pfNombres.trim()) errors.push('PF: nombres son obligatorios');
+      if (!pfApPaterno.trim()) errors.push('PF: apellido paterno es obligatorio');
+      if (!pfActividadSel) errors.push('PF: actividad económica es obligatoria');
     }
 
-    if (tipoCliente === 'persona_moral') {
-      if (!pmRfc.trim()) return 'RFC (PM) es obligatorio';
-      if (!pmFechaConst.trim()) return 'Fecha constitución (PM) es obligatoria';
-      if (!giroSel) return 'Giro mercantil (PM) es obligatorio (catálogo)';
+    if (tipo === 'persona_moral') {
+      if (!pmRfc.trim()) errors.push('PM: RFC es obligatorio');
+      if (pmRfc.trim() && !isValidRFC(pmRfc)) errors.push('PM: RFC inválido');
+      if (!pmFechaConst) errors.push('PM: fecha de constitución es obligatoria');
+      if (!pmGiroSel) errors.push('PM: giro mercantil es obligatorio');
 
-      if (!repNombres.trim()) return 'Nombres del representante (PM) es obligatorio';
-      if (!repApPaterno.trim()) return 'Apellido paterno del representante (PM) es obligatorio';
+      if (!repNombres.trim()) errors.push('PM: representante nombres son obligatorios');
+      if (!repApPaterno.trim()) errors.push('PM: representante apellido paterno es obligatorio');
+      if (repRfc.trim() && !isValidRFC(repRfc)) errors.push('PM: representante RFC inválido');
+      if (repCurp.trim() && !isValidCURP(repCurp)) errors.push('PM: representante CURP inválida');
     }
 
-    if (tipoCliente === 'fideicomiso') {
-      if (!fidDenominacion.trim()) return 'Denominación / Razón Social del Fiduciario es obligatoria';
-      if (!fidRfcFiduciario.trim()) return 'RFC del Fiduciario es obligatorio';
-      if (!fidIdentificador.trim()) return 'Identificador del fideicomiso es obligatorio';
+    if (tipo === 'fideicomiso') {
+      if (!fidIdentificador.trim()) errors.push('Fideicomiso: identificador es obligatorio');
+      if (!fidDenominacion.trim()) errors.push('Fideicomiso: denominación del fiduciario es obligatoria');
+      if (!fidRfcFiduciario.trim()) errors.push('Fideicomiso: RFC del fiduciario es obligatorio');
+      if (fidRfcFiduciario.trim() && !isValidRFC(fidRfcFiduciario)) errors.push('Fideicomiso: RFC del fiduciario inválido');
 
-      if (!fidRepNombres.trim()) return 'Nombres del representante (Fideicomiso) es obligatorio';
-      if (!fidRepApPaterno.trim()) return 'Apellido paterno del representante (Fideicomiso) es obligatorio';
+      if (!fidRepNombreCompleto.trim()) errors.push('Fideicomiso: nombre completo del representante es obligatorio');
+      if (!fidRepRfc.trim()) errors.push('Fideicomiso: RFC del representante es obligatorio');
+      if (fidRepRfc.trim() && !isValidRFC(fidRepRfc)) errors.push('Fideicomiso: RFC del representante inválido');
 
-      const ymd = toYYYYMMDD(fidRepFechaNac);
-      if (!ymd) return 'Fecha de nacimiento del representante (Fideicomiso) es obligatoria';
-      if (!/^\d{8}$/.test(ymd)) return 'Fecha de nacimiento debe ser AAAAMMDD (Fideicomiso)';
+      if (!fidRepCurp.trim()) errors.push('Fideicomiso: CURP del representante es obligatoria');
+      if (fidRepCurp.trim() && !isValidCURP(fidRepCurp)) errors.push('Fideicomiso: CURP del representante inválida');
 
-      if (!fidRepRfc.trim()) return 'RFC del representante (Fideicomiso) es obligatorio';
-      if (!fidRepCurp.trim()) return 'CURP del representante (Fideicomiso) es obligatorio';
+      if (!fidRepFechaNac.trim()) errors.push('Fideicomiso: fecha de nacimiento (AAAAMMDD) es obligatoria');
+      if (fidRepFechaNac.trim() && !isYYYYMMDD(fidRepFechaNac)) errors.push('Fideicomiso: fecha de nacimiento debe ser AAAAMMDD');
     }
 
-    return null;
+    return errors;
   }
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setErrorMsg(null);
+  function buildPayload() {
+    const nacionalidad = nacionalidadSel ? toPaisValue(nacionalidadSel) : '';
+    const paisContacto = paisContactoSel ? toPaisValue(paisContactoSel) : '';
 
-    const token = localStorage.getItem('token');
-    if (!token) {
-      router.replace('/login');
-      return;
-    }
+    const contacto: any = {
+      pais: paisContacto,
+      telefono: telefono.trim()
+    };
+    if (emailContacto.trim()) contacto.email = emailContacto.trim();
+    if (domicilioContacto.trim()) contacto.domicilio = domicilioContacto.trim();
 
-    const v = validate();
-    if (v) {
-      setErrorMsg(v);
-      return;
-    }
-
-    const datos_completos: any = {
-      contacto: {
-        pais: paisContactoSel?.descripcion,
-        telefono: telefono.trim()
-      }
+    const base: any = {
+      empresa_id: empresaId,
+      tipo_cliente: tipo,
+      nombre_entidad: nombreEntidad.trim(),
+      nacionalidad,
+      datos_completos: { contacto }
     };
 
-    if (tipoCliente === 'persona_fisica') {
-      datos_completos.persona = {
+    if (tipo === 'persona_fisica') {
+      base.datos_completos.persona = {
         tipo: 'persona_fisica',
         nombres: pfNombres.trim(),
         apellido_paterno: pfApPaterno.trim(),
         apellido_materno: pfApMaterno.trim() || undefined,
-        fecha_nacimiento: pfFechaNac ? pfFechaNac.replaceAll('-', '') : undefined,
-        rfc: pfRfc.trim() || undefined,
-        curp: pfCurp.trim() || undefined,
-        actividad_economica: actividadSel
-          ? { clave: actividadSel.clave, descripcion: actividadSel.descripcion }
+        actividad_economica: pfActividadSel
+          ? { clave: pfActividadSel.clave, descripcion: pfActividadSel.descripcion }
           : undefined
       };
     }
 
-    if (tipoCliente === 'persona_moral') {
-      datos_completos.empresa = {
+    if (tipo === 'persona_moral') {
+      base.datos_completos.empresa = {
         tipo: 'persona_moral',
-        rfc: pmRfc.trim(),
+        rfc: pmRfc.trim().toUpperCase(),
         fecha_constitucion: pmFechaConst,
-        giro: giroSel ? giroSel.descripcion : undefined,
-        giro_detalle: giroSel ? { clave: giroSel.clave, descripcion: giroSel.descripcion } : undefined
+        giro: pmGiroSel ? pmGiroSel.descripcion : undefined
       };
 
-      datos_completos.representante = {
-        tipo: 'representante',
+      base.datos_completos.representante = {
         nombres: repNombres.trim(),
         apellido_paterno: repApPaterno.trim(),
         apellido_materno: repApMaterno.trim() || undefined,
-        rfc: repRfc.trim() || undefined,
-        curp: repCurp.trim() || undefined
+        rfc: repRfc.trim() ? repRfc.trim().toUpperCase() : undefined,
+        curp: repCurp.trim() ? repCurp.trim().toUpperCase() : undefined
       };
     }
 
-    if (tipoCliente === 'fideicomiso') {
-      datos_completos.fideicomiso = {
+    if (tipo === 'fideicomiso') {
+      base.datos_completos.fideicomiso = {
         identificador: fidIdentificador.trim(),
-        rfc_fiduciario: fidRfcFiduciario.trim(),
-        denominacion_fiduciario: fidDenominacion.trim()
+        denominacion_fiduciario: fidDenominacion.trim(),
+        rfc_fiduciario: fidRfcFiduciario.trim().toUpperCase()
       };
 
-      const nombreCompleto = `${fidRepNombres} ${fidRepApPaterno} ${fidRepApMaterno}`.replace(/\s+/g, ' ').trim();
-      datos_completos.representante = {
-        nombre_completo: nombreCompleto,
-        nombres: fidRepNombres.trim(),
-        apellido_paterno: fidRepApPaterno.trim(),
-        apellido_materno: fidRepApMaterno.trim() || undefined,
-        fecha_nacimiento: toYYYYMMDD(fidRepFechaNac),
-        rfc: fidRepRfc.trim(),
-        curp: fidRepCurp.trim()
+      base.datos_completos.representante = {
+        nombre_completo: fidRepNombreCompleto.trim(),
+        rfc: fidRepRfc.trim().toUpperCase(),
+        curp: fidRepCurp.trim().toUpperCase(),
+        fecha_nacimiento: fidRepFechaNac.trim()
       };
     }
 
-    const payload = {
-      empresa_id: empresaId,
-      tipo_cliente: tipoCliente,
-      nombre_entidad: nombreEntidad.trim(),
-      nacionalidad: nacionalidadSel?.descripcion ?? '',
-      datos_completos
-    };
+    return base;
+  }
 
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    setOkMsg(null);
+
+    const errors = validate();
+    if (errors.length) {
+      setErr(errors.join(' | '));
+      return;
+    }
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!token) {
+      setErr('No hay token. Inicia sesión de nuevo.');
+      return;
+    }
+
+    const payload = buildPayload();
+
+    setSubmitting(true);
     try {
-      setSubmitting(true);
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
 
       const res = await fetch(`${apiBase}/api/cliente/registrar-cliente`, {
         method: 'POST',
@@ -376,378 +352,277 @@ export default function Page() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        if (res.status === 409) {
-          setErrorMsg(data?.error || 'Cliente duplicado para esa empresa.');
-          return;
-        }
-        if (res.status === 401) {
-          setErrorMsg(data?.error || 'Sesión inválida. Vuelve a iniciar sesión.');
-          router.replace('/login');
-          return;
-        }
-        setErrorMsg(data?.error || `Error HTTP ${res.status}`);
+        // si backend manda fields, lo mostramos
+        const extra = Array.isArray(data?.fields) ? ` | ${data.fields.join(', ')}` : '';
+        setErr((data?.error || `Error HTTP ${res.status}`) + extra);
         return;
       }
 
-      const id = data?.cliente?.id ?? data?.id ?? null;
-      if (id) {
-        router.push(`/cliente/clientes/${id}`);
-      } else {
-        router.push('/cliente/clientes');
+      const newId =
+        data?.cliente?.id ??
+        data?.id ??
+        data?.clienteId ??
+        null;
+
+      if (!newId) {
+        setOkMsg('Cliente registrado ✅ (pero no llegó id en respuesta)');
+        return;
       }
+
+      setOkMsg(`Cliente registrado ✅ ID=${newId}`);
+      router.push(`/cliente/clientes/${newId}`);
     } catch (e: any) {
-      setErrorMsg(e?.message || 'Error de red');
+      setErr(e?.message || 'Error de red');
     } finally {
       setSubmitting(false);
     }
   }
 
+  if (loadingCatalogos) return <div className="p-6 text-sm">Cargando catálogos...</div>;
+
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="max-w-4xl mx-auto bg-white p-6 rounded shadow space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold mb-1">Registrar Cliente</h1>
-            <p className="text-sm text-gray-500">
-              Selecciona el tipo de cliente y captura los datos mínimos requeridos (iteración 1).
-            </p>
-          </div>
+    <div className="max-w-5xl mx-auto p-6 space-y-4">
+      <h1 className="text-2xl font-semibold">Registrar Cliente</h1>
 
-          <button className="rounded border px-4 py-2 text-sm" onClick={() => router.push('/cliente/clientes')}>
-            Volver
-          </button>
-        </div>
+      {okMsg && <div className="rounded border p-3 text-sm">{okMsg}</div>}
+      {err && <div className="rounded border p-3 text-sm">{err}</div>}
 
-        {loadingCats ? <div className="text-sm">Cargando catálogos…</div> : null}
+      <form onSubmit={onSubmit} className="space-y-6">
+        <div className="rounded border p-4 space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-sm font-medium">Empresa ID *</label>
+              <input
+                type="number"
+                className="w-full rounded border p-2"
+                value={empresaId}
+                onChange={(e) => setEmpresaId(Number(e.target.value))}
+              />
+            </div>
 
-        {errorMsg ? (
-          <div className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-700">{errorMsg}</div>
-        ) : null}
-
-        <form onSubmit={onSubmit} className="space-y-6">
-          {/* Datos base */}
-          <div className="rounded border p-4 space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium">Empresa ID *</label>
-                <input
-                  className="w-full rounded border p-2"
-                  type="number"
-                  value={empresaId}
-                  onChange={(e) => setEmpresaId(Number(e.target.value))}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium">Tipo de cliente *</label>
-                <select
-                  className="w-full rounded border p-2"
-                  value={tipoCliente}
-                  onChange={(e) => setTipoCliente(e.target.value as TipoCliente)}
-                >
-                  <option value="persona_fisica">Persona Física</option>
-                  <option value="persona_moral">Persona Moral</option>
-                  <option value="fideicomiso">Fideicomiso</option>
-                </select>
-              </div>
+            <div>
+              <label className="block text-sm font-medium">Tipo *</label>
+              <select className="w-full rounded border p-2" value={tipo} onChange={(e) => setTipo(e.target.value as TipoCliente)}>
+                <option value="persona_fisica">Persona Física</option>
+                <option value="persona_moral">Persona Moral</option>
+                <option value="fideicomiso">Fideicomiso</option>
+              </select>
             </div>
 
             <div>
               <label className="block text-sm font-medium">Nombre / Entidad *</label>
-              <input
-                className="w-full rounded border p-2"
-                value={nombreEntidad}
-                onChange={(e) => setNombreEntidad(e.target.value)}
-                placeholder={
-                  tipoCliente === 'persona_fisica'
-                    ? 'Ej. Juan Pérez López'
-                    : tipoCliente === 'persona_moral'
-                    ? 'Ej. Comercializadora XYZ S.A. de C.V.'
-                    : 'Ej. Fideicomiso ABC'
-                }
-              />
+              <input className="w-full rounded border p-2" value={nombreEntidad} onChange={(e) => setNombreEntidad(e.target.value)} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <SearchSelect
+              label="Nacionalidad"
+              value={nacionalidadSel}
+              onChange={setNacionalidadSel}
+              items={paises}
+              required
+              modoBusqueda={buscaNacionalidad}
+              onToggleModoBusqueda={setBuscaNacionalidad}
+              placeholder="Selecciona nacionalidad..."
+            />
+
+            <SearchSelect
+              label="País (contacto)"
+              value={paisContactoSel}
+              onChange={setPaisContactoSel}
+              items={paises}
+              required
+              modoBusqueda={buscaPaisContacto}
+              onToggleModoBusqueda={setBuscaPaisContacto}
+              placeholder="Selecciona país..."
+            />
+          </div>
+        </div>
+
+        <div className="rounded border p-4 space-y-3">
+          <div className="font-medium">Contacto</div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium">Teléfono *</label>
+              <input className="w-full rounded border p-2" value={telefono} onChange={(e) => setTelefono(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium">Email</label>
+              <input className="w-full rounded border p-2" value={emailContacto} onChange={(e) => setEmailContacto(e.target.value)} />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium">Domicilio</label>
+            <input className="w-full rounded border p-2" value={domicilioContacto} onChange={(e) => setDomicilioContacto(e.target.value)} />
+          </div>
+        </div>
+
+        {tipo === 'persona_fisica' && (
+          <div className="rounded border p-4 space-y-3">
+            <div className="font-medium">{labelTipo(tipo)}</div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-sm font-medium">Nombres *</label>
+                <input className="w-full rounded border p-2" value={pfNombres} onChange={(e) => setPfNombres(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Apellido paterno *</label>
+                <input className="w-full rounded border p-2" value={pfApPaterno} onChange={(e) => setPfApPaterno(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Apellido materno</label>
+                <input className="w-full rounded border p-2" value={pfApMaterno} onChange={(e) => setPfApMaterno(e.target.value)} />
+              </div>
             </div>
 
             <SearchSelect
-              label="Nacionalidad"
+              label="Actividad económica"
+              value={pfActividadSel}
+              onChange={setPfActividadSel}
+              items={actividades}
               required
-              items={paises}
-              value={nacionalidadSel}
-              onChange={setNacionalidadSel}
-              placeholder="Selecciona nacionalidad…"
+              modoBusqueda={buscaActividad}
+              onToggleModoBusqueda={setBuscaActividad}
+              placeholder="Selecciona actividad..."
             />
           </div>
+        )}
 
-          {/* Contacto */}
-          <div className="rounded border p-4 space-y-3">
-            <div className="font-medium">Contacto</div>
+        {tipo === 'persona_moral' && (
+          <div className="rounded border p-4 space-y-4">
+            <div className="font-medium">{labelTipo(tipo)}</div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <SearchSelect
-                label="País (contacto)"
-                required
-                items={paises}
-                value={paisContactoSel}
-                onChange={setPaisContactoSel}
-                placeholder="Selecciona país…"
-              />
-
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
-                <label className="block text-sm font-medium">
-                  Teléfono <span className="text-red-600">*</span>
-                </label>
-                <input
-                  className="w-full rounded border p-2"
-                  value={telefono}
-                  onChange={(e) => setTelefono(e.target.value)}
-                  placeholder="Ej. 5512345678"
+                <label className="block text-sm font-medium">RFC *</label>
+                <input className="w-full rounded border p-2" value={pmRfc} onChange={(e) => setPmRfc(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Fecha constitución *</label>
+                <input type="date" className="w-full rounded border p-2" value={pmFechaConst} onChange={(e) => setPmFechaConst(e.target.value)} />
+              </div>
+              <div className="md:col-span-1">
+                <SearchSelect
+                  label="Giro mercantil"
+                  value={pmGiroSel}
+                  onChange={setPmGiroSel}
+                  items={giros}
+                  required
+                  modoBusqueda={buscaGiro}
+                  onToggleModoBusqueda={setBuscaGiro}
+                  placeholder="Selecciona giro..."
                 />
               </div>
             </div>
-          </div>
 
-          {/* PF */}
-          {tipoCliente === 'persona_fisica' && (
-            <div className="rounded border p-4 space-y-4">
-              <div className="font-medium">{labelTipo(tipoCliente)}</div>
+            <div className="rounded border p-3 space-y-3">
+              <div className="font-medium">Representante</div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-sm font-medium">
-                    Nombres <span className="text-red-600">*</span>
-                  </label>
-                  <input className="w-full rounded border p-2" value={pfNombres} onChange={(e) => setPfNombres(e.target.value)} />
+                  <label className="block text-sm font-medium">Nombres *</label>
+                  <input className="w-full rounded border p-2" value={repNombres} onChange={(e) => setRepNombres(e.target.value)} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium">
-                    Apellido paterno <span className="text-red-600">*</span>
-                  </label>
-                  <input className="w-full rounded border p-2" value={pfApPaterno} onChange={(e) => setPfApPaterno(e.target.value)} />
+                  <label className="block text-sm font-medium">Apellido paterno *</label>
+                  <input className="w-full rounded border p-2" value={repApPaterno} onChange={(e) => setRepApPaterno(e.target.value)} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium">Apellido materno</label>
-                  <input className="w-full rounded border p-2" value={pfApMaterno} onChange={(e) => setPfApMaterno(e.target.value)} />
+                  <input className="w-full rounded border p-2" value={repApMaterno} onChange={(e) => setRepApMaterno(e.target.value)} />
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium">RFC</label>
+                  <input className="w-full rounded border p-2" value={repRfc} onChange={(e) => setRepRfc(e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium">CURP</label>
+                  <input className="w-full rounded border p-2" value={repCurp} onChange={(e) => setRepCurp(e.target.value)} />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {tipo === 'fideicomiso' && (
+          <div className="rounded border p-4 space-y-4">
+            <div className="font-medium">{labelTipo(tipo)} — mínimos (iteración 1)</div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-sm font-medium">Identificador *</label>
+                <input className="w-full rounded border p-2" value={fidIdentificador} onChange={(e) => setFidIdentificador(e.target.value)} />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium">Denominación / Razón Social del Fiduciario *</label>
+                <input className="w-full rounded border p-2" value={fidDenominacion} onChange={(e) => setFidDenominacion(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium">RFC del Fiduciario *</label>
+                <input className="w-full rounded border p-2" value={fidRfcFiduciario} onChange={(e) => setFidRfcFiduciario(e.target.value)} />
+                <p className="text-xs opacity-70 mt-1">Formato: XAXX010101000</p>
+              </div>
+            </div>
+
+            <div className="rounded border p-3 space-y-3">
+              <div className="font-medium">Representante / Apoderado *</div>
+
+              <div>
+                <label className="block text-sm font-medium">Nombre completo *</label>
+                <input className="w-full rounded border p-2" value={fidRepNombreCompleto} onChange={(e) => setFidRepNombreCompleto(e.target.value)} />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-sm font-medium">Fecha de nacimiento</label>
-                  <input type="date" className="w-full rounded border p-2" value={pfFechaNac} onChange={(e) => setPfFechaNac(e.target.value)} />
+                  <label className="block text-sm font-medium">RFC *</label>
+                  <input className="w-full rounded border p-2" value={fidRepRfc} onChange={(e) => setFidRepRfc(e.target.value)} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium">RFC</label>
-                  <input className="w-full rounded border p-2" value={pfRfc} onChange={(e) => setPfRfc(e.target.value)} />
+                  <label className="block text-sm font-medium">CURP *</label>
+                  <input className="w-full rounded border p-2" value={fidRepCurp} onChange={(e) => setFidRepCurp(e.target.value)} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium">CURP</label>
-                  <input className="w-full rounded border p-2" value={pfCurp} onChange={(e) => setPfCurp(e.target.value)} />
-                </div>
-              </div>
-
-              <SearchSelect
-                label="Actividad económica"
-                required
-                items={actividades}
-                value={actividadSel}
-                onChange={setActividadSel}
-                placeholder="Selecciona actividad…"
-              />
-            </div>
-          )}
-
-          {/* PM */}
-          {tipoCliente === 'persona_moral' && (
-            <div className="rounded border p-4 space-y-4">
-              <div className="font-medium">{labelTipo(tipoCliente)}</div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium">
-                    RFC <span className="text-red-600">*</span>
-                  </label>
-                  <input className="w-full rounded border p-2" value={pmRfc} onChange={(e) => setPmRfc(e.target.value)} />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium">
-                    Fecha constitución <span className="text-red-600">*</span>
-                  </label>
-                  <input type="date" className="w-full rounded border p-2" value={pmFechaConst} onChange={(e) => setPmFechaConst(e.target.value)} />
-                </div>
-              </div>
-
-              <SearchSelect
-                label="Giro mercantil"
-                required
-                items={giros}
-                value={giroSel}
-                onChange={setGiroSel}
-                placeholder="Selecciona giro…"
-              />
-
-              <div className="rounded border p-3 space-y-3">
-                <div className="font-medium">Representante legal</div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium">
-                      Nombres <span className="text-red-600">*</span>
-                    </label>
-                    <input className="w-full rounded border p-2" value={repNombres} onChange={(e) => setRepNombres(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium">
-                      Apellido paterno <span className="text-red-600">*</span>
-                    </label>
-                    <input className="w-full rounded border p-2" value={repApPaterno} onChange={(e) => setRepApPaterno(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium">Apellido materno</label>
-                    <input className="w-full rounded border p-2" value={repApMaterno} onChange={(e) => setRepApMaterno(e.target.value)} />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium">RFC</label>
-                    <input className="w-full rounded border p-2" value={repRfc} onChange={(e) => setRepRfc(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium">CURP</label>
-                    <input className="w-full rounded border p-2" value={repCurp} onChange={(e) => setRepCurp(e.target.value)} />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* FIDEICOMISO */}
-          {tipoCliente === 'fideicomiso' && (
-            <div className="rounded border p-4 space-y-4">
-              <div className="font-medium">{labelTipo(tipoCliente)} (iteración 1)</div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium">
-                    Denominación / Razón Social del Fiduciario <span className="text-red-600">*</span>
-                  </label>
+                  <label className="block text-sm font-medium">Fecha nacimiento *</label>
                   <input
                     className="w-full rounded border p-2"
-                    value={fidDenominacion}
-                    onChange={(e) => setFidDenominacion(e.target.value)}
-                    placeholder="Ej. Fiduciario Ejemplo S.A."
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium">
-                    RFC del Fiduciario <span className="text-red-600">*</span>
-                  </label>
-                  <input
-                    className="w-full rounded border p-2"
-                    value={fidRfcFiduciario}
-                    onChange={(e) => setFidRfcFiduciario(e.target.value)}
-                    placeholder="XAXX010101000"
+                    placeholder="AAAAMMDD"
+                    value={fidRepFechaNac}
+                    onChange={(e) => setFidRepFechaNac(e.target.value)}
                   />
                 </div>
               </div>
-
-              <div>
-                <label className="block text-sm font-medium">
-                  Identificador del fideicomiso <span className="text-red-600">*</span>
-                </label>
-                <input
-                  className="w-full rounded border p-2"
-                  value={fidIdentificador}
-                  onChange={(e) => setFidIdentificador(e.target.value)}
-                  placeholder="Ej. FID-0001"
-                />
-              </div>
-
-              <div className="rounded border p-3 space-y-3">
-                <div className="font-medium">Representante / Apoderado legal</div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium">
-                      Nombre(s) <span className="text-red-600">*</span>
-                    </label>
-                    <input className="w-full rounded border p-2" value={fidRepNombres} onChange={(e) => setFidRepNombres(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium">
-                      Apellido paterno <span className="text-red-600">*</span>
-                    </label>
-                    <input className="w-full rounded border p-2" value={fidRepApPaterno} onChange={(e) => setFidRepApPaterno(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium">Apellido materno</label>
-                    <input className="w-full rounded border p-2" value={fidRepApMaterno} onChange={(e) => setFidRepApMaterno(e.target.value)} />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium">
-                      Fecha nacimiento <span className="text-red-600">*</span>
-                    </label>
-                    <input type="date" className="w-full rounded border p-2" value={fidRepFechaNac} onChange={(e) => setFidRepFechaNac(e.target.value)} />
-                    <div className="text-xs opacity-60 mt-1">Se enviará como AAAAMMDD</div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium">
-                      RFC <span className="text-red-600">*</span>
-                    </label>
-                    <input className="w-full rounded border p-2" value={fidRepRfc} onChange={(e) => setFidRepRfc(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium">
-                      CURP <span className="text-red-600">*</span>
-                    </label>
-                    <input className="w-full rounded border p-2" value={fidRepCurp} onChange={(e) => setFidRepCurp(e.target.value)} />
-                  </div>
-                </div>
-              </div>
             </div>
-          )}
-
-          <div className="flex gap-3">
-            <button type="submit" disabled={submitting} className="rounded border px-4 py-2 text-sm">
-              {submitting ? 'Registrando…' : 'Registrar'}
-            </button>
-            <button type="button" className="rounded border px-4 py-2 text-sm" onClick={() => router.push('/cliente/clientes')}>
-              Cancelar
-            </button>
           </div>
+        )}
 
-          <div className="rounded border p-4">
-            <details>
-              <summary className="cursor-pointer select-none font-medium">Debug: payload (preview)</summary>
-              <pre className="mt-3 text-xs overflow-auto whitespace-pre-wrap">
-                {JSON.stringify(
-                  {
-                    empresa_id: empresaId,
-                    tipo_cliente: tipoCliente,
-                    nombre_entidad: nombreEntidad,
-                    nacionalidad: nacionalidadSel?.descripcion,
-                    datos_completos_preview: {
-                      contacto: { pais: paisContactoSel?.descripcion, telefono },
-                      pf: tipoCliente === 'persona_fisica' ? { pfNombres, pfApPaterno, actividadSel } : undefined,
-                      pm: tipoCliente === 'persona_moral' ? { pmRfc, pmFechaConst, giroSel } : undefined,
-                      fideicomiso:
-                        tipoCliente === 'fideicomiso'
-                          ? { fidDenominacion, fidRfcFiduciario, fidIdentificador, fidRepNombres }
-                          : undefined
-                    }
-                  },
-                  null,
-                  2
-                )}
-              </pre>
-            </details>
-          </div>
-        </form>
-      </div>
+        <div className="flex gap-3">
+          <button type="submit" disabled={submitting} className="rounded border px-4 py-2 text-sm">
+            {submitting ? 'Registrando...' : 'Registrar'}
+          </button>
+          <button type="button" className="rounded border px-4 py-2 text-sm" onClick={() => router.push('/cliente/clientes')}>
+            Cancelar
+          </button>
+        </div>
+
+        <div className="rounded border p-4">
+          <details>
+            <summary className="cursor-pointer select-none font-medium">Debug: payload</summary>
+            <pre className="mt-3 text-xs overflow-auto whitespace-pre-wrap">
+              {JSON.stringify(buildPayload(), null, 2)}
+            </pre>
+          </details>
+        </div>
+      </form>
     </div>
   );
 }

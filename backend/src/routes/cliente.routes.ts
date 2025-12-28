@@ -1,96 +1,55 @@
 // backend/src/routes/cliente.routes.ts
 import { Router, Request, Response } from 'express';
-import { authenticate } from '../middleware/auth.middleware';
 import pool from '../db';
+import authenticate from '../middleware/auth.middleware';
 
 const router = Router();
-
-type Rol = 'admin' | 'consultor' | 'cliente';
-type TipoCliente = 'persona_fisica' | 'persona_moral' | 'fideicomiso';
-
-function getUser(req: Request) {
-  return (req as any).user as { id: number; rol: Rol; empresa_id: number | null } | undefined;
-}
-
-function isPlainObject(x: any): x is Record<string, any> {
-  return x !== null && typeof x === 'object' && !Array.isArray(x);
-}
-
-function requireString(val: any) {
-  return typeof val === 'string' && val.trim().length > 0;
-}
-
-/**
- * Validación mínima por tipo_cliente (iteración 1)
- * - NO bloquea PF/PM existentes con reglas excesivas
- * - Para fideicomiso: exige un set pequeño y claro
- */
-function validateDatosCompletos(tipo: TipoCliente, datos: any): string | null {
-  if (datos == null) return null; // permitimos null (DB lo permite); FE lo manda normalmente.
-  if (!isPlainObject(datos)) return 'datos_completos debe ser un objeto';
-
-  // Contacto mínimo (si viene)
-  if (datos.contacto != null) {
-    if (!isPlainObject(datos.contacto)) return 'datos_completos.contacto debe ser un objeto';
-    const { pais, telefono } = datos.contacto;
-    if (!requireString(pais)) return 'Contacto: país es obligatorio';
-    if (!requireString(telefono)) return 'Contacto: teléfono es obligatorio';
-  }
-
-  // Reglas mínimas por tipo
-  if (tipo === 'persona_fisica') {
-    if (datos.persona != null) {
-      if (!isPlainObject(datos.persona)) return 'datos_completos.persona debe ser un objeto';
-      if (!requireString(datos.persona.nombres)) return 'Persona física: nombres es obligatorio';
-      if (!requireString(datos.persona.apellido_paterno)) return 'Persona física: apellido_paterno es obligatorio';
-    }
-  }
-
-  if (tipo === 'persona_moral') {
-    if (datos.empresa != null) {
-      if (!isPlainObject(datos.empresa)) return 'datos_completos.empresa debe ser un objeto';
-      if (!requireString(datos.empresa.rfc)) return 'Persona moral: RFC es obligatorio';
-    }
-  }
-
-  if (tipo === 'fideicomiso') {
-    // Iteración 1 (mínimos)
-    const f = datos.fideicomiso;
-    if (!isPlainObject(f)) return 'Fideicomiso: datos_completos.fideicomiso es obligatorio';
-
-    if (!requireString(f.denominacion_fiduciario)) {
-      return 'Fideicomiso: denominacion_fiduciario es obligatorio';
-    }
-    if (!requireString(f.rfc_fiduciario)) {
-      return 'Fideicomiso: rfc_fiduciario es obligatorio';
-    }
-    if (!requireString(f.identificador)) {
-      return 'Fideicomiso: identificador es obligatorio';
-    }
-
-    const r = datos.representante;
-    if (!isPlainObject(r)) return 'Fideicomiso: datos_completos.representante es obligatorio';
-    if (!requireString(r.nombre_completo)) return 'Fideicomiso: representante.nombre_completo es obligatorio';
-    if (!requireString(r.rfc)) return 'Fideicomiso: representante.rfc es obligatorio';
-    if (!requireString(r.curp)) return 'Fideicomiso: representante.curp es obligatorio';
-    if (!requireString(r.fecha_nacimiento)) return 'Fideicomiso: representante.fecha_nacimiento es obligatorio';
-  }
-
-  return null;
-}
 
 router.get('/__debug', (_req, res) => {
   res.json({ ok: true, router: 'cliente' });
 });
 
+type AuthUser = {
+  id: number;
+  email: string;
+  rol: string;
+  empresa_id: number | null;
+};
+
+function getUser(req: Request): AuthUser | null {
+  return (req as any).user ?? null;
+}
+
+function isValidRFC(raw: string): boolean {
+  const v = String(raw ?? '').trim().toUpperCase();
+  // RFC genérico + RFC real (12/13)
+  return /^[A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3}$/.test(v);
+}
+
+function isValidCURP(raw: string): boolean {
+  const v = String(raw ?? '').trim().toUpperCase();
+  // Validación razonable (18 chars). No es 100% “oficial”, pero evita basura.
+  return /^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]{2}$/.test(v);
+}
+
+function isYYYYMMDD(raw: string): boolean {
+  return /^\d{8}$/.test(String(raw ?? '').trim());
+}
+
+function normalizePaisValue(x: any): string {
+  // En FE mandas "MEXICO,MX" / "CANADA,CA" etc.
+  const v = String(x ?? '').trim();
+  return v;
+}
+
 /**
  * ===============================
- * LISTAR CLIENTES
+ * LISTAR CLIENTES (compat)
+ * GET /api/cliente/clientes
+ * GET /api/cliente/mis-clientes (alias legacy)
  * ===============================
- * - GET /api/cliente/clientes (canónico)
- * - GET /api/cliente/mis-clientes (alias histórico)
  */
-const listarClientesHandler = async (req: Request, res: Response) => {
+async function listClientesHandler(req: Request, res: Response) {
   try {
     const user = getUser(req);
     if (!user) return res.status(401).json({ error: 'Usuario no autenticado' });
@@ -98,6 +57,7 @@ const listarClientesHandler = async (req: Request, res: Response) => {
     let query = `
       SELECT
         id,
+        empresa_id,
         nombre_entidad,
         tipo_cliente,
         nacionalidad,
@@ -107,9 +67,10 @@ const listarClientesHandler = async (req: Request, res: Response) => {
     `;
     const params: any[] = [];
 
-    // Si es cliente: filtra por empresa
     if (user.rol === 'cliente') {
-      if (!user.empresa_id) return res.status(400).json({ error: 'Empresa no asociada al usuario' });
+      if (!user.empresa_id) {
+        return res.status(403).json({ error: 'Empresa no asociada al usuario' });
+      }
       query += ` WHERE empresa_id = $1`;
       params.push(user.empresa_id);
     }
@@ -118,20 +79,20 @@ const listarClientesHandler = async (req: Request, res: Response) => {
 
     const result = await pool.query(query, params);
     return res.json({ clientes: result.rows });
-  } catch (error) {
-    console.error('Error al listar clientes:', error);
+  } catch (e) {
+    console.error('Error al listar clientes:', e);
     return res.status(500).json({ error: 'Error al listar clientes' });
   }
-};
+}
 
-router.get('/clientes', authenticate, listarClientesHandler);
-router.get('/mis-clientes', authenticate, listarClientesHandler);
+router.get('/clientes', authenticate, listClientesHandler);
+router.get('/mis-clientes', authenticate, listClientesHandler);
 
 /**
  * ===============================
- * OBTENER CLIENTE POR ID
- * ===============================
+ * DETALLE CLIENTE
  * GET /api/cliente/clientes/:id
+ * ===============================
  */
 router.get('/clientes/:id', authenticate, async (req: Request, res: Response) => {
   try {
@@ -139,213 +100,208 @@ router.get('/clientes/:id', authenticate, async (req: Request, res: Response) =>
     if (!user) return res.status(401).json({ error: 'Usuario no autenticado' });
 
     const id = Number(req.params.id);
-    if (!id || Number.isNaN(id)) return res.status(400).json({ error: 'id inválido' });
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'id inválido' });
 
+    let query = `SELECT * FROM clientes WHERE id = $1`;
     const params: any[] = [id];
-    let sql = `SELECT * FROM clientes WHERE id = $1`;
 
     if (user.rol === 'cliente') {
-      if (!user.empresa_id) return res.status(400).json({ error: 'Empresa no asociada al usuario' });
-      sql += ` AND empresa_id = $2`;
+      if (!user.empresa_id) return res.status(403).json({ error: 'Empresa no asociada al usuario' });
+      query += ` AND empresa_id = $2`;
       params.push(user.empresa_id);
     }
 
-    const result = await pool.query(sql, params);
-    if (result.rowCount === 0) return res.status(404).json({ error: 'Cliente no encontrado' });
+    const result = await pool.query(query, params);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Cliente no encontrado' });
 
     return res.json({ cliente: result.rows[0] });
-  } catch (error) {
-    console.error('Error al obtener cliente:', error);
+  } catch (e) {
+    console.error('Error al obtener cliente:', e);
     return res.status(500).json({ error: 'Error al obtener cliente' });
   }
 });
 
 /**
  * ===============================
- * CREAR CLIENTE
+ * REGISTRAR CLIENTE
+ * POST /api/cliente/registrar-cliente
  * ===============================
- * - POST /api/cliente/clientes (canónico)
- * - POST /api/cliente/registrar-cliente (alias histórico)
  */
-const crearClienteHandler = async (req: Request, res: Response) => {
+router.post('/registrar-cliente', authenticate, async (req: Request, res: Response) => {
   try {
     const user = getUser(req);
     if (!user) return res.status(401).json({ error: 'Usuario no autenticado' });
 
-    const body = req.body ?? {};
+    const {
+      empresa_id: empresaIdBody,
+      tipo_cliente,
+      nombre_entidad,
+      nacionalidad,
+      datos_completos
+    } = req.body ?? {};
 
-    // Resolver empresa_id según rol
-    const resolvedEmpresaId =
-      user.rol === 'cliente'
-        ? user.empresa_id
-        : body.empresa_id !== undefined && body.empresa_id !== null
-          ? Number(body.empresa_id)
-          : null;
-
+    // empresa_id: si es rol cliente, forzamos su empresa
+    let empresa_id: number | null = null;
     if (user.rol === 'cliente') {
-      if (!resolvedEmpresaId) return res.status(400).json({ error: 'Empresa no asociada al usuario' });
+      empresa_id = user.empresa_id ?? null;
     } else {
-      if (!resolvedEmpresaId || Number.isNaN(resolvedEmpresaId)) {
-        return res.status(400).json({ error: 'empresa_id es obligatorio para admin/consultor' });
-      }
+      empresa_id = Number(empresaIdBody);
     }
 
-    const nombre_entidad = typeof body.nombre_entidad === 'string' ? body.nombre_entidad.trim() : '';
-    if (!nombre_entidad) return res.status(400).json({ error: 'nombre_entidad es obligatorio' });
+    const fields: string[] = [];
 
-    const tipo_cliente = body.tipo_cliente as TipoCliente;
-    const allowedTipo: TipoCliente[] = ['persona_fisica', 'persona_moral', 'fideicomiso'];
-    if (!tipo_cliente || !allowedTipo.includes(tipo_cliente)) {
-      return res.status(400).json({ error: `tipo_cliente inválido (${allowedTipo.join('|')})` });
+    if (!empresa_id || !Number.isInteger(empresa_id) || empresa_id <= 0) fields.push('empresa_id');
+    if (!String(tipo_cliente ?? '').trim()) fields.push('tipo_cliente');
+    if (!String(nombre_entidad ?? '').trim()) fields.push('nombre_entidad');
+
+    const nacionalidadNorm = normalizePaisValue(nacionalidad);
+    if (!nacionalidadNorm) fields.push('nacionalidad');
+
+    // contacto mínimo (para todos)
+    const contacto = datos_completos?.contacto ?? {};
+    const paisContacto = normalizePaisValue(contacto?.pais);
+    const telefono = String(contacto?.telefono ?? '').trim();
+    if (!paisContacto) fields.push('datos_completos.contacto.pais');
+    if (!telefono) fields.push('datos_completos.contacto.telefono');
+
+    // Validaciones mínimas por tipo
+    if (tipo_cliente === 'fideicomiso') {
+      const fid = datos_completos?.fideicomiso ?? {};
+      const rep = datos_completos?.representante ?? {};
+
+      const identificador = String(fid?.identificador ?? '').trim();
+      const denominacion = String(fid?.denominacion_fiduciario ?? '').trim();
+      const rfcFiduciario = String(fid?.rfc_fiduciario ?? '').trim();
+
+      const repNombre = String(rep?.nombre_completo ?? '').trim();
+      const repRfc = String(rep?.rfc ?? '').trim();
+      const repCurp = String(rep?.curp ?? '').trim();
+      const repFechaNac = String(rep?.fecha_nacimiento ?? '').trim();
+
+      if (!identificador) fields.push('datos_completos.fideicomiso.identificador');
+      if (!denominacion) fields.push('datos_completos.fideicomiso.denominacion_fiduciario');
+      if (!rfcFiduciario) fields.push('datos_completos.fideicomiso.rfc_fiduciario');
+
+      if (!repNombre) fields.push('datos_completos.representante.nombre_completo');
+      if (!repRfc) fields.push('datos_completos.representante.rfc');
+      if (!repCurp) fields.push('datos_completos.representante.curp');
+      if (!repFechaNac) fields.push('datos_completos.representante.fecha_nacimiento');
+
+      // formato básico
+      if (rfcFiduciario && !isValidRFC(rfcFiduciario)) fields.push('datos_completos.fideicomiso.rfc_fiduciario(formato)');
+      if (repRfc && !isValidRFC(repRfc)) fields.push('datos_completos.representante.rfc(formato)');
+      if (repCurp && !isValidCURP(repCurp)) fields.push('datos_completos.representante.curp(formato)');
+      if (repFechaNac && !isYYYYMMDD(repFechaNac)) fields.push('datos_completos.representante.fecha_nacimiento(AAAAMMDD)');
     }
 
-    // ✅ YA NO BLOQUEAMOS fideicomiso EN CÓDIGO
-    const msgDatos = validateDatosCompletos(tipo_cliente, body.datos_completos);
-    if (msgDatos) return res.status(400).json({ error: msgDatos });
+    if (fields.length > 0) {
+      return res.status(400).json({
+        error: 'Validación fallida',
+        fields
+      });
+    }
 
-    const insertSQL = `
+    const insertQuery = `
       INSERT INTO clientes (
         empresa_id,
-        cliente_id_externo,
         nombre_entidad,
-        alias,
-        fecha_nacimiento_constitucion,
         tipo_cliente,
         nacionalidad,
-        domicilio_mexico,
-        ocupacion,
-        actividad_economica,
         datos_completos,
         estado
-      ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12
       )
-      RETURNING id, empresa_id, nombre_entidad, tipo_cliente, nacionalidad, estado, creado_en, actualizado_en
+      VALUES ($1, $2, $3, $4, $5, 'activo')
+      RETURNING
+        id,
+        empresa_id,
+        nombre_entidad,
+        tipo_cliente,
+        nacionalidad,
+        estado,
+        creado_en,
+        actualizado_en
     `;
 
-    const values = [
-      resolvedEmpresaId,
-      body.cliente_id_externo ?? null,
-      nombre_entidad,
-      body.alias ?? null,
-      body.fecha_nacimiento_constitucion ?? null,
-      tipo_cliente,
-      body.nacionalidad ?? null,
-      body.domicilio_mexico ?? null,
-      body.ocupacion ?? null,
-      body.actividad_economica ?? null,
-      body.datos_completos ?? null,
-      body.estado ?? 'activo'
+    const insertParams = [
+      empresa_id,
+      String(nombre_entidad).trim(),
+      String(tipo_cliente).trim(),
+      nacionalidadNorm,
+      datos_completos ?? {}
     ];
 
-    const result = await pool.query(insertSQL, values);
+    const result = await pool.query(insertQuery, insertParams);
+
     return res.status(201).json({ ok: true, cliente: result.rows[0] });
-  } catch (error: any) {
-    // duplicado empresa_id + nombre_entidad (idx_clientes_empresa_nombre)
-    if (error?.code === '23505') {
-      return res.status(409).json({ error: 'Cliente duplicado para esa empresa (empresa_id + nombre_entidad)' });
+  } catch (e: any) {
+    // unique(empresa_id, nombre_entidad) => 23505
+    if (e?.code === '23505') {
+      return res.status(409).json({
+        error: 'Cliente duplicado para esa empresa (empresa_id + nombre_entidad)'
+      });
     }
 
-    // violación de CHECK constraint (por ejemplo tipo_cliente)
-    if (error?.code === '23514') {
-      return res.status(400).json({ error: `Datos inválidos (constraint): ${error?.constraint ?? 'CHECK'}` });
-    }
-
-    console.error('Error al crear cliente:', error);
-    return res.status(500).json({ error: 'Error al crear cliente' });
+    console.error('Error al registrar cliente:', e);
+    return res.status(500).json({ error: 'Error al registrar cliente' });
   }
-};
-
-router.post('/clientes', authenticate, crearClienteHandler);
-router.post('/registrar-cliente', authenticate, crearClienteHandler);
+});
 
 /**
  * ===============================
- * ACTUALIZAR CLIENTE
+ * EDITAR CLIENTE (mínimo)
+ * PUT /api/cliente/clientes/:id
  * ===============================
- * - PUT /api/cliente/clientes/:id (canónico)
- * - PUT /api/cliente/:id (alias histórico)
  */
-const actualizarClienteHandler = async (req: Request, res: Response) => {
+router.put('/clientes/:id', authenticate, async (req: Request, res: Response) => {
   try {
     const user = getUser(req);
     if (!user) return res.status(401).json({ error: 'Usuario no autenticado' });
 
     const id = Number(req.params.id);
-    if (!id || Number.isNaN(id)) return res.status(400).json({ error: 'id inválido' });
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'id inválido' });
 
-    const body = req.body ?? {};
+    const { nombre_entidad, nacionalidad, estado, datos_completos } = req.body ?? {};
 
-    // Cliente: sólo su empresa
-    let empresaGuardSQL = '';
-    const paramsGuard: any[] = [id];
-
-    if (user.rol === 'cliente') {
-      if (!user.empresa_id) return res.status(400).json({ error: 'Empresa no asociada al usuario' });
-      empresaGuardSQL = ' AND empresa_id = $2';
-      paramsGuard.push(user.empresa_id);
-    }
-
-    // Validación tipo_cliente si lo mandan
-    if (body.tipo_cliente) {
-      const allowedTipo: TipoCliente[] = ['persona_fisica', 'persona_moral', 'fideicomiso'];
-      if (!allowedTipo.includes(body.tipo_cliente)) {
-        return res.status(400).json({ error: `tipo_cliente inválido (${allowedTipo.join('|')})` });
-      }
-      const msgDatos = validateDatosCompletos(body.tipo_cliente, body.datos_completos);
-      if (msgDatos) return res.status(400).json({ error: msgDatos });
-    }
-
-    const sql = `
-      UPDATE clientes SET
-        cliente_id_externo = COALESCE($3, cliente_id_externo),
-        nombre_entidad = COALESCE($4, nombre_entidad),
-        alias = COALESCE($5, alias),
-        fecha_nacimiento_constitucion = COALESCE($6, fecha_nacimiento_constitucion),
-        tipo_cliente = COALESCE($7, tipo_cliente),
-        nacionalidad = COALESCE($8, nacionalidad),
-        domicilio_mexico = COALESCE($9, domicilio_mexico),
-        ocupacion = COALESCE($10, ocupacion),
-        actividad_economica = COALESCE($11, actividad_economica),
-        datos_completos = COALESCE($12, datos_completos),
-        estado = COALESCE($13, estado),
-        actualizado_en = now()
-      WHERE id = $1 ${empresaGuardSQL}
-      RETURNING id, empresa_id, nombre_entidad, tipo_cliente, nacionalidad, estado, creado_en, actualizado_en
-    `;
-
-    const values = [
-      ...paramsGuard,
-      body.cliente_id_externo ?? null,
-      body.nombre_entidad ?? null,
-      body.alias ?? null,
-      body.fecha_nacimiento_constitucion ?? null,
-      body.tipo_cliente ?? null,
-      body.nacionalidad ?? null,
-      body.domicilio_mexico ?? null,
-      body.ocupacion ?? null,
-      body.actividad_economica ?? null,
-      body.datos_completos ?? null,
-      body.estado ?? null
+    const params: any[] = [
+      nombre_entidad ?? null,
+      nacionalidad ?? null,
+      estado ?? null,
+      datos_completos ?? null,
+      id
     ];
 
-    const result = await pool.query(sql, values);
-    if (result.rowCount === 0) return res.status(404).json({ error: 'Cliente no encontrado' });
+    let query = `
+      UPDATE clientes
+      SET
+        nombre_entidad = COALESCE($1, nombre_entidad),
+        nacionalidad = COALESCE($2, nacionalidad),
+        estado = COALESCE($3, estado),
+        datos_completos = COALESCE($4, datos_completos),
+        actualizado_en = now()
+      WHERE id = $5
+    `;
+
+    if (user.rol === 'cliente') {
+      if (!user.empresa_id) return res.status(403).json({ error: 'Empresa no asociada al usuario' });
+      query += ` AND empresa_id = $6`;
+      params.push(user.empresa_id);
+    }
+
+    query += ` RETURNING id, empresa_id, nombre_entidad, tipo_cliente, nacionalidad, estado, creado_en, actualizado_en`;
+
+    const result = await pool.query(query, params);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Cliente no encontrado' });
 
     return res.json({ ok: true, cliente: result.rows[0] });
-  } catch (error: any) {
-    if (error?.code === '23505') {
-      return res.status(409).json({ error: 'Cliente duplicado para esa empresa (empresa_id + nombre_entidad)' });
+  } catch (e: any) {
+    if (e?.code === '23505') {
+      return res.status(409).json({
+        error: 'Cliente duplicado para esa empresa (empresa_id + nombre_entidad)'
+      });
     }
-    if (error?.code === '23514') {
-      return res.status(400).json({ error: `Datos inválidos (constraint): ${error?.constraint ?? 'CHECK'}` });
-    }
-    console.error('Error al actualizar cliente:', error);
-    return res.status(500).json({ error: 'Error al actualizar cliente' });
+    console.error('Error al editar cliente:', e);
+    return res.status(500).json({ error: 'Error al editar cliente' });
   }
-};
-
-router.put('/clientes/:id', authenticate, actualizarClienteHandler);
-router.put('/:id', authenticate, actualizarClienteHandler);
+});
 
 export default router;
