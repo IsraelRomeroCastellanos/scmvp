@@ -1,7 +1,7 @@
 // backend/src/routes/cliente.routes.ts
 import { Router, Request, Response } from 'express';
 import pool from '../db';
-import authenticate from '../middleware/auth.middleware';
+import { authenticate } from '../middleware/auth.middleware';
 
 const router = Router();
 
@@ -25,7 +25,6 @@ function isYYYYMMDD(raw: any): boolean {
 }
 
 function normalizePaisValue(x: any): string {
-  // FE manda "MEXICO,MX" / "CANADA,CA" etc.
   return String(x ?? '').trim();
 }
 
@@ -54,7 +53,6 @@ async function listClientesHandler(req: Request, res: Response) {
     `;
     const params: any[] = [];
 
-    // Si es rol cliente, filtra por su empresa
     if (user.rol === 'cliente') {
       if (!user.empresa_id) return res.status(403).json({ error: 'Empresa no asociada al usuario' });
       query += ` WHERE empresa_id = $1`;
@@ -127,7 +125,6 @@ async function createClienteHandler(req: Request, res: Response) {
       datos_completos
     } = req.body ?? {};
 
-    // empresa_id: si es rol cliente, forzamos su empresa
     let empresa_id: number | null = null;
     if (user.rol === 'cliente') {
       empresa_id = user.empresa_id ?? null;
@@ -146,18 +143,15 @@ async function createClienteHandler(req: Request, res: Response) {
     if (!nombre) fields.push('nombre_entidad');
     if (!nacionalidadNorm) fields.push('nacionalidad');
 
-    // contacto mínimo (aplica a todos)
     const contacto = datos_completos?.contacto ?? {};
     const pais = normalizePaisValue(contacto?.pais);
     const telefono = String(contacto?.telefono ?? '').trim();
     if (!pais) fields.push('datos_completos.contacto.pais');
     if (!telefono) fields.push('datos_completos.contacto.telefono');
 
-    // tipos permitidos (server-side)
     const allowedTipos = new Set(['persona_fisica', 'persona_moral', 'fideicomiso']);
     if (tipo && !allowedTipos.has(tipo)) fields.push('tipo_cliente(inválido)');
 
-    // Validaciones mínimas por tipo (iteración 1)
     if (tipo === 'fideicomiso') {
       const fid = datos_completos?.fideicomiso ?? {};
       const rep = datos_completos?.representante ?? {};
@@ -166,7 +160,6 @@ async function createClienteHandler(req: Request, res: Response) {
       const denominacion = String(fid?.denominacion_fiduciario ?? '').trim();
       const rfcFiduciario = String(fid?.rfc_fiduciario ?? '').trim();
 
-      // Representante: aceptamos nombre_completo o nombres/apellidos
       const repNombreCompleto = String(rep?.nombre_completo ?? '').trim();
       const repNombres = String(rep?.nombres ?? '').trim();
       const repApellidoP = String(rep?.apellido_paterno ?? '').trim();
@@ -179,17 +172,15 @@ async function createClienteHandler(req: Request, res: Response) {
       if (!denominacion) fields.push('datos_completos.fideicomiso.denominacion_fiduciario');
       if (!rfcFiduciario) fields.push('datos_completos.fideicomiso.rfc_fiduciario');
 
-      const tieneNombre =
-        !!repNombreCompleto || (!!repNombres && !!repApellidoP); // mínimo: nombres + apellido paterno
+      const tieneNombre = !!repNombreCompleto || (!!repNombres && !!repApellidoP);
       if (!tieneNombre) fields.push('datos_completos.representante.nombre');
       if (!repFechaNac || !isYYYYMMDD(repFechaNac)) fields.push('datos_completos.representante.fecha_nacimiento(YYYYMMDD)');
       if (!repRfc) fields.push('datos_completos.representante.rfc');
       if (!repCurp) fields.push('datos_completos.representante.curp');
 
-      // Si vienen nombres separados pero no nombre_completo, lo armamos para consistencia
       if (!repNombreCompleto && tieneNombre) {
         const nombreArmado = [repNombres, repApellidoP, repApellidoM].filter(Boolean).join(' ').trim();
-        datos_completos.representante = {
+        (datos_completos as any).representante = {
           ...rep,
           nombre_completo: nombreArmado
         };
@@ -235,7 +226,6 @@ async function createClienteHandler(req: Request, res: Response) {
     const result = await pool.query(insertQuery, insertParams);
     return res.status(201).json({ ok: true, cliente: result.rows[0] });
   } catch (e: any) {
-    // unique(empresa_id, nombre_entidad) => 23505
     if (e?.code === '23505') {
       return res.status(409).json({
         error: 'Cliente duplicado para esa empresa (empresa_id + nombre_entidad)'
