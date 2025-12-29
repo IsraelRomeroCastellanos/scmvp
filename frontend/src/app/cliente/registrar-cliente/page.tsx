@@ -35,78 +35,142 @@ function isYYYYMMDD(raw: string) {
 function SearchSelect({
   label,
   value,
-  onChange,
   items,
+  onChange,
   placeholder,
   required,
-  modoBusqueda,
-  onToggleModoBusqueda
+  hint
 }: {
   label: string;
   value: CatalogItem | null;
-  onChange: (v: CatalogItem | null) => void;
   items: CatalogItem[];
+  onChange: (item: CatalogItem | null) => void;
   placeholder?: string;
   required?: boolean;
-  modoBusqueda: boolean;
-  onToggleModoBusqueda: (v: boolean) => void;
+  hint?: string;
 }) {
+  const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
+  const wrapRef = useMemo(() => ({ current: null as HTMLDivElement | null }), []);
+  const inputRef = useMemo(() => ({ current: null as HTMLInputElement | null }), []);
+
+  const normalize = (s: string) =>
+    (s ?? '')
+      .toString()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
 
   const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return items;
-    return items.filter((x) => {
-      const a = `${x.clave} ${x.descripcion}`.toLowerCase();
-      return a.includes(s);
+    const nq = normalize(q);
+    if (!nq) return items;
+    return items.filter((it) => {
+      const a = normalize(it.descripcion ?? '');
+      const b = normalize(it.clave ?? '');
+      return a.includes(nq) || b.includes(nq);
     });
-  }, [q, items]);
+  }, [items, q]);
+
+  // Cierra al hacer click fuera
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      const el = wrapRef.current;
+      if (!el) return;
+      if (!el.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [wrapRef]);
+
+  const display = (it: CatalogItem) => {
+    // Si quieres ver clave también, descomenta la línea 2 y comenta la 1:
+    return `${it.descripcion}`;
+    // return `${it.descripcion} (${it.clave})`;
+  };
 
   return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between gap-3">
-        <label className="block text-sm font-medium">
-          {label} {required ? '*' : ''}
+    <div className="space-y-1" ref={(n) => (wrapRef.current = n)}>
+      <div className="flex items-center justify-between gap-2">
+        <label className="text-sm font-medium">
+          {label} {required ? <span className="text-red-600">*</span> : null}
         </label>
-
-        <label className="flex items-center gap-2 text-xs opacity-80 select-none">
-          <input
-            type="checkbox"
-            checked={modoBusqueda}
-            onChange={(e) => onToggleModoBusqueda(e.target.checked)}
-          />
-          activar búsqueda
-        </label>
+        {hint ? <span className="text-xs text-gray-500">{hint}</span> : null}
       </div>
 
-      {modoBusqueda ? (
+      <div className="relative">
         <input
-          className="w-full rounded border p-2"
-          placeholder="Escribe para buscar..."
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-      ) : null}
+          ref={(n) => (inputRef.current = n)}
+          className="w-full rounded border px-3 py-2 text-sm"
+          placeholder={placeholder ?? 'Buscar...'}
+          value={open ? q : value?.descripcion ?? ''}
+          onFocus={() => {
+            setOpen(true);
+            // Al abrir, permite buscar “en el mismo campo”
+            setQ(value?.descripcion ?? '');
+            // Selecciona texto para escribir encima (opcional)
+            setTimeout(() => inputRef.current?.select(), 0);
+          }}
+          onChange={(e) => {
+            setOpen(true);
+            setQ(e.target.value);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              setOpen(false);
+              return;
+            }
+            if (e.key === 'Enter') {
+              // Si hay 1 match exacto por clave o descripción, lo selecciona
+              const nq = normalize(q);
+              const exact =
+                filtered.find((it) => normalize(it.descripcion) === nq) ??
+                filtered.find((it) => normalize(it.clave) === nq) ??
+                null;
 
-      <select
-        className="w-full rounded border p-2"
-        value={value?.clave ?? ''}
-        onChange={(e) => {
-          const v = e.target.value;
-          const it = items.find((x) => x.clave === v) ?? null;
-          onChange(it);
-        }}
-      >
-        <option value="">{placeholder ?? 'Selecciona...'}</option>
-        {(modoBusqueda ? filtered : items).map((it) => (
-          <option key={it.clave} value={it.clave}>
-            {it.descripcion} ({it.clave})
-          </option>
-        ))}
-      </select>
+              if (exact) {
+                onChange(exact);
+                setOpen(false);
+              }
+            }
+          }}
+        />
+
+        {open && (
+          <div className="absolute z-10 mt-1 w-full rounded border bg-white shadow max-h-64 overflow-auto">
+            {filtered.length === 0 ? (
+              <div className="p-3 text-sm text-gray-500">Sin resultados</div>
+            ) : (
+              filtered.slice(0, 300).map((it) => {
+                const selected = value?.clave === it.clave;
+                return (
+                  <button
+                    key={it.clave}
+                    type="button"
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 ${
+                      selected ? 'bg-gray-50 font-medium' : ''
+                    }`}
+                    onMouseDown={(ev) => {
+                      // evita blur antes del click
+                      ev.preventDefault();
+                    }}
+                    onClick={() => {
+                      onChange(it);
+                      setOpen(false);
+                    }}
+                  >
+                    {display(it)}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
+
 
 export default function RegistrarClientePage() {
   const router = useRouter();
