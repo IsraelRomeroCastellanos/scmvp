@@ -1,0 +1,14 @@
+SCMVP Mission Check — 2025-12-21 13:16:15
+BASE: https://scmvp.onrender.com
+EMAIL: admin@cumplimiento.com
+
+Auth/Login: OK (token length 225)
+
+-- Checks --
+Cliente mis-clientes (Bearer): OK (HTTP:200) — {"clientes":[{"id":44,"nombre_entidad":"Servicios Financieros de Occidente","tipo_cliente":"persona_moral","nacionalidad":"Mexicana","estado":"activo","creado_en":"2025-12-20T10:32:22.828Z"},{"id":43,"nombre_entidad":"Cliente PF Curl 2","tipo_cliente":"persona_fisica","nacionalidad":null,"estado":"a
+Admin empresas: OK (HTTP:200) — {"empresas":[{"id":38,"nombre_legal":"Angelica Ramírez López","rfc":"ARL851203","tipo_entidad":"persona_fisica","estado":"activo","entidad":null,"municipio":null,"codigo_postal":null},{"id":45,"nombre_legal":"Casa Grande","rfc":"CG12","tipo_entidad":"persona_moral","estado":"activo","entidad":"Nay
+Cliente mis-clientes (Raw): FAIL (HTTP:401) — {"error":"Token no proporcionado"}
+Admin __debug: OK (HTTP:200) — {"ok":true,"router":"admin"}
+Cliente __debug: OK (HTTP:200) — {"ok":true,"router":"cliente"}
+
+Overall: FAIL

@@ -9,3 +9,6 @@ backend/node_modules/
 
 # SAT local bins
 docs/sat/*.xls
+
+# Local secrets
+scripts/.env.local
