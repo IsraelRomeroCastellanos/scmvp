@@ -12,34 +12,21 @@ router.get('/__debug', (_req, res) => {
 type AuthUser = {
   id: number;
   email: string;
-  rol: string;
+  rol: 'admin' | 'consultor' | 'cliente';
   empresa_id: number | null;
 };
 
 function getUser(req: Request): AuthUser | null {
-  return (req as any).user ?? null;
+  return ((req as any).user ?? null) as AuthUser | null;
 }
 
-function isValidRFC(raw: string): boolean {
-  const v = String(raw ?? '').trim().toUpperCase();
-  // RFC genérico + RFC real (12/13)
-  return /^[A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3}$/.test(v);
-}
-
-function isValidCURP(raw: string): boolean {
-  const v = String(raw ?? '').trim().toUpperCase();
-  // Validación razonable (18 chars). No es 100% “oficial”, pero evita basura.
-  return /^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]{2}$/.test(v);
-}
-
-function isYYYYMMDD(raw: string): boolean {
+function isYYYYMMDD(raw: any): boolean {
   return /^\d{8}$/.test(String(raw ?? '').trim());
 }
 
 function normalizePaisValue(x: any): string {
-  // En FE mandas "MEXICO,MX" / "CANADA,CA" etc.
-  const v = String(x ?? '').trim();
-  return v;
+  // FE manda "MEXICO,MX" / "CANADA,CA" etc.
+  return String(x ?? '').trim();
 }
 
 /**
@@ -67,10 +54,9 @@ async function listClientesHandler(req: Request, res: Response) {
     `;
     const params: any[] = [];
 
+    // Si es rol cliente, filtra por su empresa
     if (user.rol === 'cliente') {
-      if (!user.empresa_id) {
-        return res.status(403).json({ error: 'Empresa no asociada al usuario' });
-      }
+      if (!user.empresa_id) return res.status(403).json({ error: 'Empresa no asociada al usuario' });
       query += ` WHERE empresa_id = $1`;
       params.push(user.empresa_id);
     }
@@ -116,18 +102,19 @@ router.get('/clientes/:id', authenticate, async (req: Request, res: Response) =>
 
     return res.json({ cliente: result.rows[0] });
   } catch (e) {
-    console.error('Error al obtener cliente:', e);
-    return res.status(500).json({ error: 'Error al obtener cliente' });
+    console.error('Error al obtener detalle cliente:', e);
+    return res.status(500).json({ error: 'Error al obtener detalle cliente' });
   }
 });
 
 /**
  * ===============================
- * REGISTRAR CLIENTE
- * POST /api/cliente/registrar-cliente
+ * REGISTRAR / CREAR CLIENTE (compat)
+ * POST /api/cliente/registrar-cliente (legacy FE)
+ * POST /api/cliente/clientes (alias estable)
  * ===============================
  */
-router.post('/registrar-cliente', authenticate, async (req: Request, res: Response) => {
+async function createClienteHandler(req: Request, res: Response) {
   try {
     const user = getUser(req);
     if (!user) return res.status(401).json({ error: 'Usuario no autenticado' });
@@ -150,22 +137,28 @@ router.post('/registrar-cliente', authenticate, async (req: Request, res: Respon
 
     const fields: string[] = [];
 
-    if (!empresa_id || !Number.isInteger(empresa_id) || empresa_id <= 0) fields.push('empresa_id');
-    if (!String(tipo_cliente ?? '').trim()) fields.push('tipo_cliente');
-    if (!String(nombre_entidad ?? '').trim()) fields.push('nombre_entidad');
-
+    const tipo = String(tipo_cliente ?? '').trim();
+    const nombre = String(nombre_entidad ?? '').trim();
     const nacionalidadNorm = normalizePaisValue(nacionalidad);
+
+    if (!empresa_id || !Number.isInteger(empresa_id) || empresa_id <= 0) fields.push('empresa_id');
+    if (!tipo) fields.push('tipo_cliente');
+    if (!nombre) fields.push('nombre_entidad');
     if (!nacionalidadNorm) fields.push('nacionalidad');
 
-    // contacto mínimo (para todos)
+    // contacto mínimo (aplica a todos)
     const contacto = datos_completos?.contacto ?? {};
-    const paisContacto = normalizePaisValue(contacto?.pais);
+    const pais = normalizePaisValue(contacto?.pais);
     const telefono = String(contacto?.telefono ?? '').trim();
-    if (!paisContacto) fields.push('datos_completos.contacto.pais');
+    if (!pais) fields.push('datos_completos.contacto.pais');
     if (!telefono) fields.push('datos_completos.contacto.telefono');
 
-    // Validaciones mínimas por tipo
-    if (tipo_cliente === 'fideicomiso') {
+    // tipos permitidos (server-side)
+    const allowedTipos = new Set(['persona_fisica', 'persona_moral', 'fideicomiso']);
+    if (tipo && !allowedTipos.has(tipo)) fields.push('tipo_cliente(inválido)');
+
+    // Validaciones mínimas por tipo (iteración 1)
+    if (tipo === 'fideicomiso') {
       const fid = datos_completos?.fideicomiso ?? {};
       const rep = datos_completos?.representante ?? {};
 
@@ -173,25 +166,34 @@ router.post('/registrar-cliente', authenticate, async (req: Request, res: Respon
       const denominacion = String(fid?.denominacion_fiduciario ?? '').trim();
       const rfcFiduciario = String(fid?.rfc_fiduciario ?? '').trim();
 
-      const repNombre = String(rep?.nombre_completo ?? '').trim();
+      // Representante: aceptamos nombre_completo o nombres/apellidos
+      const repNombreCompleto = String(rep?.nombre_completo ?? '').trim();
+      const repNombres = String(rep?.nombres ?? '').trim();
+      const repApellidoP = String(rep?.apellido_paterno ?? '').trim();
+      const repApellidoM = String(rep?.apellido_materno ?? '').trim();
+      const repFechaNac = String(rep?.fecha_nacimiento ?? '').trim();
       const repRfc = String(rep?.rfc ?? '').trim();
       const repCurp = String(rep?.curp ?? '').trim();
-      const repFechaNac = String(rep?.fecha_nacimiento ?? '').trim();
 
       if (!identificador) fields.push('datos_completos.fideicomiso.identificador');
       if (!denominacion) fields.push('datos_completos.fideicomiso.denominacion_fiduciario');
       if (!rfcFiduciario) fields.push('datos_completos.fideicomiso.rfc_fiduciario');
 
-      if (!repNombre) fields.push('datos_completos.representante.nombre_completo');
+      const tieneNombre =
+        !!repNombreCompleto || (!!repNombres && !!repApellidoP); // mínimo: nombres + apellido paterno
+      if (!tieneNombre) fields.push('datos_completos.representante.nombre');
+      if (!repFechaNac || !isYYYYMMDD(repFechaNac)) fields.push('datos_completos.representante.fecha_nacimiento(YYYYMMDD)');
       if (!repRfc) fields.push('datos_completos.representante.rfc');
       if (!repCurp) fields.push('datos_completos.representante.curp');
-      if (!repFechaNac) fields.push('datos_completos.representante.fecha_nacimiento');
 
-      // formato básico
-      if (rfcFiduciario && !isValidRFC(rfcFiduciario)) fields.push('datos_completos.fideicomiso.rfc_fiduciario(formato)');
-      if (repRfc && !isValidRFC(repRfc)) fields.push('datos_completos.representante.rfc(formato)');
-      if (repCurp && !isValidCURP(repCurp)) fields.push('datos_completos.representante.curp(formato)');
-      if (repFechaNac && !isYYYYMMDD(repFechaNac)) fields.push('datos_completos.representante.fecha_nacimiento(AAAAMMDD)');
+      // Si vienen nombres separados pero no nombre_completo, lo armamos para consistencia
+      if (!repNombreCompleto && tieneNombre) {
+        const nombreArmado = [repNombres, repApellidoP, repApellidoM].filter(Boolean).join(' ').trim();
+        datos_completos.representante = {
+          ...rep,
+          nombre_completo: nombreArmado
+        };
+      }
     }
 
     if (fields.length > 0) {
@@ -224,14 +226,13 @@ router.post('/registrar-cliente', authenticate, async (req: Request, res: Respon
 
     const insertParams = [
       empresa_id,
-      String(nombre_entidad).trim(),
-      String(tipo_cliente).trim(),
+      nombre,
+      tipo,
       nacionalidadNorm,
       datos_completos ?? {}
     ];
 
     const result = await pool.query(insertQuery, insertParams);
-
     return res.status(201).json({ ok: true, cliente: result.rows[0] });
   } catch (e: any) {
     // unique(empresa_id, nombre_entidad) => 23505
@@ -244,7 +245,10 @@ router.post('/registrar-cliente', authenticate, async (req: Request, res: Respon
     console.error('Error al registrar cliente:', e);
     return res.status(500).json({ error: 'Error al registrar cliente' });
   }
-});
+}
+
+router.post('/registrar-cliente', authenticate, createClienteHandler);
+router.post('/clientes', authenticate, createClienteHandler);
 
 /**
  * ===============================
