@@ -12,3 +12,4 @@ docs/sat/*.xls
 
 # Local secrets
 scripts/.env.local
+node_modules/
