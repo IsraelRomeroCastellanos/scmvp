@@ -22,10 +22,12 @@ export async function loadCatalogo(path: string): Promise<CatalogItem[]> {
   }
 
   const data = await res.json().catch(() => null);
+
   if (!Array.isArray(data)) {
     throw new Error(`Catálogo inválido (se esperaba array): ${url}`);
   }
 
+  // Normaliza/filtra para evitar basura
   return data
     .map((x: any) => ({
       clave: String(x?.clave ?? '').trim(),
@@ -34,7 +36,7 @@ export async function loadCatalogo(path: string): Promise<CatalogItem[]> {
     .filter((x: CatalogItem) => x.clave && x.descripcion);
 }
 
-// Helpers opcionales (si los sigues usando en otras pantallas)
+// Helpers opcionales
 export function loadPaises() {
   return loadCatalogo('sat/c_pais');
 }
@@ -52,9 +54,6 @@ function normalizeCatalogUrl(path: string) {
     return path.endsWith('.json') ? path : `${path}.json`;
   }
 
-  const withPrefix = path.startsWith('catalogos/')
-    ? `/${path}`
-    : `/catalogos/${path}`;
-
+  const withPrefix = path.startsWith('catalogos/') ? `/${path}` : `/catalogos/${path}`;
   return withPrefix.endsWith('.json') ? withPrefix : `${withPrefix}.json`;
 }
