@@ -1,86 +1,132 @@
 // frontend/src/app/cliente/clientes/[id]/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 
-type Cliente = {
-  id: number;
-  empresa_id: number;
-  nombre_entidad: string;
-  tipo_cliente: 'persona_fisica' | 'persona_moral' | 'fideicomiso';
-  nacionalidad: string | null;
-  estado: string | null;
-  creado_en?: string;
-  actualizado_en?: string;
-  datos_completos?: any;
-};
-
-function formatDateIso(dt?: string) {
-  if (!dt) return '';
-  try {
-    const d = new Date(dt);
-    return d.toLocaleString();
-  } catch {
-    return dt;
-  }
+function getApiBase() {
+  return process.env.NEXT_PUBLIC_API_BASE_URL || '';
+}
+function getToken() {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('token');
 }
 
-export default function ClienteDetallePage({ params }: { params: { id: string } }) {
-  const router = useRouter();
-  const id = params.id;
+function fmtDateTime(v: any) {
+  if (!v) return '-';
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return String(v);
+  return d.toLocaleString('es-MX');
+}
 
-  const [cliente, setCliente] = useState<Cliente | null>(null);
+function safeStr(v: any) {
+  if (v === null || v === undefined) return '-';
+  const s = String(v).trim();
+  return s ? s : '-';
+}
+
+function formatPaisLike(v: any) {
+  // "MEXICO,MX" -> "MEXICO (MX)"
+  const s = safeStr(v);
+  if (s === '-') return s;
+  const parts = s.split(',').map((x) => x.trim()).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0]} (${parts[1]})`;
+  return s;
+}
+
+function formatCatalogLike(v: any) {
+  // {clave, descripcion} -> "descripcion (clave)"
+  if (!v) return '-';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'object') {
+    const clave = safeStr((v as any).clave);
+    const descripcion = safeStr((v as any).descripcion);
+    if (descripcion !== '-' && clave !== '-') return `${descripcion} (${clave})`;
+    if (descripcion !== '-') return descripcion;
+    if (clave !== '-') return clave;
+  }
+  return safeStr(v);
+}
+
+function Card({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded border p-4">
+      <h2 className="text-lg font-medium mb-3">{title}</h2>
+      {children}
+    </div>
+  );
+}
+
+function Row({ label, value, formatter }: { label: string; value: any; formatter?: (v: any) => string }) {
+  const v = formatter
+    ? formatter(value)
+    : value === null || value === undefined || value === ''
+      ? '-'
+      : typeof value === 'object'
+        ? JSON.stringify(value)
+        : String(value);
+
+  return (
+    <div className="text-sm">
+      <div className="text-xs opacity-70">{label}</div>
+      <div className="break-words">{v}</div>
+    </div>
+  );
+}
+
+export default function ClienteDetallePage() {
+  const apiBase = useMemo(() => getApiBase(), []);
+  const router = useRouter();
+  const params = useParams<{ id: string }>();
+
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [cliente, setCliente] = useState<any>(null);
+  const [showRaw, setShowRaw] = useState(false);
 
   useEffect(() => {
-    let mounted = true;
+    const token = getToken();
+    if (!token) {
+      router.replace('/login');
+      return;
+    }
 
-    async function run() {
-      setLoading(true);
-      setErr(null);
+    const id = params?.id;
+    if (!id) return;
 
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setErr('No hay token. Inicia sesión de nuevo.');
-        setLoading(false);
-        return;
-      }
-
+    (async () => {
       try {
-        const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
+        setLoading(true);
+
         const res = await fetch(`${apiBase}/api/cliente/clientes/${id}`, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store'
         });
 
         const data = await res.json().catch(() => ({}));
 
         if (!res.ok) {
           setErr(data?.error || `Error HTTP ${res.status}`);
+          setCliente(null);
           return;
         }
 
-        if (mounted) setCliente(data?.cliente ?? null);
+        setCliente(data?.cliente);
+        setErr(null);
       } catch (e: any) {
         setErr(e?.message || 'Error de red');
       } finally {
-        if (mounted) setLoading(false);
+        setLoading(false);
       }
-    }
+    })();
+  }, [apiBase, params, router]);
 
-    run();
-    return () => {
-      mounted = false;
-    };
-  }, [id]);
+  if (loading) return <div className="p-6 text-sm">Cargando cliente…</div>;
 
-  if (loading) return <div className="p-6 text-sm">Cargando cliente...</div>;
-
-  if (err || !cliente) {
+  if (err) {
     return (
       <div className="p-6 space-y-3">
-        <div className="rounded border p-3 text-sm">{err || 'No se pudo cargar el cliente.'}</div>
+        <div className="rounded border p-3 text-sm">{err}</div>
         <button className="rounded border px-4 py-2 text-sm" onClick={() => router.push('/cliente/clientes')}>
           Volver
         </button>
@@ -88,182 +134,159 @@ export default function ClienteDetallePage({ params }: { params: { id: string } 
     );
   }
 
-  const dc = cliente.datos_completos ?? {};
-  const contacto = dc.contacto ?? {};
+  const exp = cliente?.datos_completos ?? {};
+  const contacto = exp?.contacto ?? {};
 
-  const persona = dc.persona ?? {};
-  const empresa = dc.empresa ?? {};
-  const rep = dc.representante ?? {};
-  const fideicomiso = dc.fideicomiso ?? {};
+  const persona = exp?.persona ?? null; // PF
+  const empresa = exp?.empresa ?? null; // PM
+  const representante = exp?.representante ?? null; // PM/Fideicomiso
+  const fidei = exp?.fideicomiso ?? null; // Fideicomiso
+
+  // PF: actividad económica (obj catálogo o string)
+  const actObj = persona?.actividad_economica ?? null;
+  const actShow =
+    actObj
+      ? formatCatalogLike(actObj)
+      : cliente?.actividad_economica
+        ? safeStr(cliente?.actividad_economica)
+        : '-';
+
+  // PM: giro mercantil (obj catálogo o string) o empresa.giro
+  const giroObj = empresa?.giro_mercantil ?? null;
+  const giroShow =
+    giroObj
+      ? formatCatalogLike(giroObj)
+      : empresa?.giro
+        ? safeStr(empresa?.giro)
+        : (cliente as any)?.giro_mercantil
+          ? safeStr((cliente as any)?.giro_mercantil)
+          : '-';
+
+  // Representante: soporta nombre_completo o nombres/apellidos
+  const repNombreCompleto =
+    safeStr(representante?.nombre_completo) !== '-'
+      ? safeStr(representante?.nombre_completo)
+      : [representante?.nombres, representante?.apellido_paterno, representante?.apellido_materno]
+          .map((x: any) => (x ? String(x).trim() : ''))
+          .filter(Boolean)
+          .join(' ') || '-';
 
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">
-          Cliente #{cliente.id} — {cliente.nombre_entidad}
-        </h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold">Detalle de Cliente</h1>
+
         <div className="flex gap-2">
           <button className="rounded border px-4 py-2 text-sm" onClick={() => router.push('/cliente/clientes')}>
             Volver
           </button>
-          <button className="rounded border px-4 py-2 text-sm" onClick={() => router.push(`/cliente/editar-cliente/${cliente.id}`)}>
+
+          <button
+            className="rounded border px-4 py-2 text-sm"
+            onClick={() => router.push(`/cliente/editar-cliente/${cliente?.id}`)}
+          >
             Editar
           </button>
         </div>
       </div>
 
-      <div className="rounded border p-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-        <div>
-          <div className="font-medium">Tipo</div>
-          <div>{cliente.tipo_cliente}</div>
-        </div>
-        <div>
-          <div className="font-medium">Empresa ID</div>
-          <div>{cliente.empresa_id}</div>
-        </div>
-        <div>
-          <div className="font-medium">Nacionalidad</div>
-          <div>{cliente.nacionalidad ?? '-'}</div>
-        </div>
-        <div>
-          <div className="font-medium">Estado</div>
-          <div>{cliente.estado ?? '-'}</div>
-        </div>
-        <div>
-          <div className="font-medium">Creado</div>
-          <div>{formatDateIso(cliente.creado_en)}</div>
-        </div>
-        <div>
-          <div className="font-medium">Actualizado</div>
-          <div>{formatDateIso(cliente.actualizado_en)}</div>
-        </div>
-      </div>
+      <Card title="Información base">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <Row label="ID" value={cliente?.id} />
+          <Row label="Empresa ID" value={cliente?.empresa_id} />
+          <Row label="Estado" value={cliente?.estado} />
+          <Row label="Tipo" value={cliente?.tipo_cliente} />
 
-      <div className="rounded border p-4 space-y-2">
-        <div className="font-medium">Contacto</div>
-        <div className="text-sm grid grid-cols-1 md:grid-cols-2 gap-2">
-          <div>
-            <span className="font-medium">País:</span> {contacto?.pais ?? '-'}
+          <div className="md:col-span-2">
+            <Row label="Nombre / Entidad" value={cliente?.nombre_entidad} />
           </div>
-          <div>
-            <span className="font-medium">Teléfono:</span> {contacto?.telefono ?? '-'}
-          </div>
-          <div>
-            <span className="font-medium">Email:</span> {contacto?.email ?? '-'}
-          </div>
-          <div>
-            <span className="font-medium">Domicilio:</span> {contacto?.domicilio ?? '-'}
-          </div>
-        </div>
-      </div>
 
-      {cliente.tipo_cliente === 'persona_fisica' && (
-        <div className="rounded border p-4 space-y-2">
-          <div className="font-medium">Persona Física</div>
-          <div className="text-sm grid grid-cols-1 md:grid-cols-2 gap-2">
-            <div>
-              <span className="font-medium">Nombres:</span> {persona?.nombres ?? '-'}
-            </div>
-            <div>
-              <span className="font-medium">Apellido paterno:</span> {persona?.apellido_paterno ?? '-'}
-            </div>
-            <div>
-              <span className="font-medium">Apellido materno:</span> {persona?.apellido_materno ?? '-'}
-            </div>
-            <div>
-              <span className="font-medium">Actividad económica:</span>{' '}
-              {persona?.actividad_economica?.descripcion
-                ? `${persona.actividad_economica.descripcion} (${persona.actividad_economica.clave})`
-                : '-'}
-            </div>
-          </div>
+          <Row label="Alias" value={cliente?.alias} />
+          <Row label="Nacionalidad" value={cliente?.nacionalidad} formatter={formatPaisLike} />
+
+          <Row label="Cliente ID Externo" value={cliente?.cliente_id_externo} />
+          <Row label="Fecha nac/constitución (columna)" value={cliente?.fecha_nacimiento_constitucion} />
+          <Row label="Creado" value={cliente?.creado_en} formatter={fmtDateTime} />
+          <Row label="Actualizado" value={cliente?.actualizado_en} formatter={fmtDateTime} />
         </div>
+      </Card>
+
+      <Card title="Contacto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <Row label="País" value={contacto?.pais} formatter={formatPaisLike} />
+          <Row label="Teléfono" value={contacto?.telefono} />
+        </div>
+      </Card>
+
+      {cliente?.tipo_cliente === 'persona_fisica' && (
+        <Card title="Persona Física">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <Row label="Nombres" value={persona?.nombres} />
+            <Row label="Apellido paterno" value={persona?.apellido_paterno} />
+            <Row label="Apellido materno" value={persona?.apellido_materno} />
+
+            <Row label="RFC" value={persona?.rfc} />
+            <Row label="CURP" value={persona?.curp} />
+            <Row label="Fecha nacimiento" value={persona?.fecha_nacimiento} />
+
+            <Row label="Ocupación" value={persona?.ocupacion ?? cliente?.ocupacion} />
+            <Row label="Actividad económica" value={actShow} />
+          </div>
+        </Card>
       )}
 
-      {cliente.tipo_cliente === 'persona_moral' && (
-        <div className="rounded border p-4 space-y-4">
-          <div>
-            <div className="font-medium">Persona Moral</div>
-            <div className="text-sm grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
-              <div>
-                <span className="font-medium">RFC:</span> {empresa?.rfc ?? '-'}
-              </div>
-              <div>
-                <span className="font-medium">Fecha constitución:</span> {empresa?.fecha_constitucion ?? '-'}
-              </div>
-              <div className="md:col-span-2">
-                <span className="font-medium">Giro mercantil:</span> {empresa?.giro ?? '-'}
-              </div>
-            </div>
+      {cliente?.tipo_cliente === 'persona_moral' && (
+        <Card title="Persona Moral">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <Row label="RFC (empresa)" value={empresa?.rfc} />
+            <Row label="Fecha constitución" value={empresa?.fecha_constitucion} />
+            <Row label="Giro mercantil" value={giroShow} />
           </div>
 
-          <div className="rounded border p-3 space-y-2">
-            <div className="font-medium">Representante</div>
-            <div className="text-sm grid grid-cols-1 md:grid-cols-2 gap-2">
-              <div>
-                <span className="font-medium">Nombres:</span> {rep?.nombres ?? '-'}
-              </div>
-              <div>
-                <span className="font-medium">Apellido paterno:</span> {rep?.apellido_paterno ?? '-'}
-              </div>
-              <div>
-                <span className="font-medium">Apellido materno:</span> {rep?.apellido_materno ?? '-'}
-              </div>
-              <div>
-                <span className="font-medium">RFC:</span> {rep?.rfc ?? '-'}
-              </div>
-              <div>
-                <span className="font-medium">CURP:</span> {rep?.curp ?? '-'}
-              </div>
+          <div className="mt-4 rounded border p-3">
+            <h3 className="font-medium mb-3">Representante</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Row label="Nombre completo" value={repNombreCompleto} />
+              <Row label="RFC" value={representante?.rfc} />
+              <Row label="CURP" value={representante?.curp} />
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
-      {cliente.tipo_cliente === 'fideicomiso' && (
-        <div className="rounded border p-4 space-y-4">
-          <div>
-            <div className="font-medium">Fideicomiso</div>
-            <div className="text-sm grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
-              <div className="md:col-span-2">
-                <span className="font-medium">Denominación fiduciario:</span> {fideicomiso?.denominacion_fiduciario ?? '-'}
-              </div>
-              <div>
-                <span className="font-medium">RFC fiduciario:</span> {fideicomiso?.rfc_fiduciario ?? '-'}
-              </div>
-              <div>
-                <span className="font-medium">Identificador:</span> {fideicomiso?.identificador ?? '-'}
-              </div>
-            </div>
+      {cliente?.tipo_cliente === 'fideicomiso' && (
+        <Card title="Fideicomiso">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <Row label="Denominación / Razón social del fiduciario" value={fidei?.denominacion_fiduciario} />
+            <Row label="RFC del fiduciario" value={fidei?.rfc_fiduciario} />
+            <Row label="Identificador del fideicomiso" value={fidei?.identificador} />
           </div>
 
-          <div className="rounded border p-3 space-y-2">
-            <div className="font-medium">Representante / Apoderado</div>
-            <div className="text-sm grid grid-cols-1 md:grid-cols-2 gap-2">
-              <div className="md:col-span-2">
-                <span className="font-medium">Nombre completo:</span> {rep?.nombre_completo ?? '-'}
-              </div>
-              <div>
-                <span className="font-medium">RFC:</span> {rep?.rfc ?? '-'}
-              </div>
-              <div>
-                <span className="font-medium">CURP:</span> {rep?.curp ?? '-'}
-              </div>
-              <div>
-                <span className="font-medium">Fecha nacimiento:</span> {rep?.fecha_nacimiento ?? '-'}
-              </div>
+          <div className="mt-4 rounded border p-3">
+            <h3 className="font-medium mb-3">Representante / Apoderado</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Row label="Nombre completo" value={repNombreCompleto} />
+              <Row label="Fecha de nacimiento (AAAAMMDD)" value={representante?.fecha_nacimiento} />
+              <Row label="RFC" value={representante?.rfc} />
+              <Row label="CURP" value={representante?.curp} />
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       <div className="rounded border p-4">
-        <details>
-          <summary className="cursor-pointer select-none font-medium">Debug: datos_completos</summary>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-medium">Expediente (datos_completos)</h2>
+          <button className="rounded border px-3 py-1 text-sm" onClick={() => setShowRaw((v) => !v)}>
+            {showRaw ? 'Ocultar JSON' : 'Ver JSON'}
+          </button>
+        </div>
+
+        {showRaw && (
           <pre className="mt-3 text-xs overflow-auto whitespace-pre-wrap">
-            {JSON.stringify(dc, null, 2)}
+            {JSON.stringify(cliente?.datos_completos ?? {}, null, 2)}
           </pre>
-        </details>
+        )}
       </div>
     </div>
   );
