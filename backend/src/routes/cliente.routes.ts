@@ -1,9 +1,13 @@
 // backend/src/routes/cliente.routes.ts
-import { Router } from 'express';
-import type { Request, Response } from 'express';
+import { Router, Request, Response } from 'express';
 import pool from '../db';
-import authenticate from '../middleware/auth.middleware';
+import { authenticate } from '../middleware/auth.middleware';
 
+const router = Router();
+
+/**
+ * Helpers
+ */
 type AuthUser = {
   id: number;
   email: string;
@@ -12,31 +16,68 @@ type AuthUser = {
 };
 
 function getUser(req: Request): AuthUser | null {
-  return ((req as any).user as AuthUser) ?? null;
+  return (req as any).user ?? null;
 }
 
-const router = Router();
+function parseIdParam(req: Request, res: Response): number | null {
+  const raw = String(req.params.id ?? '').trim();
+  const id = Number(raw);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: 'id inválido' });
+    return null;
+  }
+  return id;
+}
 
 /**
- * ===============================
- * DEBUG (rápido para validar router mount)
+ * =========================================
+ * DEBUG
  * GET /api/cliente/__debug
- * ===============================
+ * =========================================
  */
-router.get('/__debug', (_req: Request, res: Response) => {
-  res.json({ ok: true, router: 'cliente' });
+router.get('/__debug', authenticate, (req, res) => {
+  return res.json({ ok: true, router: 'cliente' });
 });
 
 /**
- * ===============================
+ * =========================================
  * LISTAR CLIENTES
  * GET /api/cliente/clientes
- * ===============================
+ * GET /api/cliente/mis-clientes  (alias)
+ *
+ * - rol "cliente": filtra por empresa_id del token (obligatorio)
+ * - rol "admin"/"consultor": puede filtrar opcionalmente con ?empresa_id=NNN
+ * =========================================
  */
-router.get('/clientes', authenticate, async (req: Request, res: Response) => {
+async function listClientesHandler(req: Request, res: Response) {
   try {
     const user = getUser(req);
-    if (!user) return res.status(401).json({ error: 'Usuario no autenticado' });
+
+    if (!user) {
+      return res.status(401).json({ error: 'Usuario no autenticado' });
+    }
+
+    let empresaIdFilter: number | null = null;
+
+    if (user.rol === 'cliente') {
+      if (!user.empresa_id) {
+        return res
+          .status(403)
+          .json({ error: 'Usuario cliente sin empresa_id (no puede listar clientes)' });
+      }
+      empresaIdFilter = Number(user.empresa_id);
+    } else if (user.rol === 'admin' || user.rol === 'consultor') {
+      const raw = (req.query.empresa_id as string | undefined) ?? '';
+      const trimmed = String(raw).trim();
+
+      if (trimmed) {
+        const n = Number(trimmed);
+        if (!Number.isInteger(n) || n <= 0) {
+          return res.status(400).json({ error: 'empresa_id inválido' });
+        }
+        empresaIdFilter = n;
+      }
+    }
 
     let query = `
       SELECT
@@ -48,106 +89,82 @@ router.get('/clientes', authenticate, async (req: Request, res: Response) => {
         creado_en
       FROM clientes
     `;
-    const params: any[] = [];
 
-    // Si es rol cliente, filtra por empresa_id
-    if (user.rol === 'cliente') {
-      if (!user.empresa_id) return res.status(403).json({ error: 'Empresa no asociada al usuario' });
+    const params: any[] = [];
+    if (empresaIdFilter !== null) {
       query += ` WHERE empresa_id = $1`;
-      params.push(user.empresa_id);
+      params.push(empresaIdFilter);
     }
 
     query += ` ORDER BY creado_en DESC`;
 
     const result = await pool.query(query, params);
     return res.json({ clientes: result.rows });
-  } catch (e) {
-    console.error('Error al listar clientes:', e);
+  } catch (error) {
+    console.error('Error al listar clientes:', error);
     return res.status(500).json({ error: 'Error al listar clientes' });
   }
-});
+}
+
+router.get('/clientes', authenticate, listClientesHandler);
+router.get('/mis-clientes', authenticate, listClientesHandler);
 
 /**
- * Alias FE legacy:
- * GET /api/cliente/mis-clientes  -> igual que /clientes
- */
-router.get('/mis-clientes', authenticate, async (req: Request, res: Response) => {
-  try {
-    const user = getUser(req);
-    if (!user) return res.status(401).json({ error: 'Usuario no autenticado' });
-
-    let query = `
-      SELECT
-        id,
-        nombre_entidad,
-        tipo_cliente,
-        nacionalidad,
-        estado,
-        creado_en
-      FROM clientes
-    `;
-    const params: any[] = [];
-
-    if (user.rol === 'cliente') {
-      if (!user.empresa_id) return res.status(403).json({ error: 'Empresa no asociada al usuario' });
-      query += ` WHERE empresa_id = $1`;
-      params.push(user.empresa_id);
-    }
-
-    query += ` ORDER BY creado_en DESC`;
-
-    const result = await pool.query(query, params);
-    return res.json({ clientes: result.rows });
-  } catch (e) {
-    console.error('Error al listar mis-clientes:', e);
-    return res.status(500).json({ error: 'Error al listar clientes' });
-  }
-});
-
-/**
- * ===============================
+ * =========================================
  * DETALLE CLIENTE
  * GET /api/cliente/clientes/:id
- * ===============================
+ * =========================================
  */
 router.get('/clientes/:id', authenticate, async (req: Request, res: Response) => {
+  const id = parseIdParam(req, res);
+  if (!id) return;
+
   try {
-    const user = getUser(req);
-    if (!user) return res.status(401).json({ error: 'Usuario no autenticado' });
+    const result = await pool.query(
+      `
+      SELECT
+        id,
+        empresa_id,
+        cliente_id_externo,
+        nombre_entidad,
+        alias,
+        fecha_nacimiento_constitucion,
+        tipo_cliente,
+        nacionalidad,
+        domicilio_mexico,
+        ocupacion,
+        actividad_economica,
+        datos_completos,
+        porcentaje_cumplimiento,
+        creado_en,
+        actualizado_en,
+        estado
+      FROM clientes
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [id]
+    );
 
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'id inválido' });
-
-    let query = `SELECT * FROM clientes WHERE id = $1`;
-    const params: any[] = [id];
-
-    if (user.rol === 'cliente') {
-      if (!user.empresa_id) return res.status(403).json({ error: 'Empresa no asociada al usuario' });
-      query += ` AND empresa_id = $2`;
-      params.push(user.empresa_id);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Cliente no encontrado' });
     }
 
-    const result = await pool.query(query, params);
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Cliente no encontrado' });
-
     return res.json({ cliente: result.rows[0] });
-  } catch (e) {
-    console.error('Error al obtener cliente:', e);
+  } catch (error) {
+    console.error('Error al obtener cliente:', error);
     return res.status(500).json({ error: 'Error al obtener cliente' });
   }
 });
 
 /**
- * ===============================
+ * =========================================
  * REGISTRAR CLIENTE
  * POST /api/cliente/registrar-cliente
- * ===============================
+ * =========================================
  */
 router.post('/registrar-cliente', authenticate, async (req: Request, res: Response) => {
   try {
-    const user = getUser(req);
-    if (!user) return res.status(401).json({ error: 'Usuario no autenticado' });
-
     const {
       empresa_id,
       tipo_cliente,
@@ -156,62 +173,43 @@ router.post('/registrar-cliente', authenticate, async (req: Request, res: Respon
       datos_completos
     } = req.body ?? {};
 
-    if (!empresa_id || !Number.isInteger(Number(empresa_id))) {
+    if (!empresa_id || !Number.isInteger(Number(empresa_id)) || Number(empresa_id) <= 0) {
       return res.status(400).json({ error: 'empresa_id inválido' });
     }
-
-    if (!tipo_cliente || typeof tipo_cliente !== 'string') {
+    if (!tipo_cliente) {
       return res.status(400).json({ error: 'tipo_cliente es obligatorio' });
     }
-
-    if (!nombre_entidad || typeof nombre_entidad !== 'string' || !nombre_entidad.trim()) {
+    if (!nombre_entidad || String(nombre_entidad).trim().length < 2) {
       return res.status(400).json({ error: 'nombre_entidad es obligatorio' });
     }
 
-    if (!nacionalidad || typeof nacionalidad !== 'string' || !nacionalidad.trim()) {
-      return res.status(400).json({ error: 'nacionalidad es obligatoria' });
-    }
-
-    // Validaciones mínimas por tipo (manténlo simple)
-    if (tipo_cliente === 'persona_fisica') {
-      const persona = datos_completos?.persona;
-      if (!persona?.nombres || !persona?.apellido_paterno) {
-        return res.status(400).json({
-          error: 'persona_fisica requiere persona.nombres y persona.apellido_paterno'
-        });
-      }
-    }
-
-    if (tipo_cliente === 'persona_moral') {
-      const empresa = datos_completos?.empresa;
-      if (!empresa?.rfc) {
-        return res.status(400).json({
-          error: 'persona_moral requiere empresa.rfc'
-        });
-      }
-    }
-
+    // Validaciones mínimas por tipo (iteración 1)
     if (tipo_cliente === 'fideicomiso') {
-      const f = datos_completos?.fideicomiso;
-      const r = datos_completos?.representante;
+      const f = datos_completos?.fideicomiso ?? {};
+      const r = datos_completos?.representante ?? {};
 
-      if (!f?.denominacion_fiduciario || !f?.rfc_fiduciario) {
-        return res.status(400).json({
-          error: 'fideicomiso requiere fideicomiso.denominacion_fiduciario y fideicomiso.rfc_fiduciario'
-        });
+      if (!f?.identificador || String(f.identificador).trim().length < 2) {
+        return res.status(400).json({ error: 'fideicomiso.identificador es obligatorio' });
+      }
+      if (!f?.denominacion_fiduciario || String(f.denominacion_fiduciario).trim().length < 2) {
+        return res.status(400).json({ error: 'fideicomiso.denominacion_fiduciario es obligatorio' });
+      }
+      if (!f?.rfc_fiduciario || String(f.rfc_fiduciario).trim().length < 10) {
+        return res.status(400).json({ error: 'fideicomiso.rfc_fiduciario es obligatorio' });
       }
 
-      // Representante: obligatorio (según tu definición actual)
-      if (
-        !r?.nombre_completo ||
-        !r?.fecha_nacimiento ||
-        !r?.rfc ||
-        !r?.curp
-      ) {
-        return res.status(400).json({
-          error:
-            'fideicomiso requiere representante.nombre_completo, representante.fecha_nacimiento, representante.rfc y representante.curp'
-        });
+      // Representante (obligatorio) – tu decisión: lo marcaste como obligatorio
+      if (!r?.nombre_completo || String(r.nombre_completo).trim().length < 3) {
+        return res.status(400).json({ error: 'representante.nombre_completo es obligatorio' });
+      }
+      if (!r?.fecha_nacimiento || String(r.fecha_nacimiento).trim().length !== 8) {
+        return res.status(400).json({ error: 'representante.fecha_nacimiento debe ser AAAAMMDD' });
+      }
+      if (!r?.rfc || String(r.rfc).trim().length < 10) {
+        return res.status(400).json({ error: 'representante.rfc es obligatorio' });
+      }
+      if (!r?.curp || String(r.curp).trim().length < 10) {
+        return res.status(400).json({ error: 'representante.curp es obligatorio' });
       }
     }
 
@@ -219,36 +217,105 @@ router.post('/registrar-cliente', authenticate, async (req: Request, res: Respon
       `
       INSERT INTO clientes (
         empresa_id,
-        nombre_entidad,
         tipo_cliente,
+        nombre_entidad,
         nacionalidad,
         datos_completos,
         estado
-      ) VALUES ($1, $2, $3, $4, $5, 'activo')
-      RETURNING id, empresa_id, nombre_entidad, tipo_cliente, nacionalidad, estado, creado_en, actualizado_en
+      )
+      VALUES ($1, $2, $3, $4, $5, 'activo')
+      RETURNING
+        id,
+        empresa_id,
+        nombre_entidad,
+        tipo_cliente,
+        nacionalidad,
+        estado,
+        creado_en,
+        actualizado_en
       `,
       [
         Number(empresa_id),
-        nombre_entidad.trim(),
         tipo_cliente,
-        nacionalidad.trim(),
-        datos_completos ?? {}
+        String(nombre_entidad).trim(),
+        nacionalidad ?? null,
+        datos_completos ?? null
       ]
     );
 
     return res.status(201).json({ ok: true, cliente: insert.rows[0] });
-  } catch (e: any) {
-    const msg = String(e?.message ?? e ?? '');
-
-    // Unique (empresa_id, nombre_entidad)
-    if (msg.toLowerCase().includes('idx_clientes_empresa_nombre') || msg.toLowerCase().includes('duplicate')) {
+  } catch (error: any) {
+    // duplicado por unique(empresa_id, nombre_entidad)
+    const msg = String(error?.message ?? '');
+    if (msg.toLowerCase().includes('duplicate') || msg.toLowerCase().includes('unique')) {
       return res.status(409).json({
         error: 'Cliente duplicado para esa empresa (empresa_id + nombre_entidad)'
       });
     }
 
-    console.error('Error al registrar cliente:', e);
+    console.error('Error al registrar cliente:', error);
     return res.status(500).json({ error: 'Error al registrar cliente' });
+  }
+});
+
+/**
+ * =========================================
+ * ACTUALIZAR CLIENTE
+ * PUT /api/cliente/clientes/:id
+ * =========================================
+ */
+router.put('/clientes/:id', authenticate, async (req: Request, res: Response) => {
+  const id = parseIdParam(req, res);
+  if (!id) return;
+
+  try {
+    const {
+      nombre_entidad,
+      alias,
+      nacionalidad,
+      estado,
+      datos_completos
+    } = req.body ?? {};
+
+    const upd = await pool.query(
+      `
+      UPDATE clientes
+      SET
+        nombre_entidad = COALESCE($1, nombre_entidad),
+        alias = COALESCE($2, alias),
+        nacionalidad = COALESCE($3, nacionalidad),
+        estado = COALESCE($4, estado),
+        datos_completos = COALESCE($5, datos_completos),
+        actualizado_en = NOW()
+      WHERE id = $6
+      RETURNING
+        id,
+        empresa_id,
+        nombre_entidad,
+        tipo_cliente,
+        nacionalidad,
+        estado,
+        creado_en,
+        actualizado_en
+      `,
+      [
+        nombre_entidad ?? null,
+        alias ?? null,
+        nacionalidad ?? null,
+        estado ?? null,
+        datos_completos ?? null,
+        id
+      ]
+    );
+
+    if (upd.rows.length === 0) {
+      return res.status(404).json({ error: 'Cliente no encontrado' });
+    }
+
+    return res.json({ ok: true, cliente: upd.rows[0] });
+  } catch (error) {
+    console.error('Error al actualizar cliente:', error);
+    return res.status(500).json({ error: 'Error al actualizar cliente' });
   }
 });
 
