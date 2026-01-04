@@ -3,571 +3,572 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { loadCatalogo, type CatalogItem } from '@/lib/catalogos';
 
 type TipoCliente = 'persona_fisica' | 'persona_moral' | 'fideicomiso';
-type Cliente = any;
+type Errors = Record<string, string>;
 
-function labelTipo(tipo: TipoCliente) {
-  if (tipo === 'persona_fisica') return 'Persona Física';
-  if (tipo === 'persona_moral') return 'Persona Moral';
-  return 'Fideicomiso';
+function onlyDigits(s: string) {
+  return (s ?? '').replace(/\D+/g, '');
+}
+function normalizeUpper(s: string) {
+  return (s ?? '').trim().toUpperCase();
+}
+function isYYYYMMDD(s: string) {
+  return /^\d{8}$/.test(s ?? '');
+}
+function isRFC(s: string) {
+  const v = normalizeUpper(s);
+  return /^[A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3}$/.test(v);
+}
+function isCURP(s: string) {
+  const v = normalizeUpper(s);
+  return /^[A-Z][AEIOUX][A-Z]{2}\d{6}[HM][A-Z]{5}[A-Z0-9]\d$/.test(v);
 }
 
-function toYYYYMMDD(value: string) {
-  const v = (value ?? '').trim();
-  if (!v) return '';
-  if (/^\d{8}$/.test(v)) return v;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v.replaceAll('-', '');
-  return v;
+function req(errors: Errors, key: string, label: string, value: any) {
+  const v = typeof value === 'string' ? value.trim() : value;
+  if (!v) errors[key] = `${label} es obligatorio`;
+}
+function reqPhone(errors: Errors, key: string, label: string, value: string) {
+  const d = onlyDigits(value);
+  if (!d) return (errors[key] = `${label} es obligatorio`);
+  if (d.length < 8 || d.length > 15) errors[key] = `${label} inválido (8–15 dígitos)`;
+}
+function reqRFC(errors: Errors, key: string, label: string, value: string) {
+  if (!value?.trim()) return (errors[key] = `${label} es obligatorio`);
+  if (!isRFC(value)) errors[key] = `${label} inválido (formato RFC)`;
+}
+function reqCURP(errors: Errors, key: string, label: string, value: string) {
+  if (!value?.trim()) return (errors[key] = `${label} es obligatorio`);
+  if (!isCURP(value)) errors[key] = `${label} inválida (formato CURP)`;
+}
+function reqYYYYMMDD(errors: Errors, key: string, label: string, value: string) {
+  if (!value?.trim()) return (errors[key] = `${label} es obligatorio`);
+  if (!isYYYYMMDD(value)) errors[key] = `${label} inválida (AAAAMMDD)`;
+}
+
+function errText(msg?: string) {
+  if (!msg) return null;
+  return <p className="text-sm text-red-600 mt-1">{msg}</p>;
+}
+function classInput(hasErr: boolean) {
+  return `w-full rounded-md border px-3 py-2 text-sm outline-none ${
+    hasErr ? 'border-red-500' : 'border-gray-300'
+  }`;
 }
 
 export default function Page() {
   const router = useRouter();
-  const params = useParams();
-  const id = String((params as any)?.id ?? '');
+  const params = useParams<{ id: string }>();
+  const id = params?.id;
 
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://scmvp.onrender.com';
 
-  const [loading, setLoading] = useState(true);
+  const token = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    return localStorage.getItem('token') || '';
+  }, []);
+
+  const [fatal, setFatal] = useState('');
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Errors>({});
 
-  const [cliente, setCliente] = useState<Cliente | null>(null);
+  const [paises, setPaises] = useState<CatalogItem[]>([]);
+  const [actividades, setActividades] = useState<CatalogItem[]>([]);
+  const [giros, setGiros] = useState<CatalogItem[]>([]);
 
-  // generales
+  const [tipoCliente, setTipoCliente] = useState<TipoCliente>('persona_fisica');
+
   const [nombreEntidad, setNombreEntidad] = useState('');
   const [nacionalidad, setNacionalidad] = useState('');
-  const [estado, setEstado] = useState<'activo' | 'inactivo'>('activo');
-
-  // contacto
-  const [paisContacto, setPaisContacto] = useState('');
+  const [contactoPais, setContactoPais] = useState('');
   const [telefono, setTelefono] = useState('');
-  const [emailContacto, setEmailContacto] = useState('');
-  const [domicilioContacto, setDomicilioContacto] = useState('');
 
   // PF
-  const [pfNombres, setPfNombres] = useState('');
-  const [pfApPaterno, setPfApPaterno] = useState('');
-  const [pfApMaterno, setPfApMaterno] = useState('');
-  const [pfFechaNac, setPfFechaNac] = useState('');
-  const [pfRfc, setPfRfc] = useState('');
-  const [pfCurp, setPfCurp] = useState('');
-  const [pfOcupacion, setPfOcupacion] = useState('');
-
+  const [pfActividad, setPfActividad] = useState('');
   // PM
-  const [pmRfc, setPmRfc] = useState('');
-  const [pmFechaConst, setPmFechaConst] = useState('');
-
-  // Rep PM
-  const [repNombres, setRepNombres] = useState('');
-  const [repApPaterno, setRepApPaterno] = useState('');
-  const [repApMaterno, setRepApMaterno] = useState('');
-  const [repRfc, setRepRfc] = useState('');
-  const [repCurp, setRepCurp] = useState('');
-
-  // Fideicomiso
-  const [fidDenominacion, setFidDenominacion] = useState('');
-  const [fidRfcFiduciario, setFidRfcFiduciario] = useState('');
-  const [fidIdentificador, setFidIdentificador] = useState('');
-
-  const [fidRepNombres, setFidRepNombres] = useState('');
-  const [fidRepApPaterno, setFidRepApPaterno] = useState('');
-  const [fidRepApMaterno, setFidRepApMaterno] = useState('');
-  const [fidRepFechaNac, setFidRepFechaNac] = useState(''); // date input
-  const [fidRepRfc, setFidRepRfc] = useState('');
-  const [fidRepCurp, setFidRepCurp] = useState('');
+  const [pmGiro, setPmGiro] = useState('');
+  // Rep (PM/FID)
+  const [repNombre, setRepNombre] = useState('');
+  const [repAP, setRepAP] = useState('');
+  const [repAM, setRepAM] = useState('');
+  const [repFechaNac, setRepFechaNac] = useState('');
+  const [repRFC, setRepRFC] = useState('');
+  const [repCURP, setRepCURP] = useState('');
 
   useEffect(() => {
-    let mounted = true;
-
-    async function run() {
+    (async () => {
       try {
-        setLoading(true);
-        setErr(null);
+        const [p, a, g] = await Promise.all([
+          loadCatalogo('sat/c_pais'),
+          loadCatalogo('sat/c_actividad_economica'),
+          loadCatalogo('internos/giro_mercantil')
+        ]);
+        setPaises(p);
+        setActividades(a);
+        setGiros(g);
+      } catch (e: any) {
+        setFatal(e?.message || 'No se pudieron cargar catálogos');
+      }
+    })();
+  }, []);
 
-        const token = localStorage.getItem('token');
-        if (!token) {
-          router.replace('/login');
-          return;
-        }
+  useEffect(() => {
+    if (!id) return;
+    if (!token) return;
 
+    (async () => {
+      setLoading(true);
+      setFatal('');
+      try {
         const res = await fetch(`${apiBase}/api/cliente/clientes/${id}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          if (res.status === 401) {
-            router.replace('/login');
-            return;
-          }
-          throw new Error(data?.error || `Error HTTP ${res.status}`);
+          setFatal(data?.error || `Error al cargar (${res.status})`);
+          return;
         }
 
-        if (!mounted) return;
-
-        const c = data?.cliente ?? null;
-        setCliente(c);
-
-        setNombreEntidad(c?.nombre_entidad ?? '');
-        setNacionalidad(c?.nacionalidad ?? '');
-        setEstado((c?.estado ?? 'activo') as any);
-
-        const dc = c?.datos_completos ?? {};
-        const contacto = dc?.contacto ?? {};
-        setPaisContacto(contacto?.pais ?? '');
-        setTelefono(contacto?.telefono ?? '');
-        setEmailContacto(contacto?.email ?? '');
-        setDomicilioContacto(contacto?.domicilio ?? '');
-
-        if (c?.tipo_cliente === 'persona_fisica') {
-          const pf = dc?.persona ?? {};
-          setPfNombres(pf?.nombres ?? '');
-          setPfApPaterno(pf?.apellido_paterno ?? '');
-          setPfApMaterno(pf?.apellido_materno ?? '');
-          // si venía AAAAMMDD, lo dejamos; si venía YYYY-MM-DD, igual
-          setPfFechaNac(pf?.fecha_nacimiento ?? '');
-          setPfRfc(pf?.rfc ?? '');
-          setPfCurp(pf?.curp ?? '');
-          setPfOcupacion(pf?.ocupacion ?? '');
+        const c = data?.cliente;
+        if (!c) {
+          setFatal('Respuesta inválida: falta cliente');
+          return;
         }
 
-        if (c?.tipo_cliente === 'persona_moral') {
-          const pm = dc?.empresa ?? {};
-          setPmRfc(pm?.rfc ?? '');
-          setPmFechaConst(pm?.fecha_constitucion ?? '');
+        setTipoCliente(c.tipo_cliente);
+        setNombreEntidad(c.nombre_entidad || '');
+        setNacionalidad(c.nacionalidad || '');
 
-          const rep = dc?.representante ?? {};
-          setRepNombres(rep?.nombres ?? '');
-          setRepApPaterno(rep?.apellido_paterno ?? '');
-          setRepApMaterno(rep?.apellido_materno ?? '');
-          setRepRfc(rep?.rfc ?? '');
-          setRepCurp(rep?.curp ?? '');
+        const contacto = c?.datos_completos?.contacto || {};
+        setContactoPais(contacto.pais || '');
+        setTelefono(contacto.telefono || '');
+
+        if (c.tipo_cliente === 'persona_fisica') {
+          const ae = c?.datos_completos?.persona?.actividad_economica;
+          setPfActividad(ae?.clave || '');
         }
 
-        if (c?.tipo_cliente === 'fideicomiso') {
-          const f = dc?.fideicomiso ?? {};
-          setFidIdentificador(f?.identificador ?? '');
-          setFidRfcFiduciario(f?.rfc_fiduciario ?? '');
-          setFidDenominacion(f?.denominacion_fiduciario ?? '');
+        if (c.tipo_cliente === 'persona_moral') {
+          // si guardas giro en empresa.giro como texto, intentamos mapear por descripcion
+          const giroTxt = c?.datos_completos?.empresa?.giro || '';
+          const match = giros.find((x) => x.descripcion === giroTxt);
+          setPmGiro(match?.clave || '');
+          const r = c?.datos_completos?.representante || {};
+          setRepNombre(r.nombres || r.nombre_completo || '');
+          setRepAP(r.apellido_paterno || '');
+          setRepAM(r.apellido_materno || '');
+          setRepFechaNac(r.fecha_nacimiento || '');
+          setRepRFC(r.rfc || '');
+          setRepCURP(r.curp || '');
+        }
 
-          const rep = dc?.representante ?? {};
-          setFidRepNombres(rep?.nombres ?? '');
-          setFidRepApPaterno(rep?.apellido_paterno ?? '');
-          setFidRepApMaterno(rep?.apellido_materno ?? '');
-          // si venía AAAAMMDD, lo dejamos (si quieres, luego lo convertimos a date)
-          setFidRepFechaNac(rep?.fecha_nacimiento ?? '');
-          setFidRepRfc(rep?.rfc ?? '');
-          setFidRepCurp(rep?.curp ?? '');
+        if (c.tipo_cliente === 'fideicomiso') {
+          const r = c?.datos_completos?.representante || {};
+          const nc = (r.nombre_completo || '').split(' ');
+          setRepNombre(nc.slice(0, 1).join(' ') || r.nombre_completo || '');
+          setRepAP(nc.slice(1, 2).join(' ') || '');
+          setRepAM(nc.slice(2).join(' ') || '');
+          setRepFechaNac(r.fecha_nacimiento || '');
+          setRepRFC(r.rfc || '');
+          setRepCURP(r.curp || '');
         }
       } catch (e: any) {
-        if (!mounted) return;
-        setErr(e?.message || 'No se pudo cargar el cliente');
+        setFatal(e?.message || 'Error inesperado');
       } finally {
-        if (mounted) setLoading(false);
+        setLoading(false);
       }
+    })();
+  }, [id, token, apiBase, giros]);
+
+  function validate(): Errors {
+    const e: Errors = {};
+    req(e, 'nombre_entidad', 'Nombre / Razón social', nombreEntidad);
+    req(e, 'nacionalidad', 'Nacionalidad', nacionalidad);
+    req(e, 'contacto.pais', 'País (contacto)', contactoPais);
+    reqPhone(e, 'contacto.telefono', 'Teléfono', telefono);
+
+    if (tipoCliente === 'persona_fisica') {
+      req(e, 'pf.actividad', 'Actividad económica', pfActividad);
+    }
+    if (tipoCliente === 'persona_moral') {
+      req(e, 'pm.giro', 'Giro mercantil', pmGiro);
+      req(e, 'rep.nombres', 'Nombre(s) representante', repNombre);
+      req(e, 'rep.apellido_paterno', 'Apellido paterno representante', repAP);
+      req(e, 'rep.apellido_materno', 'Apellido materno representante', repAM);
+      reqYYYYMMDD(e, 'rep.fecha_nacimiento', 'Fecha nacimiento representante', repFechaNac);
+      reqRFC(e, 'rep.rfc', 'RFC representante', repRFC);
+      reqCURP(e, 'rep.curp', 'CURP representante', repCURP);
+    }
+    if (tipoCliente === 'fideicomiso') {
+      req(e, 'rep.nombres', 'Nombre(s) representante', repNombre);
+      req(e, 'rep.apellido_paterno', 'Apellido paterno representante', repAP);
+      req(e, 'rep.apellido_materno', 'Apellido materno representante', repAM);
+      reqYYYYMMDD(e, 'rep.fecha_nacimiento', 'Fecha nacimiento representante', repFechaNac);
+      reqRFC(e, 'rep.rfc', 'RFC representante', repRFC);
+      reqCURP(e, 'rep.curp', 'CURP representante', repCURP);
     }
 
-    if (apiBase && id) run();
-    return () => {
-      mounted = false;
-    };
-  }, [apiBase, id, router]);
+    return e;
+  }
 
-  const dcActual = useMemo(() => cliente?.datos_completos ?? {}, [cliente]);
+  async function onSave() {
+    setFatal('');
+    const e = validate();
+    setErrors(e);
+    if (Object.keys(e).length > 0) return;
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setErr(null);
-    setMsg(null);
-
-    const token = localStorage.getItem('token');
     if (!token) {
-      router.replace('/login');
+      setFatal('No hay token en sesión. Vuelve a iniciar sesión.');
       return;
     }
 
-    if (!nombreEntidad.trim()) {
-      setErr('Nombre / Entidad es obligatorio');
-      return;
-    }
-    if (!paisContacto.trim() || !telefono.trim()) {
-      setErr('Contacto (país y teléfono) es obligatorio');
-      return;
-    }
-
-    const tipo = (cliente?.tipo_cliente ?? 'persona_fisica') as TipoCliente;
-
-    // clon base de datos_completos existente para no perder nada
-    const datos_completos: any = { ...(dcActual || {}) };
-
-    datos_completos.contacto = {
-      ...(datos_completos.contacto || {}),
-      pais: paisContacto.trim(),
-      telefono: telefono.trim(),
-      email: emailContacto.trim() || undefined,
-      domicilio: domicilioContacto.trim() || undefined
-    };
-
-    if (tipo === 'persona_fisica') {
-      datos_completos.persona = {
-        ...(datos_completos.persona || {}),
-        tipo: 'persona_fisica',
-        nombres: pfNombres.trim(),
-        apellido_paterno: pfApPaterno.trim(),
-        apellido_materno: pfApMaterno.trim() || undefined,
-        fecha_nacimiento: pfFechaNac ? toYYYYMMDD(pfFechaNac) : undefined,
-        rfc: pfRfc.trim() || undefined,
-        curp: pfCurp.trim() || undefined,
-        ocupacion: pfOcupacion.trim() || undefined
-      };
-    }
-
-    if (tipo === 'persona_moral') {
-      datos_completos.empresa = {
-        ...(datos_completos.empresa || {}),
-        tipo: 'persona_moral',
-        rfc: pmRfc.trim(),
-        fecha_constitucion: pmFechaConst
-      };
-
-      datos_completos.representante = {
-        ...(datos_completos.representante || {}),
-        nombres: repNombres.trim(),
-        apellido_paterno: repApPaterno.trim(),
-        apellido_materno: repApMaterno.trim() || undefined,
-        rfc: repRfc.trim() || undefined,
-        curp: repCurp.trim() || undefined
-      };
-    }
-
-    if (tipo === 'fideicomiso') {
-      if (!fidDenominacion.trim() || !fidRfcFiduciario.trim() || !fidIdentificador.trim()) {
-        setErr('Fideicomiso: denominación, RFC fiduciario e identificador son obligatorios');
-        return;
-      }
-
-      const ymd = toYYYYMMDD(fidRepFechaNac);
-      if (!ymd || !/^\d{8}$/.test(ymd)) {
-        setErr('Fideicomiso: fecha de nacimiento del representante debe ser AAAAMMDD');
-        return;
-      }
-      if (!fidRepNombres.trim() || !fidRepApPaterno.trim() || !fidRepRfc.trim() || !fidRepCurp.trim()) {
-        setErr('Fideicomiso: datos mínimos del representante incompletos');
-        return;
-      }
-
-      datos_completos.fideicomiso = {
-        ...(datos_completos.fideicomiso || {}),
-        identificador: fidIdentificador.trim(),
-        rfc_fiduciario: fidRfcFiduciario.trim(),
-        denominacion_fiduciario: fidDenominacion.trim()
-      };
-
-      const nombreCompleto = `${fidRepNombres} ${fidRepApPaterno} ${fidRepApMaterno}`.replace(/\s+/g, ' ').trim();
-
-      datos_completos.representante = {
-        ...(datos_completos.representante || {}),
-        nombre_completo: nombreCompleto,
-        nombres: fidRepNombres.trim(),
-        apellido_paterno: fidRepApPaterno.trim(),
-        apellido_materno: fidRepApMaterno.trim() || undefined,
-        fecha_nacimiento: ymd,
-        rfc: fidRepRfc.trim(),
-        curp: fidRepCurp.trim()
-      };
-    }
-
-    const payload: any = {
-      nombre_entidad: nombreEntidad.trim(),
-      nacionalidad: nacionalidad.trim() || undefined,
-      estado,
-      datos_completos
-    };
-
+    setSaving(true);
     try {
-      setSaving(true);
+      const act = actividades.find((x) => x.clave === pfActividad) || null;
+      const giro = giros.find((x) => x.clave === pmGiro) || null;
+
+      const body: any = {
+        nombre_entidad: nombreEntidad.trim(),
+        nacionalidad,
+        datos_completos: {
+          contacto: {
+            pais: contactoPais,
+            telefono: onlyDigits(telefono)
+          }
+        }
+      };
+
+      if (tipoCliente === 'persona_fisica') {
+        body.datos_completos.persona = {
+          tipo: 'persona_fisica',
+          actividad_economica: act
+            ? { clave: act.clave, descripcion: act.descripcion }
+            : { clave: pfActividad, descripcion: '' }
+        };
+      }
+
+      if (tipoCliente === 'persona_moral') {
+        body.datos_completos.empresa = { giro: giro ? giro.descripcion : '' };
+        body.datos_completos.representante = {
+          nombres: repNombre.trim(),
+          apellido_paterno: repAP.trim(),
+          apellido_materno: repAM.trim(),
+          fecha_nacimiento: repFechaNac.trim(),
+          rfc: normalizeUpper(repRFC),
+          curp: normalizeUpper(repCURP)
+        };
+      }
+
+      if (tipoCliente === 'fideicomiso') {
+        body.datos_completos.representante = {
+          nombre_completo: `${repNombre.trim()} ${repAP.trim()} ${repAM.trim()}`.trim(),
+          fecha_nacimiento: repFechaNac.trim(),
+          rfc: normalizeUpper(repRFC),
+          curp: normalizeUpper(repCURP)
+        };
+      }
 
       const res = await fetch(`${apiBase}/api/cliente/clientes/${id}`, {
         method: 'PUT',
         headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(body)
       });
 
       const data = await res.json().catch(() => ({}));
-
       if (!res.ok) {
-        if (res.status === 401) {
-          router.replace('/login');
-          return;
-        }
-        setErr(data?.error || `Error HTTP ${res.status}`);
+        setFatal(data?.error || `Error al guardar (${res.status})`);
         return;
       }
 
-      setCliente(data?.cliente ?? cliente);
-      setMsg('Cambios guardados ✅');
       router.push(`/cliente/clientes/${id}`);
     } catch (e: any) {
-      setErr(e?.message || 'Error de red');
+      setFatal(e?.message || 'Error inesperado');
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading) return <div className="p-6 text-sm">Cargando edición...</div>;
+  return (
+    <div className="mx-auto max-w-3xl p-6 space-y-6">
+      <h1 className="text-2xl font-semibold">Editar cliente #{id}</h1>
 
-  if (!cliente) {
-    return (
-      <div className="p-6 space-y-3">
-        <div className="rounded border p-3 text-sm">No se pudo cargar el cliente.</div>
-        <button className="rounded border px-4 py-2 text-sm" onClick={() => router.push('/cliente/clientes')}>
-          Volver
+      {fatal ? (
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {fatal}
+        </div>
+      ) : null}
+
+      {loading ? <div className="text-sm text-gray-600">Cargando...</div> : null}
+
+      <div className="space-y-1">
+        <label className="text-sm font-medium">
+          Nombre / Razón social <span className="text-red-600">*</span>
+        </label>
+        <input
+          value={nombreEntidad}
+          onChange={(e) => setNombreEntidad(e.target.value)}
+          className={classInput(!!errors.nombre_entidad)}
+        />
+        {errText(errors.nombre_entidad)}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-1">
+          <label className="text-sm font-medium">
+            Nacionalidad <span className="text-red-600">*</span>
+          </label>
+          <select
+            value={nacionalidad}
+            onChange={(e) => setNacionalidad(e.target.value)}
+            className={classInput(!!errors.nacionalidad)}
+          >
+            <option value="">Selecciona...</option>
+            {paises.map((p) => (
+              <option key={p.clave} value={p.clave}>
+                {p.descripcion} ({p.clave})
+              </option>
+            ))}
+          </select>
+          {errText(errors.nacionalidad)}
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-sm font-medium">
+            País (contacto) <span className="text-red-600">*</span>
+          </label>
+          <select
+            value={contactoPais}
+            onChange={(e) => setContactoPais(e.target.value)}
+            className={classInput(!!errors['contacto.pais'])}
+          >
+            <option value="">Selecciona...</option>
+            {paises.map((p) => (
+              <option key={p.clave} value={p.clave}>
+                {p.descripcion} ({p.clave})
+              </option>
+            ))}
+          </select>
+          {errText(errors['contacto.pais'])}
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-sm font-medium">
+          Teléfono <span className="text-red-600">*</span>
+        </label>
+        <input
+          value={telefono}
+          onChange={(e) => setTelefono(e.target.value)}
+          className={classInput(!!errors['contacto.telefono'])}
+        />
+        {errText(errors['contacto.telefono'])}
+      </div>
+
+      {tipoCliente === 'persona_fisica' ? (
+        <div className="rounded-md border p-4 space-y-3">
+          <h2 className="font-semibold">Persona física</h2>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">
+              Actividad económica <span className="text-red-600">*</span>
+            </label>
+            <select
+              value={pfActividad}
+              onChange={(e) => setPfActividad(e.target.value)}
+              className={classInput(!!errors['pf.actividad'])}
+            >
+              <option value="">Selecciona...</option>
+              {actividades.map((a) => (
+                <option key={a.clave} value={a.clave}>
+                  {a.descripcion} ({a.clave})
+                </option>
+              ))}
+            </select>
+            {errText(errors['pf.actividad'])}
+          </div>
+        </div>
+      ) : null}
+
+      {tipoCliente === 'persona_moral' ? (
+        <div className="rounded-md border p-4 space-y-3">
+          <h2 className="font-semibold">Persona moral</h2>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">
+              Giro mercantil <span className="text-red-600">*</span>
+            </label>
+            <select
+              value={pmGiro}
+              onChange={(e) => setPmGiro(e.target.value)}
+              className={classInput(!!errors['pm.giro'])}
+            >
+              <option value="">Selecciona...</option>
+              {giros.map((g) => (
+                <option key={g.clave} value={g.clave}>
+                  {g.descripcion} ({g.clave})
+                </option>
+              ))}
+            </select>
+            {errText(errors['pm.giro'])}
+          </div>
+
+          <div className="border-t pt-3 space-y-3">
+            <h3 className="font-semibold">Representante</h3>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Nombre(s) *</label>
+                <input
+                  value={repNombre}
+                  onChange={(e) => setRepNombre(e.target.value)}
+                  className={classInput(!!errors['rep.nombres'])}
+                />
+                {errText(errors['rep.nombres'])}
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Apellido paterno *</label>
+                <input
+                  value={repAP}
+                  onChange={(e) => setRepAP(e.target.value)}
+                  className={classInput(!!errors['rep.apellido_paterno'])}
+                />
+                {errText(errors['rep.apellido_paterno'])}
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Apellido materno *</label>
+                <input
+                  value={repAM}
+                  onChange={(e) => setRepAM(e.target.value)}
+                  className={classInput(!!errors['rep.apellido_materno'])}
+                />
+                {errText(errors['rep.apellido_materno'])}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Fecha nac. (AAAAMMDD) *</label>
+                <input
+                  value={repFechaNac}
+                  onChange={(e) => setRepFechaNac(onlyDigits(e.target.value).slice(0, 8))}
+                  className={classInput(!!errors['rep.fecha_nacimiento'])}
+                />
+                {errText(errors['rep.fecha_nacimiento'])}
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">RFC *</label>
+                <input
+                  value={repRFC}
+                  onChange={(e) => setRepRFC(e.target.value)}
+                  className={classInput(!!errors['rep.rfc'])}
+                />
+                {errText(errors['rep.rfc'])}
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">CURP *</label>
+                <input
+                  value={repCURP}
+                  onChange={(e) => setRepCURP(e.target.value)}
+                  className={classInput(!!errors['rep.curp'])}
+                />
+                {errText(errors['rep.curp'])}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {tipoCliente === 'fideicomiso' ? (
+        <div className="rounded-md border p-4 space-y-3">
+          <h2 className="font-semibold">Fideicomiso</h2>
+          <div className="border-t pt-3 space-y-3">
+            <h3 className="font-semibold">Representante</h3>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Nombre(s) *</label>
+                <input
+                  value={repNombre}
+                  onChange={(e) => setRepNombre(e.target.value)}
+                  className={classInput(!!errors['rep.nombres'])}
+                />
+                {errText(errors['rep.nombres'])}
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Apellido paterno *</label>
+                <input
+                  value={repAP}
+                  onChange={(e) => setRepAP(e.target.value)}
+                  className={classInput(!!errors['rep.apellido_paterno'])}
+                />
+                {errText(errors['rep.apellido_paterno'])}
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Apellido materno *</label>
+                <input
+                  value={repAM}
+                  onChange={(e) => setRepAM(e.target.value)}
+                  className={classInput(!!errors['rep.apellido_materno'])}
+                />
+                {errText(errors['rep.apellido_materno'])}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Fecha nac. (AAAAMMDD) *</label>
+                <input
+                  value={repFechaNac}
+                  onChange={(e) => setRepFechaNac(onlyDigits(e.target.value).slice(0, 8))}
+                  className={classInput(!!errors['rep.fecha_nacimiento'])}
+                />
+                {errText(errors['rep.fecha_nacimiento'])}
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">RFC *</label>
+                <input
+                  value={repRFC}
+                  onChange={(e) => setRepRFC(e.target.value)}
+                  className={classInput(!!errors['rep.rfc'])}
+                />
+                {errText(errors['rep.rfc'])}
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">CURP *</label>
+                <input
+                  value={repCURP}
+                  onChange={(e) => setRepCURP(e.target.value)}
+                  className={classInput(!!errors['rep.curp'])}
+                />
+                {errText(errors['rep.curp'])}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={saving}
+          className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        >
+          {saving ? 'Guardando...' : 'Guardar cambios'}
+        </button>
+
+        <button
+          type="button"
+          className="rounded-md border px-4 py-2 text-sm"
+          onClick={() => router.push(`/cliente/clientes/${id}`)}
+        >
+          Cancelar
         </button>
       </div>
-    );
-  }
-
-  const tipo = cliente?.tipo_cliente as TipoCliente;
-
-  return (
-    <div className="max-w-4xl mx-auto p-6 space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">
-          Editar Cliente #{cliente?.id} — {labelTipo(tipo)}
-        </h1>
-        <div className="flex gap-2">
-          <button className="rounded border px-4 py-2 text-sm" onClick={() => router.push(`/cliente/clientes/${id}`)}>
-            Volver
-          </button>
-        </div>
-      </div>
-
-      {msg && <div className="rounded border p-3 text-sm">{msg}</div>}
-      {err && <div className="rounded border p-3 text-sm">{err}</div>}
-
-      <form onSubmit={onSubmit} className="space-y-6">
-        <div className="rounded border p-4 space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium">Nombre / Entidad *</label>
-              <input className="w-full rounded border p-2" value={nombreEntidad} onChange={(e) => setNombreEntidad(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium">Nacionalidad</label>
-              <input className="w-full rounded border p-2" value={nacionalidad} onChange={(e) => setNacionalidad(e.target.value)} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium">Estado</label>
-              <select className="w-full rounded border p-2" value={estado} onChange={(e) => setEstado(e.target.value as any)}>
-                <option value="activo">activo</option>
-                <option value="inactivo">inactivo</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded border p-4 space-y-3">
-          <div className="font-medium">Contacto</div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium">País *</label>
-              <input className="w-full rounded border p-2" value={paisContacto} onChange={(e) => setPaisContacto(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium">Teléfono *</label>
-              <input className="w-full rounded border p-2" value={telefono} onChange={(e) => setTelefono(e.target.value)} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium">Email</label>
-              <input className="w-full rounded border p-2" value={emailContacto} onChange={(e) => setEmailContacto(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium">Domicilio</label>
-              <input className="w-full rounded border p-2" value={domicilioContacto} onChange={(e) => setDomicilioContacto(e.target.value)} />
-            </div>
-          </div>
-        </div>
-
-        {tipo === 'persona_fisica' && (
-          <div className="rounded border p-4 space-y-3">
-            <div className="font-medium">Persona Física</div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-sm font-medium">Nombres *</label>
-                <input className="w-full rounded border p-2" value={pfNombres} onChange={(e) => setPfNombres(e.target.value)} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium">Apellido paterno *</label>
-                <input className="w-full rounded border p-2" value={pfApPaterno} onChange={(e) => setPfApPaterno(e.target.value)} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium">Apellido materno</label>
-                <input className="w-full rounded border p-2" value={pfApMaterno} onChange={(e) => setPfApMaterno(e.target.value)} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-sm font-medium">Fecha nacimiento</label>
-                <input className="w-full rounded border p-2" value={pfFechaNac} onChange={(e) => setPfFechaNac(e.target.value)} placeholder="YYYY-MM-DD o AAAAMMDD" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium">RFC</label>
-                <input className="w-full rounded border p-2" value={pfRfc} onChange={(e) => setPfRfc(e.target.value)} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium">CURP</label>
-                <input className="w-full rounded border p-2" value={pfCurp} onChange={(e) => setPfCurp(e.target.value)} />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium">Ocupación (opcional)</label>
-              <input className="w-full rounded border p-2" value={pfOcupacion} onChange={(e) => setPfOcupacion(e.target.value)} />
-            </div>
-
-            <p className="text-xs opacity-70">
-              Nota: actividad económica/catálogos se mantienen en datos_completos; aquí no la re-editamos aún.
-            </p>
-          </div>
-        )}
-
-        {tipo === 'persona_moral' && (
-          <div className="rounded border p-4 space-y-4">
-            <div>
-              <div className="font-medium">Persona Moral</div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                <div>
-                  <label className="block text-sm font-medium">RFC *</label>
-                  <input className="w-full rounded border p-2" value={pmRfc} onChange={(e) => setPmRfc(e.target.value)} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium">Fecha constitución *</label>
-                  <input type="date" className="w-full rounded border p-2" value={pmFechaConst} onChange={(e) => setPmFechaConst(e.target.value)} />
-                </div>
-              </div>
-
-              <p className="text-xs opacity-70 mt-2">
-                Nota: giro mercantil/catálogos se mantienen en datos_completos si ya existen.
-              </p>
-            </div>
-
-            <div className="rounded border p-3 space-y-3">
-              <div className="font-medium">Representante *</div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-sm font-medium">Nombres *</label>
-                  <input className="w-full rounded border p-2" value={repNombres} onChange={(e) => setRepNombres(e.target.value)} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium">Apellido paterno *</label>
-                  <input className="w-full rounded border p-2" value={repApPaterno} onChange={(e) => setRepApPaterno(e.target.value)} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium">Apellido materno</label>
-                  <input className="w-full rounded border p-2" value={repApMaterno} onChange={(e) => setRepApMaterno(e.target.value)} />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium">RFC</label>
-                  <input className="w-full rounded border p-2" value={repRfc} onChange={(e) => setRepRfc(e.target.value)} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium">CURP</label>
-                  <input className="w-full rounded border p-2" value={repCurp} onChange={(e) => setRepCurp(e.target.value)} />
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {tipo === 'fideicomiso' && (
-          <div className="rounded border p-4 space-y-4">
-            <div className="font-medium">Fideicomiso (iteración 1)</div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium">Denominación fiduciario *</label>
-                <input className="w-full rounded border p-2" value={fidDenominacion} onChange={(e) => setFidDenominacion(e.target.value)} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium">RFC fiduciario *</label>
-                <input className="w-full rounded border p-2" value={fidRfcFiduciario} onChange={(e) => setFidRfcFiduciario(e.target.value)} />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium">Identificador *</label>
-              <input className="w-full rounded border p-2" value={fidIdentificador} onChange={(e) => setFidIdentificador(e.target.value)} />
-            </div>
-
-            <div className="rounded border p-3 space-y-3">
-              <div className="font-medium">Representante / Apoderado *</div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-sm font-medium">Nombre(s) *</label>
-                  <input className="w-full rounded border p-2" value={fidRepNombres} onChange={(e) => setFidRepNombres(e.target.value)} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium">Apellido paterno *</label>
-                  <input className="w-full rounded border p-2" value={fidRepApPaterno} onChange={(e) => setFidRepApPaterno(e.target.value)} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium">Apellido materno</label>
-                  <input className="w-full rounded border p-2" value={fidRepApMaterno} onChange={(e) => setFidRepApMaterno(e.target.value)} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-sm font-medium">Fecha nacimiento *</label>
-                  <input className="w-full rounded border p-2" value={fidRepFechaNac} onChange={(e) => setFidRepFechaNac(e.target.value)} placeholder="YYYY-MM-DD o AAAAMMDD" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium">RFC *</label>
-                  <input className="w-full rounded border p-2" value={fidRepRfc} onChange={(e) => setFidRepRfc(e.target.value)} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium">CURP *</label>
-                  <input className="w-full rounded border p-2" value={fidRepCurp} onChange={(e) => setFidRepCurp(e.target.value)} />
-                </div>
-              </div>
-
-              <p className="text-xs opacity-70">Se enviará fecha_nacimiento como AAAAMMDD.</p>
-            </div>
-          </div>
-        )}
-
-        <div className="flex gap-3">
-          <button type="submit" disabled={saving} className="rounded border px-4 py-2 text-sm">
-            {saving ? 'Guardando...' : 'Guardar cambios'}
-          </button>
-          <button type="button" className="rounded border px-4 py-2 text-sm" onClick={() => router.push(`/cliente/clientes/${id}`)}>
-            Cancelar
-          </button>
-        </div>
-
-        <div className="rounded border p-4">
-          <details>
-            <summary className="cursor-pointer select-none font-medium">Debug: datos_completos actual</summary>
-            <pre className="mt-3 text-xs overflow-auto whitespace-pre-wrap">{JSON.stringify(cliente?.datos_completos ?? {}, null, 2)}</pre>
-          </details>
-        </div>
-      </form>
     </div>
   );
 }
