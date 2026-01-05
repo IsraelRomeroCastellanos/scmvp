@@ -8,6 +8,7 @@ import { loadCatalogo, type CatalogItem } from '@/lib/catalogos';
 type TipoCliente = 'persona_fisica' | 'persona_moral' | 'fideicomiso';
 
 type Errors = Record<string, string>;
+type Touched = Record<string, boolean>;
 
 function onlyDigits(s: string) {
   return (s ?? '').replace(/\D+/g, '');
@@ -23,40 +24,12 @@ function isYYYYMMDD(s: string) {
 
 function isRFC(s: string) {
   const v = normalizeUpper(s);
-  // RFC genérico XAXX010101000 pasa.
-  // Acepta PF(13) o PM(12)
   return /^[A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3}$/.test(v);
 }
 
 function isCURP(s: string) {
   const v = normalizeUpper(s);
   return /^[A-Z][AEIOUX][A-Z]{2}\d{6}[HM][A-Z]{5}[A-Z0-9]\d$/.test(v);
-}
-
-function req(errors: Errors, key: string, label: string, value: any) {
-  const v = typeof value === 'string' ? value.trim() : value;
-  if (!v) errors[key] = `${label} es obligatorio`;
-}
-
-function reqRFC(errors: Errors, key: string, label: string, value: string) {
-  if (!value?.trim()) return (errors[key] = `${label} es obligatorio`);
-  if (!isRFC(value)) errors[key] = `${label} inválido (formato RFC)`;
-}
-
-function reqCURP(errors: Errors, key: string, label: string, value: string) {
-  if (!value?.trim()) return (errors[key] = `${label} es obligatorio`);
-  if (!isCURP(value)) errors[key] = `${label} inválida (formato CURP)`;
-}
-
-function reqYYYYMMDD(errors: Errors, key: string, label: string, value: string) {
-  if (!value?.trim()) return (errors[key] = `${label} es obligatorio`);
-  if (!isYYYYMMDD(value)) errors[key] = `${label} inválida (AAAAMMDD)`;
-}
-
-function reqPhone(errors: Errors, key: string, label: string, value: string) {
-  const d = onlyDigits(value);
-  if (!d) return (errors[key] = `${label} es obligatorio`);
-  if (d.length < 8 || d.length > 15) errors[key] = `${label} inválido (8–15 dígitos)`;
 }
 
 function errText(msg?: string) {
@@ -72,17 +45,21 @@ function classInput(hasErr: boolean) {
 
 /**
  * Dropdown con búsqueda integrada (1 paso).
+ * - Para "onBlur" práctico: llamamos onTouch() cuando:
+ *   a) se selecciona un item
+ *   b) se cierra el panel al hacer click fuera
  */
 function SearchableSelect(props: {
   label: string;
   required?: boolean;
   placeholder?: string;
   items: CatalogItem[];
-  value: string; // guardamos "CLAVE" o "CLAVE,XX" según tu catálogo
+  value: string;
   onChange: (v: string) => void;
   error?: string;
+  onTouch?: () => void;
 }) {
-  const { label, required, placeholder, items, value, onChange, error } = props;
+  const { label, required, placeholder, items, value, onChange, error, onTouch } = props;
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -109,11 +86,14 @@ function SearchableSelect(props: {
     function onDocClick(e: MouseEvent) {
       const el = wrapRef.current;
       if (!el) return;
-      if (!el.contains(e.target as Node)) setOpen(false);
+      if (!el.contains(e.target as Node)) {
+        if (open) onTouch?.(); // se intentó interactuar y se cerró
+        setOpen(false);
+      }
     }
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
-  }, []);
+  }, [open, onTouch]);
 
   return (
     <div className="space-y-1" ref={wrapRef}>
@@ -157,6 +137,7 @@ function SearchableSelect(props: {
                   }`}
                   onClick={() => {
                     onChange(it.clave);
+                    onTouch?.();
                     setOpen(false);
                     setQ('');
                   }}
@@ -183,6 +164,7 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [fatal, setFatal] = useState<string>('');
   const [errors, setErrors] = useState<Errors>({});
+  const [touched, setTouched] = useState<Touched>({});
 
   // Catálogos
   const [paises, setPaises] = useState<CatalogItem[]>([]);
@@ -190,42 +172,41 @@ export default function Page() {
   const [giros, setGiros] = useState<CatalogItem[]>([]);
 
   // Form
-  const [empresaId, setEmpresaId] = useState<string>(''); // string para input
+  const [empresaId, setEmpresaId] = useState<string>('');
   const [tipoCliente, setTipoCliente] = useState<TipoCliente>('persona_fisica');
 
   const [nombreEntidad, setNombreEntidad] = useState('');
-  const [nacionalidad, setNacionalidad] = useState(''); // clave catálogo país
+  const [nacionalidad, setNacionalidad] = useState('');
 
-  const [contactoPais, setContactoPais] = useState(''); // clave catálogo país
+  const [contactoPais, setContactoPais] = useState('');
   const [telefono, setTelefono] = useState('');
 
   // PF
   const [pfNombres, setPfNombres] = useState('');
   const [pfAP, setPfAP] = useState('');
   const [pfAM, setPfAM] = useState('');
-  const [pfFechaNac, setPfFechaNac] = useState(''); // AAAAMMDD
+  const [pfFechaNac, setPfFechaNac] = useState('');
   const [pfRFC, setPfRFC] = useState('');
   const [pfCURP, setPfCURP] = useState('');
-  const [pfActividad, setPfActividad] = useState(''); // clave catálogo
+  const [pfActividad, setPfActividad] = useState('');
 
   // PM
   const [pmRFC, setPmRFC] = useState('');
-  const [pmFechaConst, setPmFechaConst] = useState(''); // AAAAMMDD (simple)
-  const [pmGiro, setPmGiro] = useState(''); // clave catálogo giro mercantil
+  const [pmFechaConst, setPmFechaConst] = useState('');
+  const [pmGiro, setPmGiro] = useState('');
 
   const [repNombre, setRepNombre] = useState('');
   const [repAP, setRepAP] = useState('');
   const [repAM, setRepAM] = useState('');
-  const [repFechaNac, setRepFechaNac] = useState(''); // AAAAMMDD
+  const [repFechaNac, setRepFechaNac] = useState('');
   const [repRFC, setRepRFC] = useState('');
   const [repCURP, setRepCURP] = useState('');
 
-  // Fideicomiso (iteración 1)
+  // Fideicomiso
   const [fidDenom, setFidDenom] = useState('');
   const [fidRFC, setFidRFC] = useState('');
   const [fidIdent, setFidIdent] = useState('');
 
-  // token
   const token = useMemo(() => {
     if (typeof window === 'undefined') return '';
     return localStorage.getItem('token') || '';
@@ -248,70 +229,176 @@ export default function Page() {
     })();
   }, []);
 
-  function validate(): Errors {
+  function touch(key: string) {
+    setTouched((t) => (t[key] ? t : { ...t, [key]: true }));
+  }
+
+  function showErr(key: string) {
+    return touched[key] ? errors[key] : '';
+  }
+
+  function computeErrors(): Errors {
     const e: Errors = {};
 
     // Top-level
-    req(e, 'empresa_id', 'Empresa', empresaId);
-    if (empresaId && isNaN(Number(empresaId))) e.empresa_id = 'Empresa inválida';
+    if (!empresaId.trim()) e.empresa_id = 'Empresa es obligatorio';
+    else if (isNaN(Number(empresaId))) e.empresa_id = 'Empresa inválida';
 
-    req(e, 'nombre_entidad', 'Nombre / Razón social', nombreEntidad);
-    req(e, 'nacionalidad', 'Nacionalidad', nacionalidad);
+    if (!nombreEntidad.trim()) e.nombre_entidad = 'Nombre / Razón social es obligatorio';
+    if (!nacionalidad) e.nacionalidad = 'Nacionalidad es obligatorio';
 
-    req(e, 'contacto.pais', 'País (contacto)', contactoPais);
-    reqPhone(e, 'contacto.telefono', 'Teléfono', telefono);
+    if (!contactoPais) e['contacto.pais'] = 'País (contacto) es obligatorio';
+
+    const telDigits = onlyDigits(telefono);
+    if (!telDigits) e['contacto.telefono'] = 'Teléfono es obligatorio';
+    else if (telDigits.length < 8 || telDigits.length > 15)
+      e['contacto.telefono'] = 'Teléfono inválido (8–15 dígitos)';
 
     if (tipoCliente === 'persona_fisica') {
-      req(e, 'pf.nombres', 'Nombre(s)', pfNombres);
-      req(e, 'pf.apellido_paterno', 'Apellido paterno', pfAP);
-      req(e, 'pf.apellido_materno', 'Apellido materno', pfAM);
+      if (!pfNombres.trim()) e['pf.nombres'] = 'Nombre(s) es obligatorio';
+      if (!pfAP.trim()) e['pf.apellido_paterno'] = 'Apellido paterno es obligatorio';
+      if (!pfAM.trim()) e['pf.apellido_materno'] = 'Apellido materno es obligatorio';
 
-      reqYYYYMMDD(e, 'pf.fecha_nacimiento', 'Fecha de nacimiento', pfFechaNac);
-      reqRFC(e, 'pf.rfc', 'RFC', pfRFC);
-      reqCURP(e, 'pf.curp', 'CURP', pfCURP);
+      if (!pfFechaNac.trim()) e['pf.fecha_nacimiento'] = 'Fecha de nacimiento es obligatorio';
+      else if (!isYYYYMMDD(pfFechaNac)) e['pf.fecha_nacimiento'] = 'Fecha inválida (AAAAMMDD)';
 
-      req(e, 'pf.actividad', 'Actividad económica', pfActividad);
+      if (!pfRFC.trim()) e['pf.rfc'] = 'RFC es obligatorio';
+      else if (!isRFC(pfRFC)) e['pf.rfc'] = 'RFC inválido (formato RFC)';
+
+      if (!pfCURP.trim()) e['pf.curp'] = 'CURP es obligatorio';
+      else if (!isCURP(pfCURP)) e['pf.curp'] = 'CURP inválida (formato CURP)';
+
+      if (!pfActividad) e['pf.actividad'] = 'Actividad económica es obligatorio';
     }
 
     if (tipoCliente === 'persona_moral') {
-      reqRFC(e, 'pm.rfc', 'RFC (empresa)', pmRFC);
-      reqYYYYMMDD(e, 'pm.fecha_constitucion', 'Fecha de constitución', pmFechaConst);
-      req(e, 'pm.giro', 'Giro mercantil', pmGiro);
+      if (!pmRFC.trim()) e['pm.rfc'] = 'RFC (empresa) es obligatorio';
+      else if (!isRFC(pmRFC)) e['pm.rfc'] = 'RFC (empresa) inválido';
 
-      // Representante (mínimo bloqueante)
-      req(e, 'rep.nombres', 'Nombre(s) representante', repNombre);
-      req(e, 'rep.apellido_paterno', 'Apellido paterno representante', repAP);
-      req(e, 'rep.apellido_materno', 'Apellido materno representante', repAM);
-      reqYYYYMMDD(e, 'rep.fecha_nacimiento', 'Fecha nacimiento representante', repFechaNac);
-      reqRFC(e, 'rep.rfc', 'RFC representante', repRFC);
-      reqCURP(e, 'rep.curp', 'CURP representante', repCURP);
+      if (!pmFechaConst.trim()) e['pm.fecha_constitucion'] = 'Fecha constitución es obligatorio';
+      else if (!isYYYYMMDD(pmFechaConst)) e['pm.fecha_constitucion'] = 'Fecha inválida (AAAAMMDD)';
+
+      if (!pmGiro) e['pm.giro'] = 'Giro mercantil es obligatorio';
+
+      if (!repNombre.trim()) e['rep.nombres'] = 'Nombre(s) representante es obligatorio';
+      if (!repAP.trim()) e['rep.apellido_paterno'] = 'Apellido paterno representante es obligatorio';
+      if (!repAM.trim()) e['rep.apellido_materno'] = 'Apellido materno representante es obligatorio';
+
+      if (!repFechaNac.trim()) e['rep.fecha_nacimiento'] = 'Fecha nacimiento representante es obligatorio';
+      else if (!isYYYYMMDD(repFechaNac)) e['rep.fecha_nacimiento'] = 'Fecha inválida (AAAAMMDD)';
+
+      if (!repRFC.trim()) e['rep.rfc'] = 'RFC representante es obligatorio';
+      else if (!isRFC(repRFC)) e['rep.rfc'] = 'RFC representante inválido';
+
+      if (!repCURP.trim()) e['rep.curp'] = 'CURP representante es obligatorio';
+      else if (!isCURP(repCURP)) e['rep.curp'] = 'CURP representante inválida';
     }
 
     if (tipoCliente === 'fideicomiso') {
-      // Campos mínimos del fideicomiso (bloqueantes)
-      req(e, 'fid.denom', 'Denominación del fiduciario', fidDenom);
-      reqRFC(e, 'fid.rfc', 'RFC del fiduciario', fidRFC);
-      req(e, 'fid.ident', 'Identificador del fideicomiso', fidIdent);
+      if (!fidDenom.trim()) e['fid.denom'] = 'Denominación del fiduciario es obligatorio';
 
-      // Representante (lo que marcaste obligatorio)
-      req(e, 'rep.nombres', 'Nombre(s) representante', repNombre);
-      req(e, 'rep.apellido_paterno', 'Apellido paterno representante', repAP);
-      req(e, 'rep.apellido_materno', 'Apellido materno representante', repAM);
-      reqYYYYMMDD(e, 'rep.fecha_nacimiento', 'Fecha nacimiento representante', repFechaNac);
-      reqRFC(e, 'rep.rfc', 'RFC representante', repRFC);
-      reqCURP(e, 'rep.curp', 'CURP representante', repCURP);
+      if (!fidRFC.trim()) e['fid.rfc'] = 'RFC del fiduciario es obligatorio';
+      else if (!isRFC(fidRFC)) e['fid.rfc'] = 'RFC del fiduciario inválido';
+
+      if (!fidIdent.trim()) e['fid.ident'] = 'Identificador del fideicomiso es obligatorio';
+
+      if (!repNombre.trim()) e['rep.nombres'] = 'Nombre(s) representante es obligatorio';
+      if (!repAP.trim()) e['rep.apellido_paterno'] = 'Apellido paterno representante es obligatorio';
+      if (!repAM.trim()) e['rep.apellido_materno'] = 'Apellido materno representante es obligatorio';
+
+      if (!repFechaNac.trim()) e['rep.fecha_nacimiento'] = 'Fecha nacimiento representante es obligatorio';
+      else if (!isYYYYMMDD(repFechaNac)) e['rep.fecha_nacimiento'] = 'Fecha inválida (AAAAMMDD)';
+
+      if (!repRFC.trim()) e['rep.rfc'] = 'RFC representante es obligatorio';
+      else if (!isRFC(repRFC)) e['rep.rfc'] = 'RFC representante inválido';
+
+      if (!repCURP.trim()) e['rep.curp'] = 'CURP representante es obligatorio';
+      else if (!isCURP(repCURP)) e['rep.curp'] = 'CURP representante inválida';
     }
 
     return e;
   }
 
+  function recomputeAndSetErrors() {
+    const e = computeErrors();
+    setErrors(e);
+    return e;
+  }
+
+  function validateField(key: string) {
+    // recalculamos todo por simplicidad/consistencia y extraemos el campo
+    const e = computeErrors();
+    setErrors((prev) => ({ ...prev, [key]: e[key] || '' }));
+  }
+
+  function touchAndValidate(key: string) {
+    touch(key);
+    validateField(key);
+  }
+
+  function touchAllVisible() {
+    const keys: string[] = [
+      'empresa_id',
+      'nombre_entidad',
+      'nacionalidad',
+      'contacto.pais',
+      'contacto.telefono'
+    ];
+
+    if (tipoCliente === 'persona_fisica') {
+      keys.push(
+        'pf.nombres',
+        'pf.apellido_paterno',
+        'pf.apellido_materno',
+        'pf.fecha_nacimiento',
+        'pf.rfc',
+        'pf.curp',
+        'pf.actividad'
+      );
+    }
+
+    if (tipoCliente === 'persona_moral') {
+      keys.push(
+        'pm.rfc',
+        'pm.fecha_constitucion',
+        'pm.giro',
+        'rep.nombres',
+        'rep.apellido_paterno',
+        'rep.apellido_materno',
+        'rep.fecha_nacimiento',
+        'rep.rfc',
+        'rep.curp'
+      );
+    }
+
+    if (tipoCliente === 'fideicomiso') {
+      keys.push(
+        'fid.denom',
+        'fid.rfc',
+        'fid.ident',
+        'rep.nombres',
+        'rep.apellido_paterno',
+        'rep.apellido_materno',
+        'rep.fecha_nacimiento',
+        'rep.rfc',
+        'rep.curp'
+      );
+    }
+
+    setTouched((t) => {
+      const n = { ...t };
+      for (const k of keys) n[k] = true;
+      return n;
+    });
+  }
+
   async function onSubmit() {
     setFatal('');
-    const e = validate();
-    setErrors(e);
-    if (Object.keys(e).length > 0) {
-      // bloqueante
-      return;
+    const e = recomputeAndSetErrors();
+    touchAllVisible();
+
+    if (Object.keys(e).some((k) => e[k])) {
+      return; // bloqueante
     }
 
     if (!token) {
@@ -321,7 +408,6 @@ export default function Page() {
 
     setLoading(true);
     try {
-      // Buscar descripción por clave (para guardar objeto {clave, descripcion} donde aplique)
       const act = actividades.find((x) => x.clave === pfActividad) || null;
       const giro = giros.find((x) => x.clave === pmGiro) || null;
 
@@ -400,7 +486,6 @@ export default function Page() {
         return;
       }
 
-      // soporte a ambos formatos: {ok:true, cliente:{id}} o {cliente:{id}} o {id}
       const id =
         data?.cliente?.id ??
         data?.id ??
@@ -421,10 +506,6 @@ export default function Page() {
     }
   }
 
-  if (fatal) {
-    // Ojo: fatal aquí también se usa para errores (mostramos banner, no bloqueamos UI completa)
-  }
-
   return (
     <div className="mx-auto max-w-3xl p-6 space-y-6">
       <h1 className="text-2xl font-semibold">Registrar cliente</h1>
@@ -442,11 +523,14 @@ export default function Page() {
           </label>
           <input
             value={empresaId}
-            onChange={(e) => setEmpresaId(e.target.value)}
-            className={classInput(!!errors.empresa_id)}
+            onChange={(e) => {
+              setEmpresaId(e.target.value);
+            }}
+            onBlur={() => touchAndValidate('empresa_id')}
+            className={classInput(!!showErr('empresa_id'))}
             placeholder="Ej. 38"
           />
-          {errText(errors.empresa_id)}
+          {errText(showErr('empresa_id'))}
         </div>
 
         <div className="space-y-1">
@@ -457,8 +541,10 @@ export default function Page() {
             value={tipoCliente}
             onChange={(e) => {
               setTipoCliente(e.target.value as TipoCliente);
-              setErrors({});
+              // reset parcial (sin borrar todo)
               setFatal('');
+              // recalcular errores por el cambio de tipo
+              setTimeout(() => recomputeAndSetErrors(), 0);
             }}
             className={classInput(false)}
           >
@@ -476,10 +562,11 @@ export default function Page() {
         <input
           value={nombreEntidad}
           onChange={(e) => setNombreEntidad(e.target.value)}
-          className={classInput(!!errors.nombre_entidad)}
+          onBlur={() => touchAndValidate('nombre_entidad')}
+          className={classInput(!!showErr('nombre_entidad'))}
           placeholder="Ej. Alicia Pruebas / Empresa SA de CV"
         />
-        {errText(errors.nombre_entidad)}
+        {errText(showErr('nombre_entidad'))}
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -488,8 +575,9 @@ export default function Page() {
           required
           items={paises}
           value={nacionalidad}
-          onChange={setNacionalidad}
-          error={errors.nacionalidad}
+          onChange={(v) => setNacionalidad(v)}
+          onTouch={() => touchAndValidate('nacionalidad')}
+          error={showErr('nacionalidad')}
           placeholder="Selecciona nacionalidad..."
         />
 
@@ -498,8 +586,9 @@ export default function Page() {
           required
           items={paises}
           value={contactoPais}
-          onChange={setContactoPais}
-          error={errors['contacto.pais']}
+          onChange={(v) => setContactoPais(v)}
+          onTouch={() => touchAndValidate('contacto.pais')}
+          error={showErr('contacto.pais')}
           placeholder="Selecciona país de contacto..."
         />
       </div>
@@ -511,13 +600,13 @@ export default function Page() {
         <input
           value={telefono}
           onChange={(e) => setTelefono(e.target.value)}
-          className={classInput(!!errors['contacto.telefono'])}
+          onBlur={() => touchAndValidate('contacto.telefono')}
+          className={classInput(!!showErr('contacto.telefono'))}
           placeholder="Solo dígitos (8–15)"
         />
-        {errText(errors['contacto.telefono'])}
+        {errText(showErr('contacto.telefono'))}
       </div>
 
-      {/* Secciones por tipo */}
       {tipoCliente === 'persona_fisica' ? (
         <div className="rounded-md border p-4 space-y-4">
           <h2 className="font-semibold">Persona física</h2>
@@ -530,9 +619,10 @@ export default function Page() {
               <input
                 value={pfNombres}
                 onChange={(e) => setPfNombres(e.target.value)}
-                className={classInput(!!errors['pf.nombres'])}
+                onBlur={() => touchAndValidate('pf.nombres')}
+                className={classInput(!!showErr('pf.nombres'))}
               />
-              {errText(errors['pf.nombres'])}
+              {errText(showErr('pf.nombres'))}
             </div>
 
             <div className="space-y-1">
@@ -542,9 +632,10 @@ export default function Page() {
               <input
                 value={pfAP}
                 onChange={(e) => setPfAP(e.target.value)}
-                className={classInput(!!errors['pf.apellido_paterno'])}
+                onBlur={() => touchAndValidate('pf.apellido_paterno')}
+                className={classInput(!!showErr('pf.apellido_paterno'))}
               />
-              {errText(errors['pf.apellido_paterno'])}
+              {errText(showErr('pf.apellido_paterno'))}
             </div>
 
             <div className="space-y-1">
@@ -554,9 +645,10 @@ export default function Page() {
               <input
                 value={pfAM}
                 onChange={(e) => setPfAM(e.target.value)}
-                className={classInput(!!errors['pf.apellido_materno'])}
+                onBlur={() => touchAndValidate('pf.apellido_materno')}
+                className={classInput(!!showErr('pf.apellido_materno'))}
               />
-              {errText(errors['pf.apellido_materno'])}
+              {errText(showErr('pf.apellido_materno'))}
             </div>
           </div>
 
@@ -568,10 +660,11 @@ export default function Page() {
               <input
                 value={pfFechaNac}
                 onChange={(e) => setPfFechaNac(onlyDigits(e.target.value).slice(0, 8))}
-                className={classInput(!!errors['pf.fecha_nacimiento'])}
+                onBlur={() => touchAndValidate('pf.fecha_nacimiento')}
+                className={classInput(!!showErr('pf.fecha_nacimiento'))}
                 placeholder="19900101"
               />
-              {errText(errors['pf.fecha_nacimiento'])}
+              {errText(showErr('pf.fecha_nacimiento'))}
             </div>
 
             <div className="space-y-1">
@@ -581,10 +674,11 @@ export default function Page() {
               <input
                 value={pfRFC}
                 onChange={(e) => setPfRFC(e.target.value)}
-                className={classInput(!!errors['pf.rfc'])}
+                onBlur={() => touchAndValidate('pf.rfc')}
+                className={classInput(!!showErr('pf.rfc'))}
                 placeholder="XAXX010101000"
               />
-              {errText(errors['pf.rfc'])}
+              {errText(showErr('pf.rfc'))}
             </div>
 
             <div className="space-y-1">
@@ -594,10 +688,11 @@ export default function Page() {
               <input
                 value={pfCURP}
                 onChange={(e) => setPfCURP(e.target.value)}
-                className={classInput(!!errors['pf.curp'])}
+                onBlur={() => touchAndValidate('pf.curp')}
+                className={classInput(!!showErr('pf.curp'))}
                 placeholder="PEPJ900101HDFRRN09"
               />
-              {errText(errors['pf.curp'])}
+              {errText(showErr('pf.curp'))}
             </div>
           </div>
 
@@ -606,8 +701,9 @@ export default function Page() {
             required
             items={actividades}
             value={pfActividad}
-            onChange={setPfActividad}
-            error={errors['pf.actividad']}
+            onChange={(v) => setPfActividad(v)}
+            onTouch={() => touchAndValidate('pf.actividad')}
+            error={showErr('pf.actividad')}
             placeholder="Selecciona actividad..."
           />
         </div>
@@ -625,9 +721,10 @@ export default function Page() {
               <input
                 value={pmRFC}
                 onChange={(e) => setPmRFC(e.target.value)}
-                className={classInput(!!errors['pm.rfc'])}
+                onBlur={() => touchAndValidate('pm.rfc')}
+                className={classInput(!!showErr('pm.rfc'))}
               />
-              {errText(errors['pm.rfc'])}
+              {errText(showErr('pm.rfc'))}
             </div>
 
             <div className="space-y-1 sm:col-span-1">
@@ -637,10 +734,11 @@ export default function Page() {
               <input
                 value={pmFechaConst}
                 onChange={(e) => setPmFechaConst(onlyDigits(e.target.value).slice(0, 8))}
-                className={classInput(!!errors['pm.fecha_constitucion'])}
+                onBlur={() => touchAndValidate('pm.fecha_constitucion')}
+                className={classInput(!!showErr('pm.fecha_constitucion'))}
                 placeholder="20200203"
               />
-              {errText(errors['pm.fecha_constitucion'])}
+              {errText(showErr('pm.fecha_constitucion'))}
             </div>
 
             <div className="sm:col-span-1">
@@ -649,8 +747,9 @@ export default function Page() {
                 required
                 items={giros}
                 value={pmGiro}
-                onChange={setPmGiro}
-                error={errors['pm.giro']}
+                onChange={(v) => setPmGiro(v)}
+                onTouch={() => touchAndValidate('pm.giro')}
+                error={showErr('pm.giro')}
                 placeholder="Selecciona giro..."
               />
             </div>
@@ -667,9 +766,10 @@ export default function Page() {
                 <input
                   value={repNombre}
                   onChange={(e) => setRepNombre(e.target.value)}
-                  className={classInput(!!errors['rep.nombres'])}
+                  onBlur={() => touchAndValidate('rep.nombres')}
+                  className={classInput(!!showErr('rep.nombres'))}
                 />
-                {errText(errors['rep.nombres'])}
+                {errText(showErr('rep.nombres'))}
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">
@@ -678,9 +778,10 @@ export default function Page() {
                 <input
                   value={repAP}
                   onChange={(e) => setRepAP(e.target.value)}
-                  className={classInput(!!errors['rep.apellido_paterno'])}
+                  onBlur={() => touchAndValidate('rep.apellido_paterno')}
+                  className={classInput(!!showErr('rep.apellido_paterno'))}
                 />
-                {errText(errors['rep.apellido_paterno'])}
+                {errText(showErr('rep.apellido_paterno'))}
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">
@@ -689,9 +790,10 @@ export default function Page() {
                 <input
                   value={repAM}
                   onChange={(e) => setRepAM(e.target.value)}
-                  className={classInput(!!errors['rep.apellido_materno'])}
+                  onBlur={() => touchAndValidate('rep.apellido_materno')}
+                  className={classInput(!!showErr('rep.apellido_materno'))}
                 />
-                {errText(errors['rep.apellido_materno'])}
+                {errText(showErr('rep.apellido_materno'))}
               </div>
             </div>
 
@@ -703,10 +805,11 @@ export default function Page() {
                 <input
                   value={repFechaNac}
                   onChange={(e) => setRepFechaNac(onlyDigits(e.target.value).slice(0, 8))}
-                  className={classInput(!!errors['rep.fecha_nacimiento'])}
+                  onBlur={() => touchAndValidate('rep.fecha_nacimiento')}
+                  className={classInput(!!showErr('rep.fecha_nacimiento'))}
                   placeholder="19900101"
                 />
-                {errText(errors['rep.fecha_nacimiento'])}
+                {errText(showErr('rep.fecha_nacimiento'))}
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">
@@ -715,9 +818,10 @@ export default function Page() {
                 <input
                   value={repRFC}
                   onChange={(e) => setRepRFC(e.target.value)}
-                  className={classInput(!!errors['rep.rfc'])}
+                  onBlur={() => touchAndValidate('rep.rfc')}
+                  className={classInput(!!showErr('rep.rfc'))}
                 />
-                {errText(errors['rep.rfc'])}
+                {errText(showErr('rep.rfc'))}
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">
@@ -726,9 +830,10 @@ export default function Page() {
                 <input
                   value={repCURP}
                   onChange={(e) => setRepCURP(e.target.value)}
-                  className={classInput(!!errors['rep.curp'])}
+                  onBlur={() => touchAndValidate('rep.curp')}
+                  className={classInput(!!showErr('rep.curp'))}
                 />
-                {errText(errors['rep.curp'])}
+                {errText(showErr('rep.curp'))}
               </div>
             </div>
           </div>
@@ -747,9 +852,10 @@ export default function Page() {
               <input
                 value={fidDenom}
                 onChange={(e) => setFidDenom(e.target.value)}
-                className={classInput(!!errors['fid.denom'])}
+                onBlur={() => touchAndValidate('fid.denom')}
+                className={classInput(!!showErr('fid.denom'))}
               />
-              {errText(errors['fid.denom'])}
+              {errText(showErr('fid.denom'))}
             </div>
 
             <div className="space-y-1">
@@ -759,10 +865,11 @@ export default function Page() {
               <input
                 value={fidRFC}
                 onChange={(e) => setFidRFC(e.target.value)}
-                className={classInput(!!errors['fid.rfc'])}
+                onBlur={() => touchAndValidate('fid.rfc')}
+                className={classInput(!!showErr('fid.rfc'))}
                 placeholder="XAXX010101000"
               />
-              {errText(errors['fid.rfc'])}
+              {errText(showErr('fid.rfc'))}
             </div>
           </div>
 
@@ -773,10 +880,11 @@ export default function Page() {
             <input
               value={fidIdent}
               onChange={(e) => setFidIdent(e.target.value)}
-              className={classInput(!!errors['fid.ident'])}
+              onBlur={() => touchAndValidate('fid.ident')}
+              className={classInput(!!showErr('fid.ident'))}
               placeholder="FID-0001"
             />
-            {errText(errors['fid.ident'])}
+            {errText(showErr('fid.ident'))}
           </div>
 
           <div className="border-t pt-4 space-y-4">
@@ -790,9 +898,10 @@ export default function Page() {
                 <input
                   value={repNombre}
                   onChange={(e) => setRepNombre(e.target.value)}
-                  className={classInput(!!errors['rep.nombres'])}
+                  onBlur={() => touchAndValidate('rep.nombres')}
+                  className={classInput(!!showErr('rep.nombres'))}
                 />
-                {errText(errors['rep.nombres'])}
+                {errText(showErr('rep.nombres'))}
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">
@@ -801,9 +910,10 @@ export default function Page() {
                 <input
                   value={repAP}
                   onChange={(e) => setRepAP(e.target.value)}
-                  className={classInput(!!errors['rep.apellido_paterno'])}
+                  onBlur={() => touchAndValidate('rep.apellido_paterno')}
+                  className={classInput(!!showErr('rep.apellido_paterno'))}
                 />
-                {errText(errors['rep.apellido_paterno'])}
+                {errText(showErr('rep.apellido_paterno'))}
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">
@@ -812,9 +922,10 @@ export default function Page() {
                 <input
                   value={repAM}
                   onChange={(e) => setRepAM(e.target.value)}
-                  className={classInput(!!errors['rep.apellido_materno'])}
+                  onBlur={() => touchAndValidate('rep.apellido_materno')}
+                  className={classInput(!!showErr('rep.apellido_materno'))}
                 />
-                {errText(errors['rep.apellido_materno'])}
+                {errText(showErr('rep.apellido_materno'))}
               </div>
             </div>
 
@@ -826,9 +937,10 @@ export default function Page() {
                 <input
                   value={repFechaNac}
                   onChange={(e) => setRepFechaNac(onlyDigits(e.target.value).slice(0, 8))}
-                  className={classInput(!!errors['rep.fecha_nacimiento'])}
+                  onBlur={() => touchAndValidate('rep.fecha_nacimiento')}
+                  className={classInput(!!showErr('rep.fecha_nacimiento'))}
                 />
-                {errText(errors['rep.fecha_nacimiento'])}
+                {errText(showErr('rep.fecha_nacimiento'))}
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">
@@ -837,10 +949,11 @@ export default function Page() {
                 <input
                   value={repRFC}
                   onChange={(e) => setRepRFC(e.target.value)}
-                  className={classInput(!!errors['rep.rfc'])}
+                  onBlur={() => touchAndValidate('rep.rfc')}
+                  className={classInput(!!showErr('rep.rfc'))}
                   placeholder="XAXX010101000"
                 />
-                {errText(errors['rep.rfc'])}
+                {errText(showErr('rep.rfc'))}
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">
@@ -849,10 +962,11 @@ export default function Page() {
                 <input
                   value={repCURP}
                   onChange={(e) => setRepCURP(e.target.value)}
-                  className={classInput(!!errors['rep.curp'])}
+                  onBlur={() => touchAndValidate('rep.curp')}
+                  className={classInput(!!showErr('rep.curp'))}
                   placeholder="PEPJ900101HDFRRN09"
                 />
-                {errText(errors['rep.curp'])}
+                {errText(showErr('rep.curp'))}
               </div>
             </div>
           </div>
