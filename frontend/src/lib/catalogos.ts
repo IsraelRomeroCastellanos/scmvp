@@ -27,6 +27,7 @@ export async function loadCatalogo(path: string): Promise<CatalogItem[]> {
     throw new Error(`Catálogo inválido (se esperaba array): ${url}`);
   }
 
+  // Normaliza/filtra para evitar basura
   return data
     .map((x: any) => ({
       clave: String(x?.clave ?? '').trim(),
@@ -35,7 +36,7 @@ export async function loadCatalogo(path: string): Promise<CatalogItem[]> {
     .filter((x: CatalogItem) => x.clave && x.descripcion);
 }
 
-// Helpers opcionales (si los usas en pantallas)
+// Helpers opcionales (si los sigues usando en otras pantallas)
 export function loadPaises() {
   return loadCatalogo('sat/c_pais');
 }
@@ -49,13 +50,12 @@ export function loadGiroMercantil() {
 function normalizeCatalogUrl(path: string) {
   if (!path) throw new Error('Path de catálogo vacío');
 
+  // Si ya viene como URL absoluta/relativa desde raíz
   if (path.startsWith('/')) {
     return path.endsWith('.json') ? path : `${path}.json`;
   }
 
-  const withPrefix = path.startsWith('catalogos/')
-    ? `/${path}`
-    : `/catalogos/${path}`;
-
+  // Si viene sin /catalogos/
+  const withPrefix = path.startsWith('catalogos/') ? `/${path}` : `/catalogos/${path}`;
   return withPrefix.endsWith('.json') ? withPrefix : `${withPrefix}.json`;
 }

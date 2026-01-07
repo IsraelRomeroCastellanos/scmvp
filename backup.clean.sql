@@ -26,7 +26,6 @@ SET row_security = off;
 -- *not* creating schema, since initdb creates it
 
 
-ALTER SCHEMA public OWNER TO cumplimiento_mvp_user;
 
 SET default_tablespace = '';
 
@@ -48,7 +47,6 @@ CREATE TABLE public.alertas (
 );
 
 
-ALTER TABLE public.alertas OWNER TO cumplimiento_mvp_user;
 
 --
 -- Name: TABLE alertas; Type: COMMENT; Schema: public; Owner: cumplimiento_mvp_user
@@ -70,7 +68,6 @@ CREATE SEQUENCE public.alertas_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.alertas_id_seq OWNER TO cumplimiento_mvp_user;
 
 --
 -- Name: alertas_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: cumplimiento_mvp_user
@@ -94,7 +91,6 @@ CREATE TABLE public.barridos_listas (
 );
 
 
-ALTER TABLE public.barridos_listas OWNER TO cumplimiento_mvp_user;
 
 --
 -- Name: TABLE barridos_listas; Type: COMMENT; Schema: public; Owner: cumplimiento_mvp_user
@@ -116,7 +112,6 @@ CREATE SEQUENCE public.barridos_listas_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.barridos_listas_id_seq OWNER TO cumplimiento_mvp_user;
 
 --
 -- Name: barridos_listas_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: cumplimiento_mvp_user
@@ -153,7 +148,6 @@ CREATE TABLE public.clientes (
 );
 
 
-ALTER TABLE public.clientes OWNER TO cumplimiento_mvp_user;
 
 --
 -- Name: TABLE clientes; Type: COMMENT; Schema: public; Owner: cumplimiento_mvp_user
@@ -175,7 +169,6 @@ CREATE SEQUENCE public.clientes_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.clientes_id_seq OWNER TO cumplimiento_mvp_user;
 
 --
 -- Name: clientes_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: cumplimiento_mvp_user
@@ -203,7 +196,6 @@ CREATE TABLE public.empresas (
 );
 
 
-ALTER TABLE public.empresas OWNER TO cumplimiento_mvp_user;
 
 --
 -- Name: TABLE empresas; Type: COMMENT; Schema: public; Owner: cumplimiento_mvp_user
@@ -225,7 +217,6 @@ CREATE SEQUENCE public.empresas_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.empresas_id_seq OWNER TO cumplimiento_mvp_user;
 
 --
 -- Name: empresas_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: cumplimiento_mvp_user
@@ -250,7 +241,6 @@ CREATE TABLE public.matrices_riesgo (
 );
 
 
-ALTER TABLE public.matrices_riesgo OWNER TO cumplimiento_mvp_user;
 
 --
 -- Name: TABLE matrices_riesgo; Type: COMMENT; Schema: public; Owner: cumplimiento_mvp_user
@@ -272,7 +262,6 @@ CREATE SEQUENCE public.matrices_riesgo_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.matrices_riesgo_id_seq OWNER TO cumplimiento_mvp_user;
 
 --
 -- Name: matrices_riesgo_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: cumplimiento_mvp_user
@@ -297,7 +286,6 @@ CREATE TABLE public.transacciones (
 );
 
 
-ALTER TABLE public.transacciones OWNER TO cumplimiento_mvp_user;
 
 --
 -- Name: TABLE transacciones; Type: COMMENT; Schema: public; Owner: cumplimiento_mvp_user
@@ -319,7 +307,6 @@ CREATE SEQUENCE public.transacciones_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.transacciones_id_seq OWNER TO cumplimiento_mvp_user;
 
 --
 -- Name: transacciones_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: cumplimiento_mvp_user
@@ -346,7 +333,6 @@ CREATE TABLE public.usuarios (
 );
 
 
-ALTER TABLE public.usuarios OWNER TO cumplimiento_mvp_user;
 
 --
 -- Name: TABLE usuarios; Type: COMMENT; Schema: public; Owner: cumplimiento_mvp_user
@@ -382,7 +368,6 @@ CREATE SEQUENCE public.usuarios_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.usuarios_id_seq OWNER TO cumplimiento_mvp_user;
 
 --
 -- Name: usuarios_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: cumplimiento_mvp_user
