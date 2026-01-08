@@ -8,14 +8,14 @@ const router = Router();
 /**
  * Helpers
  */
-function isNonEmptyString(v: any) {
+function isNonEmptyString(v: any): boolean {
   return typeof v === 'string' && v.trim().length > 0;
 }
 
-function pickEmpresaId(req: Request): number | null {
-  const q = (req.query?.empresa_id as any) ?? null;
-  if (q === null || q === undefined || q === '') return null;
-  const n = Number(q);
+function pickEmpresaIdFromQuery(req: Request): number | null {
+  const raw = (req.query?.empresa_id as any) ?? null;
+  if (raw === null || raw === undefined || raw === '') return null;
+  const n = Number(raw);
   if (!Number.isFinite(n) || n <= 0) return null;
   return Math.trunc(n);
 }
@@ -24,9 +24,11 @@ function getUser(req: Request): any {
   return (req as any).user || null;
 }
 
-function normalizeTipoCliente(v: any): 'persona_fisica' | 'persona_moral' | 'fideicomiso' | null {
+function normalizeTipoCliente(
+  v: any
+): 'persona_fisica' | 'persona_moral' | 'fideicomiso' | null {
   if (!isNonEmptyString(v)) return null;
-  const s = v.trim();
+  const s = String(v).trim();
   if (s === 'persona_fisica' || s === 'persona_moral' || s === 'fideicomiso') return s;
   return null;
 }
@@ -34,7 +36,7 @@ function normalizeTipoCliente(v: any): 'persona_fisica' | 'persona_moral' | 'fid
 /**
  * Validación bloqueante mínima para fideicomiso (Iteración 1)
  */
-function validateFideicomisoPayload(body: any) {
+function validateFideicomisoPayload(body: any): string[] {
   const errors: string[] = [];
 
   if (!isNonEmptyString(body?.nacionalidad)) {
@@ -45,9 +47,12 @@ function validateFideicomisoPayload(body: any) {
   const f = dc?.fideicomiso ?? {};
   const r = dc?.representante ?? {};
 
-  if (!isNonEmptyString(f?.denominacion_fiduciario)) errors.push('fideicomiso.denominacion_fiduciario es obligatorio');
-  if (!isNonEmptyString(f?.rfc_fiduciario)) errors.push('fideicomiso.rfc_fiduciario es obligatorio');
-  if (!isNonEmptyString(f?.identificador)) errors.push('fideicomiso.identificador es obligatorio');
+  if (!isNonEmptyString(f?.denominacion_fiduciario))
+    errors.push('representante: fideicomiso.denominacion_fiduciario es obligatorio');
+  if (!isNonEmptyString(f?.rfc_fiduciario))
+    errors.push('representante: fideicomiso.rfc_fiduciario es obligatorio');
+  if (!isNonEmptyString(f?.identificador))
+    errors.push('representante: fideicomiso.identificador es obligatorio');
 
   if (!isNonEmptyString(r?.nombre_completo)) errors.push('representante.nombre_completo es obligatorio');
   if (!isNonEmptyString(r?.fecha_nacimiento)) errors.push('representante.fecha_nacimiento es obligatorio (AAAAMMDD)');
@@ -60,32 +65,42 @@ function validateFideicomisoPayload(body: any) {
 /**
  * ===============================
  * GET /api/cliente/clientes
- * - admin: si manda ?empresa_id=, filtra; si no, lista todo
- * - no admin: lista por empresa_id del token (si existe), o 400
+ * - admin: lista todo o filtra por ?empresa_id=
+ * - no admin: lista por empresa_id del token (si no existe => 400)
  * ===============================
  */
 router.get('/clientes', authenticate, async (req: Request, res: Response) => {
   const user = getUser(req);
   const rol = user?.rol;
-  const empresaIdQuery = pickEmpresaId(req);
+  const empresaIdQuery = pickEmpresaIdFromQuery(req);
 
   try {
-    // admin => puede listar todo o por empresa_id
     if (rol === 'admin') {
+      if (empresaIdQuery) {
+        const { rows } = await pool.query(
+          `
+          SELECT *
+          FROM clientes
+          WHERE empresa_id = $1
+          ORDER BY id DESC
+          LIMIT 500
+          `,
+          [empresaIdQuery]
+        );
+        return res.json({ clientes: rows });
+      }
+
       const { rows } = await pool.query(
         `
         SELECT *
         FROM clientes
-        ${empresaIdQuery ? 'WHERE empresa_id = $1' : ''}
         ORDER BY id DESC
         LIMIT 500
-        `,
-        empresaIdQuery ? [empresaIdQuery] : []
+        `
       );
       return res.json({ clientes: rows });
     }
 
-    // No admin => requiere empresa_id en token
     const empresaIdToken = Number(user?.empresa_id);
     if (!Number.isFinite(empresaIdToken) || empresaIdToken <= 0) {
       return res.status(400).json({ error: 'empresa_id inválido' });
@@ -132,7 +147,7 @@ router.get('/clientes/:id', authenticate, async (req: Request, res: Response) =>
 
   try {
     if (rol === 'admin') {
-      const r = await pool.query(SELECT * FROM clientes WHERE id = $1 LIMIT 1, [id]);
+      const r = await pool.query(`SELECT * FROM clientes WHERE id = $1 LIMIT 1`, [id]);
       if (r.rows.length === 0) return res.status(404).json({ error: 'Cliente no encontrado' });
       return res.json({ cliente: r.rows[0] });
     }
@@ -142,7 +157,10 @@ router.get('/clientes/:id', authenticate, async (req: Request, res: Response) =>
       return res.status(400).json({ error: 'empresa_id inválido' });
     }
 
-    const r = await pool.query(SELECT * FROM clientes WHERE id = $1 AND empresa_id = $2 LIMIT 1, [id, empresaIdToken]);
+    const r = await pool.query(
+      `SELECT * FROM clientes WHERE id = $1 AND empresa_id = $2 LIMIT 1`,
+      [id, empresaIdToken]
+    );
     if (r.rows.length === 0) return res.status(404).json({ error: 'Cliente no encontrado' });
     return res.json({ cliente: r.rows[0] });
   } catch (err: any) {
@@ -159,13 +177,11 @@ router.get('/clientes/:id', authenticate, async (req: Request, res: Response) =>
 /**
  * ===============================
  * POST /api/cliente/registrar-cliente
- * - Inserta con columnas mínimas para compatibilidad con BD restaurada
- * - valida fideicomiso (iteración 1)
+ * Inserta columnas mínimas para compatibilidad con dumps/restauraciones viejas.
+ * Valida fideicomiso (iteración 1).
  * ===============================
  */
 router.post('/registrar-cliente', authenticate, async (req: Request, res: Response) => {
-  const user = getUser(req);
-
   const empresa_id = Number(req.body?.empresa_id);
   if (!Number.isFinite(empresa_id) || empresa_id <= 0) {
     return res.status(400).json({ error: 'empresa_id inválido' });
@@ -180,32 +196,29 @@ router.post('/registrar-cliente', authenticate, async (req: Request, res: Respon
     return res.status(400).json({ error: 'nombre_entidad es obligatorio' });
   }
 
-  // Bloqueante fideicomiso
   if (tipo_cliente === 'fideicomiso') {
     const errs = validateFideicomisoPayload(req.body);
     if (errs.length) {
-      // devuelve el primer error para bloquear (puedes cambiar a lista si quieres)
       return res.status(400).json({ error: errs[0] });
     }
   }
 
+  const nombre_entidad = String(req.body.nombre_entidad).trim();
   const nacionalidad = isNonEmptyString(req.body?.nacionalidad) ? String(req.body.nacionalidad).trim() : null;
   const datos_completos = req.body?.datos_completos ?? {};
 
   try {
-    // Nota: columnas mínimas para evitar “columna X no existe” con dumps viejos
     const q = await pool.query(
       `
       INSERT INTO clientes (empresa_id, nombre_entidad, tipo_cliente, nacionalidad, datos_completos, estado)
       VALUES ($1, $2, $3, $4, $5::jsonb, 'activo')
       RETURNING id, empresa_id, nombre_entidad, tipo_cliente, nacionalidad, estado, creado_en, actualizado_en
       `,
-      [empresa_id, String(req.body.nombre_entidad).trim(), tipo_cliente, nacionalidad, JSON.stringify(datos_completos)]
+      [empresa_id, nombre_entidad, tipo_cliente, nacionalidad, JSON.stringify(datos_completos)]
     );
 
     return res.status(201).json({ ok: true, cliente: q.rows[0] });
   } catch (err: any) {
-    // Duplicado típico
     if (err?.code === '23505') {
       return res.status(409).json({ error: 'Cliente duplicado para esa empresa (empresa_id + nombre_entidad)' });
     }
@@ -225,7 +238,7 @@ router.post('/registrar-cliente', authenticate, async (req: Request, res: Respon
 /**
  * ===============================
  * PUT /api/cliente/clientes/:id
- * - Update mínimo (compatibilidad)
+ * Update mínimo (compatibilidad con BD restaurada).
  * ===============================
  */
 router.put('/clientes/:id', authenticate, async (req: Request, res: Response) => {
@@ -241,7 +254,9 @@ router.put('/clientes/:id', authenticate, async (req: Request, res: Response) =>
   const nacionalidad = isNonEmptyString(req.body?.nacionalidad) ? String(req.body.nacionalidad).trim() : null;
   const datos_completos = req.body?.datos_completos ?? null;
 
-  if (!nombre_entidad) return res.status(400).json({ error: 'nombre_entidad es obligatorio' });
+  if (!nombre_entidad) {
+    return res.status(400).json({ error: 'nombre_entidad es obligatorio' });
+  }
 
   try {
     if (rol === 'admin') {
