@@ -3,192 +3,180 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-interface Cliente {
-  id: number;
-  nombre_entidad: string;
-  tipo_cliente: string;
-  nacionalidad: string | null;
-  estado: 'activo' | 'inactivo';
-}
-
-interface Empresa {
+type Empresa = {
   id: number;
   nombre_legal: string;
-  rfc?: string | null;
+};
+
+type Cliente = {
+  id: number;
+  empresa_id: number;
+  nombre_entidad: string;
+  tipo_cliente: string;
+  nacionalidad?: string | null;
   estado?: string | null;
+};
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, '') ||
+  'https://scmvp-1jhq.onrender.com';
+
+function getToken(): string {
+  try {
+    return localStorage.getItem('token') || '';
+  } catch {
+    return '';
+  }
+}
+
+async function apiGet<T>(path: string, token: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    cache: 'no-store'
+  });
+
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try {
+      const j = await res.json();
+      msg = j?.error || msg;
+    } catch {
+      // ignore
+    }
+    throw new Error(msg);
+  }
+
+  return (await res.json()) as T;
 }
 
 export default function ClientesPage() {
   const router = useRouter();
 
-  const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [empresas, setEmpresas] = useState<Empresa[]>([]);
-  const [empresaId, setEmpresaId] = useState<number | ''>('');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [loadingClientes, setLoadingClientes] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const apiBase = useMemo(() => process.env.NEXT_PUBLIC_API_BASE_URL || '', []);
+  const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [empresaSel, setEmpresaSel] = useState<string>('all'); // ✅ default = Todas
+  const [clientes, setClientes] = useState<Cliente[]>([]);
 
+  const token = useMemo(() => getToken(), []);
+
+  // 1) Cargar empresas (para el selector)
   useEffect(() => {
-    const init = async () => {
+    let alive = true;
+
+    (async () => {
+      setLoading(true);
+      setError(null);
+
       try {
-        setLoading(true);
-        setError('');
+        if (!token) throw new Error('No hay token. Inicia sesión.');
 
-        const token = localStorage.getItem('token');
-        if (!token) {
-          router.push('/login');
-          return;
-        }
+        const data = await apiGet<{ empresas: Empresa[] }>('/api/admin/empresas', token);
 
-        // 1) Cargar empresas (para poder seleccionar empresa_id)
-        //    Si falla, igual intentamos cargar clientes (por si el backend no requiere empresa_id).
-        let empresasList: Empresa[] = [];
-        try {
-          const resEmp = await fetch(`${apiBase}/api/admin/empresas`, {
-            headers: { Authorization: `Bearer ${token}` },
-            cache: 'no-store'
-          });
+        if (!alive) return;
+        const list = Array.isArray(data?.empresas) ? data.empresas : [];
+        setEmpresas(list);
 
-          const dataEmp = await resEmp.json().catch(() => ({}));
-          if (resEmp.ok) {
-            empresasList = Array.isArray(dataEmp?.empresas) ? dataEmp.empresas : [];
-            setEmpresas(empresasList);
-          }
-        } catch {
-          // silencioso (no bloquea)
-        }
-
-        // 2) Determinar empresa_id activa
-        const saved = localStorage.getItem('empresa_id_activa');
-        let selected: number | '' = '';
-
-        if (saved && /^\d+$/.test(saved)) {
-          selected = Number(saved);
-        } else if (empresasList.length > 0) {
-          selected = empresasList[0].id;
-        }
-
-        setEmpresaId(selected);
-
-        // 3) Cargar clientes (con empresa_id si lo tenemos)
-        await fetchClientes(token, selected);
-      } catch (e) {
-        console.error(e);
-        setError('Error al cargar clientes');
+        // Si no hay empresas, igual dejamos “all”
+        setEmpresaSel('all');
+      } catch (e: any) {
+        if (!alive) return;
+        setError(e?.message || 'Error al cargar empresas');
       } finally {
+        if (!alive) return;
         setLoading(false);
       }
+    })();
+
+    return () => {
+      alive = false;
     };
+  }, [token]);
 
-    const fetchClientes = async (token: string, empresaIdSelected: number | '') => {
-      // Si hay empresa_id, lo mandamos por query param (lo más común)
-      const url =
-        empresaIdSelected !== ''
-          ? `${apiBase}/api/cliente/clientes?empresa_id=${empresaIdSelected}`
-          : `${apiBase}/api/cliente/clientes`;
+  // 2) Cargar clientes (según selector)
+  useEffect(() => {
+    let alive = true;
 
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: 'no-store'
-      });
+    (async () => {
+      setLoadingClientes(true);
+      setError(null);
 
-      const data = await res.json().catch(() => ({}));
+      try {
+        if (!token) throw new Error('No hay token. Inicia sesión.');
 
-      if (!res.ok) {
-        // Caso típico: backend pide empresa_id => reintento si podemos obtener empresas
-        const msg = String(data?.error || '');
-        if (res.status === 400 && msg.toLowerCase().includes('empresa_id')) {
-          // Intentar cargar empresas y elegir la primera como fallback
-          const resEmp = await fetch(`${apiBase}/api/admin/empresas`, {
-            headers: { Authorization: `Bearer ${token}` },
-            cache: 'no-store'
-          });
-          const dataEmp = await resEmp.json().catch(() => ({}));
-
-          const list = Array.isArray(dataEmp?.empresas) ? dataEmp.empresas : [];
-          setEmpresas(list);
-
-          if (list.length > 0) {
-            const fallbackId = list[0].id;
-            setEmpresaId(fallbackId);
-            localStorage.setItem('empresa_id_activa', String(fallbackId));
-
-            const res2 = await fetch(`${apiBase}/api/cliente/clientes?empresa_id=${fallbackId}`, {
-              headers: { Authorization: `Bearer ${token}` },
-              cache: 'no-store'
-            });
-            const data2 = await res2.json().catch(() => ({}));
-            if (!res2.ok) throw new Error(data2?.error || 'Error al cargar clientes');
-            setClientes(data2?.clientes ?? []);
+        // Caso A: “Todas” => pedimos por cada empresa y unimos
+        if (empresaSel === 'all') {
+          if (!empresas.length) {
+            // si no hay empresas, no hay nada que consultar
+            if (!alive) return;
+            setClientes([]);
             return;
           }
-        }
 
-        // Token inválido/expirado => manda a login
-        if (res.status === 401) {
-          localStorage.removeItem('token');
-          router.push('/login');
+          const requests = empresas.map((e) =>
+            apiGet<{ clientes: Cliente[] }>(
+              `/api/cliente/clientes?empresa_id=${encodeURIComponent(String(e.id))}`,
+              token
+            ).then((r) => (Array.isArray(r?.clientes) ? r.clientes : []))
+          );
+
+          const allLists = await Promise.all(requests);
+          const flat = allLists.flat();
+
+          // Dedup por id
+          const map = new Map<number, Cliente>();
+          for (const c of flat) {
+            if (c?.id != null) map.set(Number(c.id), c);
+          }
+
+          const merged = Array.from(map.values()).sort((a, b) => Number(b.id) - Number(a.id));
+
+          if (!alive) return;
+          setClientes(merged);
           return;
         }
 
-        throw new Error(data?.error || 'Error al cargar clientes');
-      }
+        // Caso B: empresa específica
+        const empresaId = Number(empresaSel);
+        if (!Number.isFinite(empresaId) || empresaId <= 0) {
+          throw new Error('Selecciona una empresa válida');
+        }
 
-      setClientes(data?.clientes ?? []);
+        const data = await apiGet<{ clientes: Cliente[] }>(
+          `/api/cliente/clientes?empresa_id=${encodeURIComponent(String(empresaId))}`,
+          token
+        );
+
+        if (!alive) return;
+        setClientes(Array.isArray(data?.clientes) ? data.clientes : []);
+      } catch (e: any) {
+        if (!alive) return;
+        setError(e?.message || 'Error al cargar clientes');
+        setClientes([]);
+      } finally {
+        if (!alive) return;
+        setLoadingClientes(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
     };
+  }, [token, empresaSel, empresas]);
 
-    init();
-  }, [apiBase, router]);
+  if (loading) {
+    return <p className="p-6">Cargando...</p>;
+  }
 
-  const onChangeEmpresa = async (val: string) => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-
-    const next = val === '' ? '' : Number(val);
-    setEmpresaId(next);
-    if (next === '') {
-      localStorage.removeItem('empresa_id_activa');
-    } else {
-      localStorage.setItem('empresa_id_activa', String(next));
-    }
-
-    try {
-      setLoading(true);
-      setError('');
-
-      const url =
-        next !== '' ? `${apiBase}/api/cliente/clientes?empresa_id=${next}` : `${apiBase}/api/cliente/clientes`;
-
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: 'no-store'
-      });
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        if (res.status === 401) {
-          localStorage.removeItem('token');
-          router.push('/login');
-          return;
-        }
-        throw new Error(data?.error || 'Error al cargar clientes');
-      }
-
-      setClientes(data?.clientes ?? []);
-    } catch (e) {
-      console.error(e);
-      setError('Error al cargar clientes');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) return <p className="p-6">Cargando clientes…</p>;
-  if (error) return <p className="p-6 text-red-600">{error}</p>;
+  if (error) {
+    return <p className="p-6 text-red-600">{error}</p>;
+  }
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -196,24 +184,9 @@ export default function ClientesPage() {
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold mb-1">Gestión de Clientes</h1>
-            <p className="text-sm text-gray-500 mb-4">Listado general de clientes del sistema</p>
-
-            {empresas.length > 0 ? (
-              <div className="flex items-center gap-2 mb-2">
-                <label className="text-sm text-gray-600">Empresa:</label>
-                <select
-                  className="border rounded px-2 py-1 text-sm"
-                  value={empresaId === '' ? '' : String(empresaId)}
-                  onChange={(e) => onChangeEmpresa(e.target.value)}
-                >
-                  {empresas.map((e) => (
-                    <option key={e.id} value={String(e.id)}>
-                      #{e.id} — {e.nombre_legal}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : null}
+            <p className="text-sm text-gray-500">
+              Listado general de clientes del sistema
+            </p>
           </div>
 
           <button
@@ -224,58 +197,82 @@ export default function ClientesPage() {
           </button>
         </div>
 
-        {clientes.length === 0 ? (
-          <p>No hay clientes registrados.</p>
-        ) : (
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-gray-100 text-left">
-                <th className="p-2 border">ID</th>
-                <th className="p-2 border">Nombre</th>
-                <th className="p-2 border">Tipo</th>
-                <th className="p-2 border">Nacionalidad</th>
-                <th className="p-2 border">Estado</th>
-                <th className="p-2 border">Acciones</th>
-              </tr>
-            </thead>
+        {/* ✅ Selector con default “Todas” */}
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <label className="text-sm font-medium text-gray-700">Empresa:</label>
+          <select
+            className="border rounded px-3 py-2 text-sm bg-white"
+            value={empresaSel}
+            onChange={(e) => setEmpresaSel(e.target.value)}
+          >
+            <option value="all">Todas</option>
+            {empresas.map((e) => (
+              <option key={e.id} value={String(e.id)}>
+                {e.nombre_legal} (ID {e.id})
+              </option>
+            ))}
+          </select>
 
-            <tbody>
-              {clientes.map((c) => (
-                <tr key={c.id} className="hover:bg-gray-50">
-                  <td className="p-2 border">{c.id}</td>
-                  <td className="p-2 border">{c.nombre_entidad}</td>
-                  <td className="p-2 border">{c.tipo_cliente}</td>
-                  <td className="p-2 border">{c.nacionalidad ?? '-'}</td>
-                  <td className="p-2 border">
-                    <span className="px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-800">
-                      {c.estado}
-                    </span>
-                  </td>
+          {loadingClientes ? (
+            <span className="text-sm text-gray-500">Cargando clientes…</span>
+          ) : (
+            <span className="text-sm text-gray-500">
+              {clientes.length} cliente{clientes.length === 1 ? '' : 's'}
+            </span>
+          )}
+        </div>
 
-                  <td className="p-2 border">
-                    <div className="flex flex-wrap gap-3">
-                      <button
-                        onClick={() => router.push(`/cliente/clientes/${c.id}`)}
-                        className="text-blue-600 hover:underline text-sm"
-                        title="Ver detalle"
-                      >
-                        Ver
-                      </button>
-
-                      <button
-                        onClick={() => router.push(`/cliente/editar-cliente/${c.id}`)}
-                        className="text-blue-600 hover:underline text-sm"
-                        title="Editar"
-                      >
-                        Editar
-                      </button>
-                    </div>
-                  </td>
+        <div className="mt-4">
+          {clientes.length === 0 ? (
+            <p>No hay clientes registrados.</p>
+          ) : (
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-gray-100 text-left">
+                  <th className="p-2 border">ID</th>
+                  <th className="p-2 border">Empresa</th>
+                  <th className="p-2 border">Nombre</th>
+                  <th className="p-2 border">Tipo</th>
+                  <th className="p-2 border">Nacionalidad</th>
+                  <th className="p-2 border">Estado</th>
+                  <th className="p-2 border">Acciones</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+              </thead>
+              <tbody>
+                {clientes.map((c) => (
+                  <tr key={c.id} className="hover:bg-gray-50">
+                    <td className="p-2 border">{c.id}</td>
+                    <td className="p-2 border">{c.empresa_id}</td>
+                    <td className="p-2 border">{c.nombre_entidad}</td>
+                    <td className="p-2 border">{c.tipo_cliente}</td>
+                    <td className="p-2 border">{c.nacionalidad || '-'}</td>
+                    <td className="p-2 border">{c.estado || '-'}</td>
+                    <td className="p-2 border">
+                      <div className="flex gap-2">
+                        <button
+                          className="text-blue-600 hover:underline text-sm"
+                          onClick={() => router.push(`/cliente/clientes/${c.id}`)}
+                        >
+                          Ver
+                        </button>
+                        <button
+                          className="text-blue-600 hover:underline text-sm"
+                          onClick={() => router.push(`/cliente/editar-cliente/${c.id}`)}
+                        >
+                          Editar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <p className="mt-4 text-xs text-gray-400">
+          API: {API_BASE}
+        </p>
       </div>
     </div>
   );
