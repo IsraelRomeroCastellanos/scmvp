@@ -20,7 +20,9 @@
 
 \- GET /api/admin/empresas -> 200 {"empresas":\[...]}
 
-\- GET /api/cliente/mis-clientes -> esperado 200 {"clientes":\[...]} (ACTUALMENTE 404 en backend nuevo)
+\- GET /api/cliente/clientes?empresa\_id=<id> -> 200 {"clientes":\[...]}
+
+&nbsp; - Nota: para admin/consultor, si no se envía empresa\_id el BE puede responder 400: {"error":"empresa\_id inválido"}
 
 
 
@@ -28,9 +30,19 @@
 
 \- “Service Suspended” en Render:
 
-&nbsp; - Verifica BASE; el backend actual es https://scmvp-1jhq.onrender.com
+  - Verifica BASE; el backend actual es https://scmvp-1jhq.onrender.com
 
-&nbsp; - El backend anterior https://scmvp.onrender.com está suspendido
+  - El backend anterior https://scmvp.onrender.com está suspendido
+
+
+
+\## Variables (scripts/.env.local)
+
+\- BASE="https://scmvp-1jhq.onrender.com"
+
+\- EMAIL="admin@cumplimiento.com"
+
+\- EMPRESA\_ID\_FOR\_CHECK="32" (usado por mission.sh para /api/cliente/clientes)
 
 
 
