@@ -1,3 +1,19 @@
+\## 2026-01-10
+
+\- Checkpoint: mission OK en backend nuevo (Render)
+
+\- BE: https://scmvp-1jhq.onrender.com
+
+\- Nota: /api/cliente/clientes requiere empresa\_id para admin; mission usa EMPRESA\_ID\_FOR\_CHECK=32
+
+\- Evidencia: docs/ops/mission/mission\_YYYYMMDD\_HHMMSS.txt
+
+
+
+
+
+
+
 \## Semáforo (2025-12-21)
 
 \- Auth/Login: ✅
@@ -33,8 +49,4 @@
 -Backend prod actual: https://scmvp-1jhq.onrender.com
 
 -Backend viejo: https://scmvp.onrender.com (suspendido intencionalmente)
-
-
-
-
 

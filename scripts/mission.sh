@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ========== Config por ENV ==========
-BASE="${BASE:-https://scmvp.onrender.com}"
+BASE="${BASE:-https://scmvp-1jhq.onrender.com}"
 EMAIL="${EMAIL:-admin@cumplimiento.com}"
 
 # Requerido por env (no prompt)
@@ -78,11 +78,15 @@ H_RAW=(-H "Authorization: $TOKEN")
 
 # Checks (ajusta lista si cambias rutas)
 declare -A CHECKS
-CHECKS["Admin __debug"]="$BASE/api/admin/__debug"
 CHECKS["Admin empresas"]="$BASE/api/admin/empresas"
-CHECKS["Cliente __debug"]="$BASE/api/cliente/__debug"
-CHECKS["Cliente mis-clientes (Bearer)"]="$BASE/api/cliente/mis-clientes"
-#CHECKS["Cliente mis-clientes (Raw)"]="$BASE/api/cliente/mis-clientes"
+EMPRESA_ID_FOR_CHECK="${EMPRESA_ID_FOR_CHECK:-}"
+# ...
+if [[ -n "${EMPRESA_ID_FOR_CHECK}" ]]; then
+  CHECKS["Cliente clientes (Bearer)"]="$BASE/api/cliente/clientes?empresa_id=${EMPRESA_ID_FOR_CHECK}"
+else
+  CHECKS["Cliente clientes (Bearer)"]="$BASE/api/cliente/clientes"
+fi
+#CHECKS["Cliente clientes (Raw)"]="$BASE/api/cliente/clientes"
 
 # Ejecutar checks
 OVERALL="OK"
@@ -117,15 +121,15 @@ for name in "${!CHECKS[@]}"; do
 done
 
 # Diagnóstico extra: si Bearer falla y Raw OK => bug middleware
-bearer_code="$(http_req "$BASE/api/cliente/mis-clientes" "${H_BEARER[@]}")"
+bearer_code="$(http_req "$BASE/api/cliente/clientes" "${H_BEARER[@]}")"
 bearer_code="${bearer_code%%|*}"
-raw_code="$(http_req "$BASE/api/cliente/mis-clientes" "${H_RAW[@]}")"
+raw_code="$(http_req "$BASE/api/cliente/clientes" "${H_RAW[@]}")"
 raw_code="${raw_code%%|*}"
 
 if [[ "$bearer_code" != "200" && "$raw_code" == "200" ]]; then
   if [[ "$OVERALL" != "FAIL" ]]; then OVERALL="WARN"; fi
   OUT+="
-NOTE: Cliente mis-clientes funciona con Authorization: <token> pero falla con Bearer. Esto sugiere middleware que no parsea 'Bearer ' correctamente.
+NOTE: Cliente clientes funciona con Authorization: <token> pero falla con Bearer. Esto sugiere middleware que no parsea 'Bearer ' correctamente.
 "
 fi
 

@@ -1,0 +1,11 @@
+SCMVP Mission Check — 2026-01-10 13:10:29
+BASE: https://scmvp-1jhq.onrender.com
+EMAIL: admin@cumplimiento.com
+
+Auth/Login: OK (token length 225)
+
+-- Checks --
+Admin empresas: OK (HTTP:200) — {"empresas":[{"id":32,"nombre_legal":"Caviace y Asociados S.C.","rfc":"CAS010702FR4","tipo_entidad":"persona_moral","estado":"activo","entidad":null,"municipio":null,"codigo_postal":null},{"id":1,"nombre_legal":"Empresa de Prueba SA de CV","rfc":"EMP010203ABC","tipo_entidad":"persona_fisica","estado
+Cliente clientes (Bearer): OK (HTTP:200) — {"clientes":[]}
+
+Overall: OK
