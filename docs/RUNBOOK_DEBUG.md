@@ -1,42 +1,36 @@
-# Runbook: Debug & Verification
+\# RUNBOOK — SCMVP Debug
 
-## Golden commands (copy/paste)
-### Health checks
-- Backend health:
-- DB connectivity:
 
-### Auth
-- Login:
-- Decode token / claims expected:
 
-### Clientes (example)
-- GET clientes (dev):
-- GET clientes (prod):
+\## Ejecutar Mission Check (WSL)
 
-## Expected behavior
-- What “working” looks like (frontend):
-- What “working” looks like (backend response):
+1\) source scripts/.env.local
 
-## Common failure modes
-### Symptom: "Error al cargar clientes"
-Likely causes:
-- 
-How to confirm:
-- 
-Fix:
-- 
+2\) ./scripts/mission.sh
 
-### Symptom: "Empresa no asociada al usuario"
-Meaning:
-- 
-How to confirm:
-- 
-Fix options:
-- 
+3\) unset PASSWORD
 
-## Vercel / Production checklist
-- Confirm FE env vars present (names):
-- Confirm FE base URL points to correct BE:
-- Confirm CORS origin(s):
-- Confirm cookies vs Authorization header:
-- Confirm token audience/issuer (if applies):
+
+
+\## Golden checks (mínimos)
+
+\- POST /api/auth/login -> token
+
+\- GET /api/admin/\_\_debug -> 200 {"ok":true,"router":"admin"}
+
+\- GET /api/admin/empresas -> 200 {"empresas":\[...]}
+
+\- GET /api/cliente/mis-clientes -> esperado 200 {"clientes":\[...]} (ACTUALMENTE 404 en backend nuevo)
+
+
+
+\## Incidentes comunes
+
+\- “Service Suspended” en Render:
+
+&nbsp; - Verifica BASE; el backend actual es https://scmvp-1jhq.onrender.com
+
+&nbsp; - El backend anterior https://scmvp.onrender.com está suspendido
+
+
+

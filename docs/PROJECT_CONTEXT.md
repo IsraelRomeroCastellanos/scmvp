@@ -1,112 +1,24 @@
-\# Project Context
-
-
-
-\## Overview
-
-\- Product / module:
-
-\- Goal:
-
-\- Current status:
-
-\- Environments: local / staging / production
-
-
-
-\## Tech Stack
-
-\- Frontend:
-
-\- Backend:
-
-\- Database:
-
-\- Auth:
-
-\- Hosting/Deploy:
-
-\- Tooling (lint, test, migrations):
-
-
-
-\## Architecture
-
-\- Repo structure:
-
-&nbsp; - /frontend:
-
-&nbsp; - /backend:
-
-\- Main flows:
-
-&nbsp; - Auth flow:
-
-&nbsp; - Data flow (FE → BE → DB):
-
-\- Key modules / services:
-
-
-
-\## Config (no secrets)
-
-\### Environment variables (names only)
-
-Frontend:
-
-\- 
-
-Backend:
-
-\- 
-
-
-
-\### Base URLs
-
-\- Local FE:
-
-\- Local BE:
-
-\- Prod FE:
-
-\- Prod BE:
-
-
-
-\### Expected headers
-
-\- Authorization: `Bearer <token>`
-
-\- Other:
-
-
-
-\## Business Rules
-
-\- User ↔ company relationship:
-
-\- How “active company” is selected:
-
-\- Common permission errors and meaning:
-
-
-
-\## API Contracts (summary)
-
-\- `POST /auth/...`:
-
-\- `GET /clientes`:
-
-\- `POST /clientes`:
-
-\- Notes (pagination, filters, etc.):
-
-
-
-\## Known Issues
-
-\- 
-
-
-
+# SCMVP — Project Context
+
+## Producción
+- Frontend (Vercel): https://scmvp.vercel.app
+- Backend (Render, actual): https://scmvp-1jhq.onrender.com
+- Backend (Render, anterior): https://scmvp.onrender.com (suspendido)
+
+## Stack
+- Frontend: Next.js (App Router) + TypeScript + TailwindCSS
+- Backend: Node.js + Express + TypeScript
+- DB: PostgreSQL (Render)
+- Auth: JWT Bearer (Authorization: Bearer <token>)
+
+## Endpoints clave (BE)
+- POST /api/auth/login
+- GET /api/admin/__debug
+- GET /api/admin/empresas
+- GET /api/cliente/mis-clientes (pendiente en backend actual: 404)
+- GET /api/cliente/__debug (pendiente en backend actual: 404)
+
+## Roles / permisos (alto nivel)
+- Roles: admin / consultor / cliente
+- Cliente: opera sobre su empresa (empresa_id)
+- Admin/consultor: pueden ver global (según reglas definidas)

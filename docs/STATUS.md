@@ -24,3 +24,17 @@
 
 \- Tag estable actual: stable-20251221-01
 
+
+
+
+
+\## URLS
+
+-Backend prod actual: https://scmvp-1jhq.onrender.com
+
+-Backend viejo: https://scmvp.onrender.com (suspendido intencionalmente)
+
+
+
+
+
