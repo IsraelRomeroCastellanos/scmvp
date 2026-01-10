@@ -16,3 +16,4 @@ scripts/.env.local
 node_modules/
 *:Zone.Identifier
 backend/dist/
+docs/ops/mission/_local/
