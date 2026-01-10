@@ -15,3 +15,4 @@ docs/sat/*.xls
 scripts/.env.local
 node_modules/
 *:Zone.Identifier
+backend/dist/
