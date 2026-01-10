@@ -8,10 +8,13 @@ const router = Router();
 
 /**
  * ===============================
- * DEBUG — confirmar que el router carga
+ * DEBUG — confirmar que el router carga (PROTEGIDO)
  * ===============================
+ *
+ * Antes estaba público y respondía 200 sin token.
+ * Ahora requiere token válido y rol admin.
  */
-router.get('/__debug', (_req, res) => {
+router.get('/__debug', authenticate, authorizeRoles('admin'), (_req, res) => {
   res.json({ ok: true, router: 'admin' });
 });
 
@@ -43,7 +46,6 @@ router.get(
     }
   }
 );
-
 
 /**
  * ===============================
