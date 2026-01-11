@@ -299,6 +299,11 @@ export default function RegistrarClientePage() {
       if (!isNonEmpty(pfApPat)) return (setErr(path, 'persona.apellido_paterno es obligatorio'), false);
       return true;
     }
+    if (path === 'persona.apellido_materno') {
+      if (tipo !== 'persona_fisica') return true;
+      if (!isNonEmpty(pfApMat)) return (setErr(path, 'persona.apellido_materno es obligatorio'), false);
+      return true;
+    }
     if (path === 'persona.actividad_economica') {
       if (tipo !== 'persona_fisica') return true;
       if (!isNonEmpty(pfActividad)) return (setErr(path, 'persona.actividad_economica es obligatoria'), false);
@@ -393,6 +398,7 @@ export default function RegistrarClientePage() {
         'persona.fecha_nacimiento',
         'persona.nombres',
         'persona.apellido_paterno',
+	'persona.apellido_materno',
         'persona.actividad_economica'
       );
     }
@@ -714,12 +720,16 @@ export default function RegistrarClientePage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-sm font-medium">Apellido materno</label>
+                <label className="text-sm font-medium">Apellido materno *</label>
                 <input
-                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors['persona.apellido_paterno'] ? 'border-red-500' : 'border-gray-300'}`}
                   value={pfApMat}
                   onChange={(e) => setPfApMat(e.target.value)}
+		  onBlur={() => validateField('persona.apellido_materno')}
                 />
+	        {errors['persona.apellido_materno'] ? (
+                  <p className="text-xs text-red-600">{errors['persona.apellido_materno']}</p>
+                ) : null}
               </div>
 
               <SearchableSelect

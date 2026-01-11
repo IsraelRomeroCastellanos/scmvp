@@ -134,6 +134,8 @@ router.post('/registrar-cliente', authenticate, async (req: Request, res: Respon
       // Identidad mínima PF
       if (!isNonEmptyString(persona?.nombres)) return badRequest(res, 'persona.nombres es obligatorio');
       if (!isNonEmptyString(persona?.apellido_paterno)) return badRequest(res, 'persona.apellido_paterno es obligatorio');
+      if (!isNonEmptyString(persona?.apellido_materno)) return badRequest(res, 'persona.apellido_materno es obligatorio');
+
 
       // RFC + CURP obligatorios (regla de negocio estandarizada)
       if (!isNonEmptyString(persona?.rfc)) return badRequest(res, 'persona.rfc es obligatorio');
