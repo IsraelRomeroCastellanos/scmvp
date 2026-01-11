@@ -1,54 +1,46 @@
-\# RUNBOOK — SCMVP Debug
+# RUNBOOK — SCMVP Debug
 
+## Ejecutar Mission Check (WSL)
+1) source scripts/.env.local
+2) ./scripts/mission.sh
+3) unset PASSWORD
 
+## Token (WSL) — extracción robusta (evitar TOKEN_LEN=0)
+Recomendado: extraer con sed.
 
-\## Ejecutar Mission Check (WSL)
+TOKEN=$(curl -s -X POST "$BASE/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@cumplimiento.com","password":"***REDACTED***"}' \
+  | sed -n 's/.*"token"[ ]*:[ ]*"\([^"]*\)".*/\1/p')
 
-1\) source scripts/.env.local
+echo "TOKEN_LEN=${#TOKEN}"
 
-2\) ./scripts/mission.sh
+## Golden checks (mínimos)
+- POST /api/auth/login -> token
+- GET /api/admin/__debug:
+  - sin Authorization -> 401
+  - Authorization: Bearer basura -> 401
+- GET /api/admin/empresas -> 200 {"empresas":[...]}
+- GET /api/cliente/clientes?empresa_id=32 -> 200 {"clientes":[...]}
+  - Nota: para admin/consultor, si no se envía empresa_id el BE puede responder 400: {"error":"empresa_id inválido"}
 
-3\) unset PASSWORD
+## Golden checks — registrar cliente PF (post-cambio BE)
+Se espera:
+- sin persona.curp -> 400 "persona.curp es obligatorio"
+- con curp pero fecha ISO (YYYY-MM-DD) -> 400 "persona.fecha_nacimiento inválida (AAAAMMDD)"
+- sin apellido materno -> 400 "persona.apellido_materno es obligatorio"
+- con curp + AAAAMMDD + apellido materno -> 201
 
+## Golden checks — editar cliente
+- PUT /api/cliente/clientes/:id con datos_completos -> 200 ok:true
+- Validar persistencia con GET posterior
 
+## Incidentes comunes
+- “Service Suspended” en Render:
+  - Verifica BASE; el backend actual es https://scmvp-1jhq.onrender.com
+  - El backend anterior https://scmvp.onrender.com está suspendido
 
-\## Golden checks (mínimos)
-
-\- POST /api/auth/login -> token
-
-\- GET /api/admin/\_\_debug -> 200 {"ok":true,"router":"admin"}
-
-\- GET /api/admin/empresas -> 200 {"empresas":\[...]}
-
-\- GET /api/cliente/clientes?empresa\_id=<id> -> 200 {"clientes":\[...]}
-
-&nbsp; - Nota: para admin/consultor, si no se envía empresa\_id el BE puede responder 400: {"error":"empresa\_id inválido"}
-
-\- “/api/admin/__debug debe fallar sin Authorization.”
-\- “GET /api/admin/__debug debe regresar 401 sin token (si regresa 200, es regresión de seguridad).”
-
-
-
-\## Incidentes comunes
-
-\- “Service Suspended” en Render:
-
-  - Verifica BASE; el backend actual es https://scmvp-1jhq.onrender.com
-
-  - El backend anterior https://scmvp.onrender.com está suspendido
-
-
-
-\## Variables (scripts/.env.local)
-
-\- BASE="https://scmvp-1jhq.onrender.com"
-
-\- EMAIL="admin@cumplimiento.com"
-
-\- EMPRESA\_ID\_FOR\_CHECK="32" (usado por mission.sh para /api/cliente/clientes)
-
-
-\## Aviso 10-01-2026
-
-\- “Si curl da Token inválido (firma/secret), regenerar token contra el mismo BASE y evitar copiar token manualmente.”
-\- “Si /api/admin/__debug responde 200 sin Authorization, el endpoint no está protegido o el middleware permite Bearer vacío; validar con curls A/B.”
+## Variables (scripts/.env.local)
+- BASE="https://scmvp-1jhq.onrender.com"
+- EMAIL="admin@cumplimiento.com"
+- EMPRESA_ID_FOR_CHECK="32" (usado por mission.sh para /api/cliente/clientes)

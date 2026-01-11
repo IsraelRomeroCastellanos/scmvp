@@ -1,58 +1,42 @@
-\## 2026-01-10
+## 2026-01-11
 
-\- Checkpoint: mission OK en backend nuevo (Render)
+- Checkpoint: Contrato único de Cliente estabilizado (PF/PM/FID) + evidencia en PROD
+- BE (prod): https://scmvp-1jhq.onrender.com
+- FE (prod): (pendiente: URL de Vercel)
+- Nota: Para admin, endpoints de clientes requieren empresa_id explícito (ej. 32)
 
-\- BE: https://scmvp-1jhq.onrender.com
+### Evidencia (curls)
+- PF:
+  - 400: persona.curp es obligatorio
+  - 400: persona.fecha_nacimiento inválida (AAAAMMDD)
+  - 400: persona.apellido_materno es obligatorio
+  - 201: PF OK (ej. cliente id=61)
+- Fideicomiso:
+  - representante.fecha_nacimiento requiere formato AAAAMMDD (confirmado)
+  - 201: FID OK (ej. cliente id=58)
+- Seguridad:
+  - GET /api/admin/__debug -> 401 sin token; 401 token basura
 
-\- Nota: /api/cliente/clientes requiere empresa\_id para admin; mission usa EMPRESA\_ID\_FOR\_CHECK=32
+### Mission
+- Última corrida mission: 2026-01-10 (Overall: OK)
+- Log: docs/ops/mission/mission_20260110_182748.txt
 
-\- Evidencia: docs/ops/mission/mission\_YYYYMMDD\_HHMMSS.txt
+---
 
-\- stable-20260110-01
+## Semáforo
 
--“⚠️ Seguridad: /api/admin/\_\_debug responde 200 sin auth (confirmado por curl). Pendiente proteger con middleware.” 
+- Auth/Login: ✅
+- Admin/Empresas: ✅
+- Seguridad /api/admin/__debug: ✅ (protegido)
+- Clientes (listado): ✅ (GET /api/cliente/clientes?empresa_id=32)
+- Clientes (crear): ✅ (POST /api/cliente/registrar-cliente)
+- Clientes (editar): ✅ (PUT /api/cliente/clientes/:id)
+- Contrato único de cliente (docs/contratos): ✅
+- Producción estable (Vercel/Render): ✅
 
--“⚠️ Seguridad: /api/admin/\_\_debug está público (200 sin token); /api/admin/empresas sí requiere token (401). Pendiente proteger \_\_debug.
+---
 
+## URLs
 
-
-
-
-
-
-\## Semáforo (2025-12-21)
-
-\- Auth/Login: ✅
-
-\- Admin/Empresas: ✅
-
-\- Clientes (listado): ✅
-
-\- Clientes (crear): (pendiente)
-
-\- Clientes (editar): (pendiente)
-
-\- Permisos por rol: ✅ (según estado actual en prod)
-
-\- Producción estable (Vercel/Render): ✅
-
-
-
-\## Evidencia rápida
-
-\- Última corrida mission: 2025-12-21 23:38:36
-
-\- Log: docs/ops/mission/mission\_20251221\_233839.txt
-
-\- Tag estable actual: stable-20251221-01
-
-
-
-
-
-\## URLS
-
--Backend prod actual: https://scmvp-1jhq.onrender.com
-
--Backend viejo: https://scmvp.onrender.com (suspendido intencionalmente)
-
+- Backend prod actual: https://scmvp-1jhq.onrender.com
+- Backend viejo: https://scmvp.onrender.com (suspendido intencionalmente)
