@@ -36,7 +36,21 @@ function isYYYYMMDD(v: any) {
   if (m < 1 || m > 12) return false;
   if (d < 1 || d > 31) return false;
   const dt = new Date(Date.UTC(y, m - 1, d));
-  return dt.getUTCFullYear() === y && dt.getUTCMonth() === (m - 1) && dt.getUTCDate() === d;
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
+
+/**
+ * Acepta:
+ * - "YYYYMMDD" -> regresa igual
+ * - "YYYY-MM-DD" -> regresa "YYYYMMDD"
+ * - otros -> regresa null
+ */
+function normalizeToYYYYMMDD(input: string): string | null {
+  const s = (input ?? '').trim();
+  if (!s) return null;
+  if (/^\d{8}$/.test(s)) return s;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s.replaceAll('-', '');
+  return null;
 }
 
 function fmtItem(i: CatalogItem) {
@@ -44,7 +58,7 @@ function fmtItem(i: CatalogItem) {
 }
 
 function valueToCatalogKey(v: string) {
-  // tu valor viene como "MEXICO,MX" o "CANADA,CA" etc.
+  // En este UI guardamos "clave" en el state (ej. "MEX"), así que regresamos tal cual.
   return v;
 }
 
@@ -97,9 +111,7 @@ function SearchableSelect({
 
       <div className="relative">
         <input
-          className={`w-full rounded border px-3 py-2 text-sm ${
-            error ? 'border-red-500' : 'border-gray-300'
-          }`}
+          className={`w-full rounded border px-3 py-2 text-sm ${error ? 'border-red-500' : 'border-gray-300'}`}
           placeholder={placeholder ?? 'Buscar...'}
           value={open ? q : selectedLabel}
           onFocus={() => {
@@ -135,9 +147,7 @@ function SearchableSelect({
                   {fmtItem(it)}
                 </button>
               ))}
-              {filtered.length === 0 && (
-                <div className="px-3 py-2 text-sm text-gray-500">Sin resultados</div>
-              )}
+              {filtered.length === 0 && <div className="px-3 py-2 text-sm text-gray-500">Sin resultados</div>}
             </div>
           </div>
         )}
@@ -173,6 +183,9 @@ export default function RegistrarClientePage() {
   const [pfApPat, setPfApPat] = useState('');
   const [pfApMat, setPfApMat] = useState('');
   const [pfActividad, setPfActividad] = useState(''); // clave
+  const [pfRfc, setPfRfc] = useState('');
+  const [pfCurp, setPfCurp] = useState('');
+  const [pfFechaNac, setPfFechaNac] = useState(''); // acepta YYYY-MM-DD o AAAAMMDD (se normaliza a AAAAMMDD)
 
   // PM
   const [pmRfc, setPmRfc] = useState('');
@@ -233,114 +246,137 @@ export default function RegistrarClientePage() {
 
     // base
     if (path === 'empresa_id') {
-      if (!/^\d+$/.test(empresaId.trim())) return setErr(path, 'empresa_id inválido'), false;
+      if (!/^\d+$/.test(empresaId.trim())) return (setErr(path, 'empresa_id inválido'), false);
       return true;
     }
     if (path === 'nombre_entidad') {
-      if (!isNonEmpty(nombreEntidad)) return setErr(path, 'nombre_entidad es obligatorio'), false;
+      if (!isNonEmpty(nombreEntidad)) return (setErr(path, 'nombre_entidad es obligatorio'), false);
       return true;
     }
     if (path === 'nacionalidad') {
-      if (!isNonEmpty(nacionalidad)) return setErr(path, 'nacionalidad es obligatoria'), false;
+      if (!isNonEmpty(nacionalidad)) return (setErr(path, 'nacionalidad es obligatoria'), false);
       return true;
     }
     if (path === 'contacto.pais') {
-      if (!isNonEmpty(contactoPais)) return setErr(path, 'contacto.pais es obligatorio'), false;
+      if (!isNonEmpty(contactoPais)) return (setErr(path, 'contacto.pais es obligatorio'), false);
       return true;
     }
     if (path === 'contacto.telefono') {
-      if (!isNonEmpty(telefono)) return setErr(path, 'contacto.telefono es obligatorio'), false;
+      if (!isNonEmpty(telefono)) return (setErr(path, 'contacto.telefono es obligatorio'), false);
       return true;
     }
 
     // PF
+    if (path === 'persona.rfc') {
+      if (tipo !== 'persona_fisica') return true;
+      if (!isNonEmpty(pfRfc)) return (setErr(path, 'persona.rfc es obligatorio'), false);
+      if (!isRFC(pfRfc)) return (setErr(path, 'persona.rfc inválido'), false);
+      return true;
+    }
+    if (path === 'persona.curp') {
+      if (tipo !== 'persona_fisica') return true;
+      if (!isNonEmpty(pfCurp)) return (setErr(path, 'persona.curp es obligatorio'), false);
+      if (!isCURP(pfCurp)) return (setErr(path, 'persona.curp inválido'), false);
+      return true;
+    }
+    if (path === 'persona.fecha_nacimiento') {
+      if (tipo !== 'persona_fisica') return true;
+      if (!isNonEmpty(pfFechaNac)) return (setErr(path, 'persona.fecha_nacimiento es obligatoria'), false);
+
+      const norm = normalizeToYYYYMMDD(pfFechaNac);
+      if (!norm) return (setErr(path, 'persona.fecha_nacimiento inválida (AAAAMMDD)'), false);
+      if (!isYYYYMMDD(norm)) return (setErr(path, 'persona.fecha_nacimiento inválida (AAAAMMDD)'), false);
+
+      return true;
+    }
     if (path === 'persona.nombres') {
       if (tipo !== 'persona_fisica') return true;
-      if (!isNonEmpty(pfNombres)) return setErr(path, 'persona.nombres es obligatorio'), false;
+      if (!isNonEmpty(pfNombres)) return (setErr(path, 'persona.nombres es obligatorio'), false);
       return true;
     }
     if (path === 'persona.apellido_paterno') {
       if (tipo !== 'persona_fisica') return true;
-      if (!isNonEmpty(pfApPat)) return setErr(path, 'persona.apellido_paterno es obligatorio'), false;
+      if (!isNonEmpty(pfApPat)) return (setErr(path, 'persona.apellido_paterno es obligatorio'), false);
       return true;
     }
     if (path === 'persona.actividad_economica') {
       if (tipo !== 'persona_fisica') return true;
-      if (!isNonEmpty(pfActividad)) return setErr(path, 'persona.actividad_economica es obligatoria'), false;
+      if (!isNonEmpty(pfActividad)) return (setErr(path, 'persona.actividad_economica es obligatoria'), false);
       return true;
     }
 
     // PM
     if (path === 'empresa.rfc') {
       if (tipo !== 'persona_moral') return true;
-      if (!isNonEmpty(pmRfc)) return setErr(path, 'empresa.rfc es obligatorio'), false;
-      if (!isRFC(pmRfc)) return setErr(path, 'empresa.rfc inválido'), false;
+      if (!isNonEmpty(pmRfc)) return (setErr(path, 'empresa.rfc es obligatorio'), false);
+      if (!isRFC(pmRfc)) return (setErr(path, 'empresa.rfc inválido'), false);
       return true;
     }
     if (path === 'empresa.fecha_constitucion') {
       if (tipo !== 'persona_moral') return true;
-      if (!isNonEmpty(pmFechaConst)) return setErr(path, 'empresa.fecha_constitucion es obligatoria'), false;
+      if (!isNonEmpty(pmFechaConst)) return (setErr(path, 'empresa.fecha_constitucion es obligatoria'), false);
       return true;
     }
     if (path === 'empresa.giro_mercantil') {
       if (tipo !== 'persona_moral') return true;
-      if (!isNonEmpty(pmGiro)) return setErr(path, 'empresa.giro_mercantil es obligatorio'), false;
+      if (!isNonEmpty(pmGiro)) return (setErr(path, 'empresa.giro_mercantil es obligatorio'), false);
       return true;
     }
     if (path === 'representante.nombre_completo.pm') {
       if (tipo !== 'persona_moral') return true;
-      if (!isNonEmpty(pmRepNombreCompleto)) return setErr(path, 'representante.nombre_completo es obligatorio'), false;
+      if (!isNonEmpty(pmRepNombreCompleto)) return (setErr(path, 'representante.nombre_completo es obligatorio'), false);
       return true;
     }
 
     // FIDE
     if (path === 'fideicomiso.identificador') {
       if (tipo !== 'fideicomiso') return true;
-      if (!isNonEmpty(fidIdentificador)) return setErr(path, 'fideicomiso.identificador es obligatorio'), false;
+      if (!isNonEmpty(fidIdentificador)) return (setErr(path, 'fideicomiso.identificador es obligatorio'), false);
       return true;
     }
     if (path === 'fideicomiso.denominacion_fiduciario') {
       if (tipo !== 'fideicomiso') return true;
-      if (!isNonEmpty(fidDenominacion)) return setErr(path, 'fideicomiso.denominacion_fiduciario es obligatorio'), false;
+      if (!isNonEmpty(fidDenominacion))
+        return (setErr(path, 'fideicomiso.denominacion_fiduciario es obligatorio'), false);
       return true;
     }
     if (path === 'fideicomiso.rfc_fiduciario') {
       if (tipo !== 'fideicomiso') return true;
-      if (!isNonEmpty(fidRfcFiduciario)) return setErr(path, 'fideicomiso.rfc_fiduciario es obligatorio'), false;
-      if (!isRFC(fidRfcFiduciario)) return setErr(path, 'fideicomiso.rfc_fiduciario inválido'), false;
+      if (!isNonEmpty(fidRfcFiduciario)) return (setErr(path, 'fideicomiso.rfc_fiduciario es obligatorio'), false);
+      if (!isRFC(fidRfcFiduciario)) return (setErr(path, 'fideicomiso.rfc_fiduciario inválido'), false);
       return true;
     }
     if (path === 'representante.nombres') {
       if (tipo !== 'fideicomiso') return true;
-      if (!isNonEmpty(repNombres)) return setErr(path, 'representante.nombres es obligatorio'), false;
+      if (!isNonEmpty(repNombres)) return (setErr(path, 'representante.nombres es obligatorio'), false);
       return true;
     }
     if (path === 'representante.apellido_paterno') {
       if (tipo !== 'fideicomiso') return true;
-      if (!isNonEmpty(repApPat)) return setErr(path, 'representante.apellido_paterno es obligatorio'), false;
+      if (!isNonEmpty(repApPat)) return (setErr(path, 'representante.apellido_paterno es obligatorio'), false);
       return true;
     }
     if (path === 'representante.apellido_materno') {
       if (tipo !== 'fideicomiso') return true;
-      if (!isNonEmpty(repApMat)) return setErr(path, 'representante.apellido_materno es obligatorio'), false;
+      if (!isNonEmpty(repApMat)) return (setErr(path, 'representante.apellido_materno es obligatorio'), false);
       return true;
     }
     if (path === 'representante.fecha_nacimiento') {
       if (tipo !== 'fideicomiso') return true;
-      if (!isNonEmpty(repFechaNac)) return setErr(path, 'representante.fecha_nacimiento es obligatoria'), false;
-      if (!isYYYYMMDD(repFechaNac)) return setErr(path, 'representante.fecha_nacimiento inválida (AAAAMMDD)'), false;
+      if (!isNonEmpty(repFechaNac)) return (setErr(path, 'representante.fecha_nacimiento es obligatoria'), false);
+      if (!isYYYYMMDD(repFechaNac)) return (setErr(path, 'representante.fecha_nacimiento inválida (AAAAMMDD)'), false);
       return true;
     }
     if (path === 'representante.rfc') {
       if (tipo !== 'fideicomiso') return true;
-      if (!isNonEmpty(repRfc)) return setErr(path, 'representante.rfc es obligatorio'), false;
-      if (!isRFC(repRfc)) return setErr(path, 'representante.rfc inválido'), false;
+      if (!isNonEmpty(repRfc)) return (setErr(path, 'representante.rfc es obligatorio'), false);
+      if (!isRFC(repRfc)) return (setErr(path, 'representante.rfc inválido'), false);
       return true;
     }
     if (path === 'representante.curp') {
       if (tipo !== 'fideicomiso') return true;
-      if (!isNonEmpty(repCurp)) return setErr(path, 'representante.curp es obligatorio'), false;
-      if (!isCURP(repCurp)) return setErr(path, 'representante.curp inválido'), false;
+      if (!isNonEmpty(repCurp)) return (setErr(path, 'representante.curp es obligatorio'), false);
+      if (!isCURP(repCurp)) return (setErr(path, 'representante.curp inválido'), false);
       return true;
     }
 
@@ -348,16 +384,17 @@ export default function RegistrarClientePage() {
   }
 
   function validateAll(): boolean {
-    const fields = [
-      'empresa_id',
-      'nombre_entidad',
-      'nacionalidad',
-      'contacto.pais',
-      'contacto.telefono'
-    ];
+    const fields = ['empresa_id', 'nombre_entidad', 'nacionalidad', 'contacto.pais', 'contacto.telefono'];
 
     if (tipo === 'persona_fisica') {
-      fields.push('persona.nombres', 'persona.apellido_paterno', 'persona.actividad_economica');
+      fields.push(
+        'persona.rfc',
+        'persona.curp',
+        'persona.fecha_nacimiento',
+        'persona.nombres',
+        'persona.apellido_paterno',
+        'persona.actividad_economica'
+      );
     }
     if (tipo === 'persona_moral') {
       fields.push(
@@ -398,6 +435,8 @@ export default function RegistrarClientePage() {
 
     if (tipo === 'persona_fisica') {
       const act = actividades.find((x) => x.clave === pfActividad);
+      const normFecha = normalizeToYYYYMMDD(pfFechaNac) ?? pfFechaNac.trim();
+
       return {
         empresa_id,
         tipo_cliente: 'persona_fisica',
@@ -407,6 +446,9 @@ export default function RegistrarClientePage() {
           contacto,
           persona: {
             tipo: 'persona_fisica',
+            rfc: pfRfc.trim().toUpperCase(),
+            curp: pfCurp.trim().toUpperCase(),
+            fecha_nacimiento: normFecha,
             nombres: pfNombres.trim(),
             apellido_paterno: pfApPat.trim(),
             apellido_materno: pfApMat.trim(),
@@ -500,7 +542,7 @@ export default function RegistrarClientePage() {
         return;
       }
 
-      // A) la API regresa { ok:true, cliente:{id...} }
+      // API regresa { ok:true, cliente:{id...} }
       const id = data?.cliente?.id;
       if (id) router.push(`/cliente/clientes/${id}`);
       else setFatal('Registrado, pero no se recibió id. Revisa respuesta del backend.');
@@ -516,9 +558,7 @@ export default function RegistrarClientePage() {
       <h1 className="text-xl font-semibold">Registrar Cliente</h1>
 
       {fatal ? (
-        <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {fatal}
-        </div>
+        <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{fatal}</div>
       ) : null}
 
       <form onSubmit={onSubmit} className="space-y-6">
@@ -545,9 +585,7 @@ export default function RegistrarClientePage() {
               Empresa ID <span className="text-red-600">*</span>
             </label>
             <input
-              className={`w-full rounded border px-3 py-2 text-sm ${
-                errors['empresa_id'] ? 'border-red-500' : 'border-gray-300'
-              }`}
+              className={`w-full rounded border px-3 py-2 text-sm ${errors['empresa_id'] ? 'border-red-500' : 'border-gray-300'}`}
               value={empresaId}
               onChange={(e) => setEmpresaId(e.target.value)}
               onBlur={() => validateField('empresa_id')}
@@ -561,9 +599,7 @@ export default function RegistrarClientePage() {
               Nombre entidad <span className="text-red-600">*</span>
             </label>
             <input
-              className={`w-full rounded border px-3 py-2 text-sm ${
-                errors['nombre_entidad'] ? 'border-red-500' : 'border-gray-300'
-              }`}
+              className={`w-full rounded border px-3 py-2 text-sm ${errors['nombre_entidad'] ? 'border-red-500' : 'border-gray-300'}`}
               value={nombreEntidad}
               onChange={(e) => setNombreEntidad(e.target.value)}
               onBlur={() => validateField('nombre_entidad')}
@@ -597,9 +633,7 @@ export default function RegistrarClientePage() {
               Teléfono <span className="text-red-600">*</span>
             </label>
             <input
-              className={`w-full rounded border px-3 py-2 text-sm ${
-                errors['contacto.telefono'] ? 'border-red-500' : 'border-gray-300'
-              }`}
+              className={`w-full rounded border px-3 py-2 text-sm ${errors['contacto.telefono'] ? 'border-red-500' : 'border-gray-300'}`}
               value={telefono}
               onChange={(e) => setTelefono(e.target.value)}
               onBlur={() => validateField('contacto.telefono')}
@@ -616,11 +650,49 @@ export default function RegistrarClientePage() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1">
+                <label className="text-sm font-medium">RFC *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors['persona.rfc'] ? 'border-red-500' : 'border-gray-300'}`}
+                  value={pfRfc}
+                  onChange={(e) => setPfRfc(e.target.value)}
+                  onBlur={() => validateField('persona.rfc')}
+                  placeholder="XAXX010101000"
+                />
+                {errors['persona.rfc'] ? <p className="text-xs text-red-600">{errors['persona.rfc']}</p> : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">CURP *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors['persona.curp'] ? 'border-red-500' : 'border-gray-300'}`}
+                  value={pfCurp}
+                  onChange={(e) => setPfCurp(e.target.value)}
+                  onBlur={() => validateField('persona.curp')}
+                  placeholder="PEPJ900101HDFRRN09"
+                />
+                {errors['persona.curp'] ? <p className="text-xs text-red-600">{errors['persona.curp']}</p> : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Fecha nacimiento (AAAAMMDD) *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors['persona.fecha_nacimiento'] ? 'border-red-500' : 'border-gray-300'}`}
+                  value={pfFechaNac}
+                  onChange={(e) => setPfFechaNac(e.target.value)}
+                  onBlur={() => validateField('persona.fecha_nacimiento')}
+                  placeholder="19900101 (o 1990-01-01)"
+                />
+                {errors['persona.fecha_nacimiento'] ? (
+                  <p className="text-xs text-red-600">{errors['persona.fecha_nacimiento']}</p>
+                ) : (
+                  <p className="text-xs text-gray-500">Acepta AAAAMMDD o YYYY-MM-DD (se convierte a AAAAMMDD).</p>
+                )}
+              </div>
+
+              <div className="space-y-1">
                 <label className="text-sm font-medium">Nombre(s) *</label>
                 <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors['persona.nombres'] ? 'border-red-500' : 'border-gray-300'
-                  }`}
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors['persona.nombres'] ? 'border-red-500' : 'border-gray-300'}`}
                   value={pfNombres}
                   onChange={(e) => setPfNombres(e.target.value)}
                   onBlur={() => validateField('persona.nombres')}
@@ -631,14 +703,14 @@ export default function RegistrarClientePage() {
               <div className="space-y-1">
                 <label className="text-sm font-medium">Apellido paterno *</label>
                 <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors['persona.apellido_paterno'] ? 'border-red-500' : 'border-gray-300'
-                  }`}
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors['persona.apellido_paterno'] ? 'border-red-500' : 'border-gray-300'}`}
                   value={pfApPat}
                   onChange={(e) => setPfApPat(e.target.value)}
                   onBlur={() => validateField('persona.apellido_paterno')}
                 />
-                {errors['persona.apellido_paterno'] ? <p className="text-xs text-red-600">{errors['persona.apellido_paterno']}</p> : null}
+                {errors['persona.apellido_paterno'] ? (
+                  <p className="text-xs text-red-600">{errors['persona.apellido_paterno']}</p>
+                ) : null}
               </div>
 
               <div className="space-y-1">
@@ -672,9 +744,7 @@ export default function RegistrarClientePage() {
               <div className="space-y-1">
                 <label className="text-sm font-medium">RFC (empresa) *</label>
                 <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors['empresa.rfc'] ? 'border-red-500' : 'border-gray-300'
-                  }`}
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors['empresa.rfc'] ? 'border-red-500' : 'border-gray-300'}`}
                   value={pmRfc}
                   onChange={(e) => setPmRfc(e.target.value)}
                   onBlur={() => validateField('empresa.rfc')}
@@ -686,9 +756,7 @@ export default function RegistrarClientePage() {
               <div className="space-y-1">
                 <label className="text-sm font-medium">Fecha constitución *</label>
                 <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors['empresa.fecha_constitucion'] ? 'border-red-500' : 'border-gray-300'
-                  }`}
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors['empresa.fecha_constitucion'] ? 'border-red-500' : 'border-gray-300'}`}
                   value={pmFechaConst}
                   onChange={(e) => setPmFechaConst(e.target.value)}
                   onBlur={() => validateField('empresa.fecha_constitucion')}
@@ -795,7 +863,9 @@ export default function RegistrarClientePage() {
                   onChange={(e) => setRepNombres(e.target.value)}
                   onBlur={() => validateField('representante.nombres')}
                 />
-                {errors['representante.nombres'] ? <p className="text-xs text-red-600">{errors['representante.nombres']}</p> : null}
+                {errors['representante.nombres'] ? (
+                  <p className="text-xs text-red-600">{errors['representante.nombres']}</p>
+                ) : null}
               </div>
 
               <div className="space-y-1">
@@ -847,9 +917,7 @@ export default function RegistrarClientePage() {
               <div className="space-y-1">
                 <label className="text-sm font-medium">RFC *</label>
                 <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors['representante.rfc'] ? 'border-red-500' : 'border-gray-300'
-                  }`}
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors['representante.rfc'] ? 'border-red-500' : 'border-gray-300'}`}
                   value={repRfc}
                   onChange={(e) => setRepRfc(e.target.value)}
                   onBlur={() => validateField('representante.rfc')}
@@ -861,9 +929,7 @@ export default function RegistrarClientePage() {
               <div className="space-y-1">
                 <label className="text-sm font-medium">CURP *</label>
                 <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors['representante.curp'] ? 'border-red-500' : 'border-gray-300'
-                  }`}
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors['representante.curp'] ? 'border-red-500' : 'border-gray-300'}`}
                   value={repCurp}
                   onChange={(e) => setRepCurp(e.target.value)}
                   onBlur={() => validateField('representante.curp')}
@@ -876,11 +942,7 @@ export default function RegistrarClientePage() {
         )}
 
         <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={loading}
-            className="rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
-          >
+          <button type="submit" disabled={loading} className="rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-50">
             {loading ? 'Guardando...' : 'Registrar'}
           </button>
 
