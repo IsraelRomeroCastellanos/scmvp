@@ -62,3 +62,14 @@
 - Estado: Admin OK (200); Cliente endpoints 404 (no montados)
 - Evidencia: docs/ops/mission/mission_20260109_181111.txt
 - Próximo: restaurar montaje de clienteRoutes (/api/cliente) en backend nuevo y revalidar mission.sh
+
+## 2026-01-10
+- TAG stable-20260110-01
+- Hito: Revalidación mission en backend actual
+- Evidencia: docs/ops/mission/mission_20260110_132940.txt
+- Resultado: Auth + Admin + Clientes OK
+- Próximo: continuar solo con evidencia previa (mission/curl) antes de cambios mayores
+- “curl manual falló por token firma/secret; usar patrón mission.sh.”
+- “Detectada inconsistencia: docs dicen /api/admin/__debug protegido, pero curl devolvió 200 con TOKEN_LEN=0; pendiente validar protección (sin auth / token basura) y corregir si aplica.”
+- “2026-01-10: Evidencia de endpoint admin debug expuesto (sin token y token basura → 200). Próximo: proteger ruta y revalidar con curls + mission.”
+- “2026-01-10: Evidencia de exposición de /api/admin/__debug (200 sin auth). Próximo: aplicar middleware y revalidar con curls + mission.”

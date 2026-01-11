@@ -8,6 +8,12 @@
 
 \- Evidencia: docs/ops/mission/mission\_YYYYMMDD\_HHMMSS.txt
 
+\- stable-20260110-01
+
+-“⚠️ Seguridad: /api/admin/\_\_debug responde 200 sin auth (confirmado por curl). Pendiente proteger con middleware.” 
+
+-“⚠️ Seguridad: /api/admin/\_\_debug está público (200 sin token); /api/admin/empresas sí requiere token (401). Pendiente proteger \_\_debug.
+
 
 
 

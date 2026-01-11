@@ -24,6 +24,9 @@
 
 &nbsp; - Nota: para admin/consultor, si no se envía empresa\_id el BE puede responder 400: {"error":"empresa\_id inválido"}
 
+\- “/api/admin/__debug debe fallar sin Authorization.”
+\- “GET /api/admin/__debug debe regresar 401 sin token (si regresa 200, es regresión de seguridad).”
+
 
 
 \## Incidentes comunes
@@ -45,4 +48,7 @@
 \- EMPRESA\_ID\_FOR\_CHECK="32" (usado por mission.sh para /api/cliente/clientes)
 
 
+\## Aviso 10-01-2026
 
+\- “Si curl da Token inválido (firma/secret), regenerar token contra el mismo BASE y evitar copiar token manualmente.”
+\- “Si /api/admin/__debug responde 200 sin Authorization, el endpoint no está protegido o el middleware permite Bearer vacío; validar con curls A/B.”
