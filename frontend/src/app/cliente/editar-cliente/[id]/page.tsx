@@ -26,6 +26,34 @@ function isCURP(s: string) {
   return /^[A-Z][AEIOUX][A-Z]{2}\d{6}[HM][A-Z]{5}[A-Z0-9]\d$/.test(v);
 }
 
+/**
+ * Remueve:
+ * - undefined / null
+ * - strings vacíos
+ * - objetos vacíos
+ * NO toca arrays.
+ */
+function stripEmpty(obj: any): any {
+  if (Array.isArray(obj)) return obj;
+  if (obj && typeof obj === 'object') {
+    const out: any = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (v === undefined || v === null) continue;
+      if (typeof v === 'string' && v.trim() === '') continue;
+
+      const cleaned = stripEmpty(v);
+      if (cleaned === undefined || cleaned === null) continue;
+
+      if (cleaned && typeof cleaned === 'object' && !Array.isArray(cleaned) && Object.keys(cleaned).length === 0) {
+        continue;
+      }
+      out[k] = cleaned;
+    }
+    return out;
+  }
+  return obj;
+}
+
 function req(errors: Errors, key: string, label: string, value: any) {
   const v = typeof value === 'string' ? value.trim() : value;
   if (!v) errors[key] = `${label} es obligatorio`;
@@ -148,14 +176,20 @@ export default function Page() {
 
         if (c.tipo_cliente === 'persona_fisica') {
           const ae = c?.datos_completos?.persona?.actividad_economica;
-          setPfActividad(ae?.clave || '');
+          if (typeof ae === 'string') setPfActividad(ae);
+          else setPfActividad(ae?.clave || '');
         }
 
         if (c.tipo_cliente === 'persona_moral') {
-          // si guardas giro en empresa.giro como texto, intentamos mapear por descripcion
-          const giroTxt = c?.datos_completos?.empresa?.giro || '';
-          const match = giros.find((x) => x.descripcion === giroTxt);
-          setPmGiro(match?.clave || '');
+          // Giro puede venir como texto (descripcion) o como clave; intentamos mapear
+          const giroTxt = c?.datos_completos?.empresa?.giro || c?.datos_completos?.empresa?.giro_mercantil || '';
+          if (typeof giroTxt === 'string' && giroTxt) {
+            const match = giros.find((x) => x.descripcion === giroTxt || x.clave === giroTxt);
+            setPmGiro(match?.clave || '');
+          } else {
+            setPmGiro('');
+          }
+
           const r = c?.datos_completos?.representante || {};
           setRepNombre(r.nombres || r.nombre_completo || '');
           setRepAP(r.apellido_paterno || '');
@@ -167,7 +201,7 @@ export default function Page() {
 
         if (c.tipo_cliente === 'fideicomiso') {
           const r = c?.datos_completos?.representante || {};
-          const nc = (r.nombre_completo || '').split(' ');
+          const nc = (r.nombre_completo || '').split(' ').filter(Boolean);
           setRepNombre(nc.slice(0, 1).join(' ') || r.nombre_completo || '');
           setRepAP(nc.slice(1, 2).join(' ') || '');
           setRepAM(nc.slice(2).join(' ') || '');
@@ -230,6 +264,7 @@ export default function Page() {
       const act = actividades.find((x) => x.clave === pfActividad) || null;
       const giro = giros.find((x) => x.clave === pmGiro) || null;
 
+      // Base: siempre enviamos lo común (son obligatorios)
       const body: any = {
         nombre_entidad: nombreEntidad.trim(),
         nacionalidad,
@@ -242,34 +277,42 @@ export default function Page() {
       };
 
       if (tipoCliente === 'persona_fisica') {
-        body.datos_completos.persona = {
+        body.datos_completos.persona = stripEmpty({
           tipo: 'persona_fisica',
           actividad_economica: act
             ? { clave: act.clave, descripcion: act.descripcion }
-            : { clave: pfActividad, descripcion: '' }
-        };
+            : pfActividad // clave string (sin descripcion vacía)
+        });
       }
 
       if (tipoCliente === 'persona_moral') {
-        body.datos_completos.empresa = { giro: giro ? giro.descripcion : '' };
-        body.datos_completos.representante = {
+        // En edición, solo actualizamos el giro (no tocamos RFC/fecha_constitucion aquí)
+        // Guardamos como texto (descripcion) para no romper datos previos del proyecto.
+        body.datos_completos.empresa = stripEmpty({
+          giro: giro ? giro.descripcion : undefined
+        });
+
+        body.datos_completos.representante = stripEmpty({
           nombres: repNombre.trim(),
           apellido_paterno: repAP.trim(),
           apellido_materno: repAM.trim(),
           fecha_nacimiento: repFechaNac.trim(),
           rfc: normalizeUpper(repRFC),
           curp: normalizeUpper(repCURP)
-        };
+        });
       }
 
       if (tipoCliente === 'fideicomiso') {
-        body.datos_completos.representante = {
+        body.datos_completos.representante = stripEmpty({
           nombre_completo: `${repNombre.trim()} ${repAP.trim()} ${repAM.trim()}`.trim(),
           fecha_nacimiento: repFechaNac.trim(),
           rfc: normalizeUpper(repRFC),
           curp: normalizeUpper(repCURP)
-        };
+        });
       }
+
+      // Limpieza final para evitar mandar strings vacíos u objetos vacíos
+      body.datos_completos = stripEmpty(body.datos_completos);
 
       const res = await fetch(`${apiBase}/api/cliente/clientes/${id}`, {
         method: 'PUT',
@@ -286,6 +329,7 @@ export default function Page() {
         return;
       }
 
+      // UX: Guardar y volver a detalle (detalle refresca por GET)
       router.push(`/cliente/clientes/${id}`);
     } catch (e: any) {
       setFatal(e?.message || 'Error inesperado');
