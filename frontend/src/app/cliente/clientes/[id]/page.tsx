@@ -215,10 +215,11 @@ export default function ClienteDetallePage() {
 
         <div className="flex gap-2">
           <button
-            className="rounded border px-3 py-2 text-sm"
+            className="rounded-md bg-black px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
             onClick={() => router.push(`/cliente/editar-cliente/${cliente.id}`)}
+            title="Editar cliente"
           >
-            Editar
+            ✏️ Editar
           </button>
           <button className="rounded border px-3 py-2 text-sm" onClick={() => router.back()}>
             Volver
