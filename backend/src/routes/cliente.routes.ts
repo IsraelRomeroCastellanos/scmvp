@@ -1,5 +1,4 @@
 // backend/src/routes/cliente.routes.ts
-// backend/src/routes/cliente.routes.ts
 import { Router, Request, Response } from 'express';
 import pool from '../db';
 import { authenticate } from '../middleware/auth.middleware';
@@ -15,6 +14,10 @@ function isNonEmptyString(v: any): v is string {
 
 function badRequest(res: Response, msg: string) {
   return res.status(400).json({ error: msg });
+}
+
+function conflict(res: Response, msg: string) {
+  return res.status(409).json({ error: msg });
 }
 
 function parsePositiveInt(v: any): number | null {
@@ -72,9 +75,27 @@ function deepMerge(base: any, patch: any): any {
 }
 
 /**
+ * Extrae RFC "principal" del payload, según tipo_cliente.
+ * - PF: datos_completos.persona.rfc
+ * - PM: datos_completos.empresa.rfc
+ * - FID: (por ahora no definido en este gate; devuelve null)
+ */
+function extractRfcPrincipal(tipo: any, datos_completos: any): string | null {
+  const t = String(tipo || '').trim();
+  const dc = datos_completos ?? {};
+  let rfc: any = null;
+
+  if (t === 'persona_fisica') rfc = dc?.persona?.rfc;
+  else if (t === 'persona_moral') rfc = dc?.empresa?.rfc;
+  else if (t === 'fideicomiso') rfc = null; // pendiente definir gate para FID
+
+  if (!isNonEmptyString(rfc)) return null;
+  const norm = rfc.trim().toUpperCase();
+  return norm;
+}
+
+/**
  * Validación por tipo (reusada por POST y PUT)
- * - Retorna true si OK
- * - Si falla, responde 400 con error específico y retorna false
  */
 function validateDatosCompletosOr400(res: Response, tipo: any, datos_completos: any): boolean {
   // contacto común
@@ -120,7 +141,9 @@ function validateDatosCompletosOr400(res: Response, tipo: any, datos_completos: 
     if (!giroOk) return (badRequest(res, 'empresa.giro_mercantil es obligatorio'), false);
 
     const rep = datos_completos?.representante ?? {};
-    if (!isNonEmptyString(rep?.nombre_completo)) return (badRequest(res, 'representante.nombre_completo es obligatorio'), false);
+    if (!isNonEmptyString(rep?.nombre_completo) && !isNonEmptyString(rep?.nombres)) {
+      return (badRequest(res, 'representante.nombre_completo es obligatorio'), false);
+    }
   }
 
   if (tipo === 'fideicomiso') {
@@ -223,18 +246,28 @@ router.post('/registrar-cliente', authenticate, async (req: Request, res: Respon
 
     if (!validateDatosCompletosOr400(res, tipo, datos_completos)) return;
 
-    // Duplicate check: (empresa_id + nombre_entidad)
-    const dup = await pool.query(
+    // Gate RFC único por empresa (PF/PM)
+    const rfc_principal = extractRfcPrincipal(tipo, datos_completos);
+    if (rfc_principal) {
+      const dupRfc = await pool.query(
+        `SELECT id FROM clientes WHERE empresa_id=$1 AND rfc_principal=$2 LIMIT 1`,
+        [empresa_id, rfc_principal]
+      );
+      if (dupRfc.rows.length > 0) return conflict(res, 'RFC ya existe en el registro');
+    }
+
+    // Duplicate check existente: (empresa_id + nombre_entidad)
+    const dupName = await pool.query(
       `SELECT id FROM clientes WHERE empresa_id=$1 AND nombre_entidad=$2 LIMIT 1`,
       [empresa_id, nombre_entidad]
     );
-    if (dup.rows.length > 0) return res.status(409).json({ error: 'Cliente duplicado para esa empresa' });
+    if (dupName.rows.length > 0) return res.status(409).json({ error: 'Cliente duplicado para esa empresa' });
 
     const insert = await pool.query(
-      `INSERT INTO clientes (empresa_id, nombre_entidad, tipo_cliente, nacionalidad, estado, datos_completos)
-       VALUES ($1, $2, $3, $4, 'activo', $5)
+      `INSERT INTO clientes (empresa_id, nombre_entidad, tipo_cliente, nacionalidad, estado, datos_completos, rfc_principal)
+       VALUES ($1, $2, $3, $4, 'activo', $5, $6)
        RETURNING id, empresa_id, nombre_entidad, tipo_cliente, nacionalidad, estado, creado_en, actualizado_en`,
-      [empresa_id, nombre_entidad, tipo, nacionalidad, datos_completos]
+      [empresa_id, nombre_entidad, tipo, nacionalidad, datos_completos, rfc_principal]
     );
 
     return res.status(201).json({ ok: true, cliente: insert.rows[0] });
@@ -249,6 +282,7 @@ router.post('/registrar-cliente', authenticate, async (req: Request, res: Respon
  * EDITAR CLIENTE (PUT endurecido)
  * - merge de datos_completos
  * - valida por tipo si se intenta actualizar datos_completos
+ * - mantiene rfc_principal y bloquea duplicados por empresa (PF/PM)
  * ===============================
  */
 router.put('/clientes/:id', authenticate, async (req: Request, res: Response) => {
@@ -256,9 +290,9 @@ router.put('/clientes/:id', authenticate, async (req: Request, res: Response) =>
     const id = parsePositiveInt(req.params.id);
     if (!id) return badRequest(res, 'id inválido');
 
-    // cargar cliente actual (tipo + datos)
+    // cargar cliente actual (tipo + datos + empresa_id)
     const current = await pool.query(
-      `SELECT id, tipo_cliente, datos_completos
+      `SELECT id, empresa_id, tipo_cliente, datos_completos
        FROM clientes
        WHERE id=$1
        LIMIT 1`,
@@ -266,15 +300,28 @@ router.put('/clientes/:id', authenticate, async (req: Request, res: Response) =>
     );
     if (current.rows.length === 0) return res.status(404).json({ error: 'Cliente no encontrado' });
 
+    const empresa_id = current.rows[0].empresa_id;
     const tipo = current.rows[0].tipo_cliente;
     const currentDatos = current.rows[0].datos_completos ?? {};
 
     const { nombre_entidad, nacionalidad, estado } = req.body;
 
     let nextDatos: any = null;
+    let nextRfcPrincipal: string | null = null;
+
     if (req.body.datos_completos !== undefined) {
       nextDatos = deepMerge(currentDatos, req.body.datos_completos);
       if (!validateDatosCompletosOr400(res, tipo, nextDatos)) return;
+
+      // recalcular RFC principal y validar unicidad si cambió (PF/PM)
+      nextRfcPrincipal = extractRfcPrincipal(tipo, nextDatos);
+      if (nextRfcPrincipal) {
+        const dupRfc = await pool.query(
+          `SELECT id FROM clientes WHERE empresa_id=$1 AND rfc_principal=$2 AND id<>$3 LIMIT 1`,
+          [empresa_id, nextRfcPrincipal, id]
+        );
+        if (dupRfc.rows.length > 0) return conflict(res, 'RFC ya existe en el registro');
+      }
     }
 
     const result = await pool.query(
@@ -283,10 +330,11 @@ router.put('/clientes/:id', authenticate, async (req: Request, res: Response) =>
            nacionalidad = COALESCE($2, nacionalidad),
            datos_completos = COALESCE($3, datos_completos),
            estado = COALESCE($4, estado),
+           rfc_principal = COALESCE($5, rfc_principal),
            actualizado_en = NOW()
-       WHERE id=$5
+       WHERE id=$6
        RETURNING id, empresa_id, nombre_entidad, tipo_cliente, nacionalidad, estado, creado_en, actualizado_en`,
-      [nombre_entidad, nacionalidad, nextDatos, estado, id]
+      [nombre_entidad, nacionalidad, nextDatos, estado, nextRfcPrincipal, id]
     );
 
     return res.json({ ok: true, cliente: result.rows[0] });
