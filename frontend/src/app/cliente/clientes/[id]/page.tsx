@@ -221,6 +221,16 @@ export default function ClienteDetallePage() {
           >
             ✏️ Editar
           </button>
+
+          {/* ✅ NUEVO: Generar / Imprimir manual */}
+          <button
+            className="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold hover:bg-gray-50"
+            onClick={() => router.push(`/cliente/clientes/${cliente.id}/imprimir`)}
+            title="Generar / Imprimir expediente"
+          >
+            🖨️ Generar / Imprimir
+          </button>
+
           <button className="rounded border px-3 py-2 text-sm" onClick={() => router.back()}>
             Volver
           </button>
@@ -321,4 +331,3 @@ export default function ClienteDetallePage() {
     </div>
   );
 }
-
