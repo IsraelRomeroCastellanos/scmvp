@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 
 type Cliente = {
   id: number;
@@ -20,7 +20,7 @@ function fmtYYYYMMDD(v: any): string {
   const s = String(v ?? '').trim();
   if (!s) return '';
   if (/^\d{8}$/.test(s)) return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
-  return s; // fallback
+  return s;
 }
 
 function Checkbox({ checked }: { checked: boolean }) {
@@ -53,10 +53,7 @@ function Row({ label, value }: { label: string; value: any }) {
 export default function ImprimirClientePage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
-  const sp = useSearchParams();
-
   const id = Number(params?.id);
-  const autoprint = sp?.get('autoprint') === '1';
 
   const [loading, setLoading] = useState(true);
   const [fatal, setFatal] = useState<string | null>(null);
@@ -82,7 +79,8 @@ export default function ImprimirClientePage() {
         setLoading(true);
 
         const res = await fetch(`${apiBase}/api/cliente/clientes/${id}`, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store'
         });
         const data = await res.json().catch(() => null);
 
@@ -100,13 +98,6 @@ export default function ImprimirClientePage() {
     })();
   }, [apiBase, id, router]);
 
-  useEffect(() => {
-    // auto print cuando ya está cargado
-    if (autoprint && !loading && !fatal && cliente) {
-      setTimeout(() => window.print(), 250);
-    }
-  }, [autoprint, loading, fatal, cliente]);
-
   if (loading) return <div className="max-w-3xl mx-auto p-4">Cargando...</div>;
   if (fatal) return <div className="max-w-3xl mx-auto p-4 text-red-700">{fatal}</div>;
   if (!cliente) return <div className="max-w-3xl mx-auto p-4">Sin datos.</div>;
@@ -114,11 +105,9 @@ export default function ImprimirClientePage() {
   const dc = cliente.datos_completos ?? {};
   const contacto = dc.contacto ?? {};
 
-  // PF
   const persona = dc.persona ?? {};
   const pfId = persona.identificacion ?? {};
 
-  // PM
   const empresa = dc.empresa ?? {};
   const rep = dc.representante ?? {};
   const repId = rep.identificacion ?? {};
@@ -128,6 +117,7 @@ export default function ImprimirClientePage() {
 
   return (
     <div className="max-w-3xl mx-auto p-4 space-y-4 print:p-0">
+      {/* Barra de acciones (NO imprime automático, solo botón) */}
       <div className="flex items-center justify-between gap-3 print:hidden">
         <button className="rounded border border-gray-300 px-3 py-2 text-sm" onClick={() => router.back()}>
           Volver
@@ -172,7 +162,11 @@ export default function ImprimirClientePage() {
             <Row label="Fecha nacimiento" value={fmtYYYYMMDD(persona.fecha_nacimiento)} />
             <Row
               label="Actividad económica"
-              value={typeof persona.actividad_economica === 'object' ? `${persona.actividad_economica.descripcion} (${persona.actividad_economica.clave})` : persona.actividad_economica}
+              value={
+                typeof persona.actividad_economica === 'object'
+                  ? `${persona.actividad_economica.descripcion} (${persona.actividad_economica.clave})`
+                  : persona.actividad_economica
+              }
             />
           </Section>
 
@@ -219,7 +213,11 @@ export default function ImprimirClientePage() {
             <Row label="Fecha constitución" value={empresa.fecha_constitucion ?? ''} />
             <Row
               label="Giro mercantil"
-              value={typeof empresa.giro_mercantil === 'object' ? `${empresa.giro_mercantil.descripcion} (${empresa.giro_mercantil.clave})` : empresa.giro_mercantil}
+              value={
+                typeof empresa.giro_mercantil === 'object'
+                  ? `${empresa.giro_mercantil.descripcion} (${empresa.giro_mercantil.clave})`
+                  : empresa.giro_mercantil
+              }
             />
           </Section>
 
@@ -271,9 +269,7 @@ export default function ImprimirClientePage() {
         </>
       ) : null}
 
-      <div className="text-xs text-gray-500 print:hidden">
-        Nota: Fideicomiso (impresión) está pendiente por requerimiento.
-      </div>
+      <div className="text-xs text-gray-500 print:hidden">Nota: Fideicomiso (impresión) pendiente por requerimiento.</div>
     </div>
   );
 }
