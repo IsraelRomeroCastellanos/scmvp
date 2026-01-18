@@ -1,4 +1,4 @@
-// frontend/src/app/cliente/registrar-cliente/page.tsx
+//frontend/src/app/cliente/registrar-cliente/page.tsx
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
