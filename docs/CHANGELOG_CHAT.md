@@ -38,3 +38,11 @@
 - Evidencia: docs/ops/mission/mission_20251221_233839.txt
 - Tag: stable-20251221-01
 - Próximo: completar/estabilizar Crear/Editar cliente + verificar permisos por rol end-to-end en UI
+
+## 2026-01-18
+- Tag: stable-20260110-01
+- Commit: 0559528
+- Mission log: docs/ops/mission/mission_20260110_133004.txt
+- gate: domicilio contacto obligatorio (400 sin contacto.domicilio.*)
+- gate: RFC único por empresa (409 RFC repetido empresa_id=32)
+- evidencia: 201 alta PF OK con domicilio + RFC nuevo (id=69, empresa_id=32)
