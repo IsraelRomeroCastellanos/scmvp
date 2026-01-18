@@ -53,6 +53,33 @@ function normalizeToYYYYMMDD(input: string): string | null {
   return null;
 }
 
+function isEmail(v: any) {
+  if (!isNonEmpty(v)) return false;
+  const s = v.trim();
+  // Simple y suficiente para gate FE
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s);
+}
+
+function isPhoneCountryCode(v: any) {
+  if (!isNonEmpty(v)) return false;
+  const s = v.trim();
+  // +52, +1, +502, etc.
+  return /^\+\d{1,4}$/.test(s);
+}
+
+function isPhoneNumber(v: any) {
+  if (!isNonEmpty(v)) return false;
+  const s = v.trim();
+  // dígitos 7 a 15 (E.164 sin el +)
+  return /^\d{7,15}$/.test(s);
+}
+
+function isExt(v: any) {
+  if (!isNonEmpty(v)) return true; // opcional
+  const s = v.trim();
+  return /^\d{1,6}$/.test(s);
+}
+
 function fmtItem(i: CatalogItem) {
   return `${i.descripcion} (${i.clave})`;
 }
@@ -158,6 +185,17 @@ function SearchableSelect({
   );
 }
 
+const AVISO_LEGAL =
+  'DE CONFORMIDAD CON LO DISPUESTO EN LA LEY FEDERAL PARA LA PREVENCIÓN E IDENTIFICACIÓN DE OPERACIONES CON RECURSOS DE PROCEDENCIA ILÍCITA; SOLICITAMOS QUE PROPORCIONE LA SIGUIENTE INFORMACIÓN:';
+
+function buildTelefonoE164Like(cc: string, num: string, ext?: string) {
+  const a = (cc ?? '').trim();
+  const b = (num ?? '').trim();
+  const e = (ext ?? '').trim();
+  if (!a || !b) return '';
+  return e ? `${a} ${b} ext ${e}` : `${a} ${b}`;
+}
+
 export default function RegistrarClientePage() {
   const router = useRouter();
 
@@ -176,7 +214,12 @@ export default function RegistrarClientePage() {
   const [nombreEntidad, setNombreEntidad] = useState('');
   const [nacionalidad, setNacionalidad] = useState(''); // clave catálogo
   const [contactoPais, setContactoPais] = useState(''); // clave catálogo
-  const [telefono, setTelefono] = useState('');
+
+  // contacto (iteración 1)
+  const [email, setEmail] = useState('');
+  const [telCodigoPais, setTelCodigoPais] = useState('+52');
+  const [telNumero, setTelNumero] = useState('');
+  const [telExt, setTelExt] = useState('');
 
   // PF
   const [pfNombres, setPfNombres] = useState('');
@@ -185,15 +228,29 @@ export default function RegistrarClientePage() {
   const [pfActividad, setPfActividad] = useState(''); // clave
   const [pfRfc, setPfRfc] = useState('');
   const [pfCurp, setPfCurp] = useState('');
-  const [pfFechaNac, setPfFechaNac] = useState(''); // acepta YYYY-MM-DD o AAAAMMDD (se normaliza a AAAAMMDD)
+  const [pfFechaNac, setPfFechaNac] = useState(''); // acepta YYYY-MM-DD o AAAAMMDD
+
+  // PF Identificación (iteración 1)
+  const [pfIdTipo, setPfIdTipo] = useState('');
+  const [pfIdAutoridad, setPfIdAutoridad] = useState('');
+  const [pfIdNumero, setPfIdNumero] = useState('');
+  const [pfIdExpedicion, setPfIdExpedicion] = useState(''); // YYYY-MM-DD o AAAAMMDD
+  const [pfIdExpiracion, setPfIdExpiracion] = useState(''); // YYYY-MM-DD o AAAAMMDD
 
   // PM
   const [pmRfc, setPmRfc] = useState('');
-  const [pmFechaConst, setPmFechaConst] = useState(''); // acepta YYYY-MM-DD o AAAAMMDD (se normaliza a AAAAMMDD)
+  const [pmFechaConst, setPmFechaConst] = useState(''); // YYYY-MM-DD o AAAAMMDD
   const [pmGiro, setPmGiro] = useState(''); // clave
   const [pmRepNombreCompleto, setPmRepNombreCompleto] = useState('');
 
-  // FIDE
+  // PM Identificación representante (iteración 1)
+  const [pmRepIdTipo, setPmRepIdTipo] = useState('');
+  const [pmRepIdAutoridad, setPmRepIdAutoridad] = useState('');
+  const [pmRepIdNumero, setPmRepIdNumero] = useState('');
+  const [pmRepIdExpedicion, setPmRepIdExpedicion] = useState('');
+  const [pmRepIdExpiracion, setPmRepIdExpiracion] = useState('');
+
+  // FIDE (sin cambios)
   const [fidIdentificador, setFidIdentificador] = useState('');
   const [fidDenominacion, setFidDenominacion] = useState('');
   const [fidRfcFiduciario, setFidRfcFiduciario] = useState('');
@@ -201,7 +258,7 @@ export default function RegistrarClientePage() {
   const [repNombres, setRepNombres] = useState('');
   const [repApPat, setRepApPat] = useState('');
   const [repApMat, setRepApMat] = useState('');
-  const [repFechaNac, setRepFechaNac] = useState(''); // AAAAMMDD
+  const [repFechaNac, setRepFechaNac] = useState(''); // acepta YYYY-MM-DD o AAAAMMDD
   const [repRfc, setRepRfc] = useState('');
   const [repCurp, setRepCurp] = useState('');
 
@@ -241,7 +298,6 @@ export default function RegistrarClientePage() {
   }
 
   function validateField(path: string): boolean {
-    // limpia primero
     setErr(path, undefined);
 
     // base
@@ -261,8 +317,31 @@ export default function RegistrarClientePage() {
       if (!isNonEmpty(contactoPais)) return (setErr(path, 'contacto.pais es obligatorio'), false);
       return true;
     }
+
+    // contacto (iteración 1)
+    if (path === 'contacto.email') {
+      if (!isNonEmpty(email)) return (setErr(path, 'contacto.email es obligatorio'), false);
+      if (!isEmail(email)) return (setErr(path, 'contacto.email inválido'), false);
+      return true;
+    }
+    if (path === 'contacto.telefono.codigo_pais') {
+      if (!isNonEmpty(telCodigoPais)) return (setErr(path, 'contacto.telefono.codigo_pais es obligatorio'), false);
+      if (!isPhoneCountryCode(telCodigoPais)) return (setErr(path, 'contacto.telefono.codigo_pais inválido'), false);
+      return true;
+    }
+    if (path === 'contacto.telefono.numero') {
+      if (!isNonEmpty(telNumero)) return (setErr(path, 'contacto.telefono.numero es obligatorio'), false);
+      if (!isPhoneNumber(telNumero)) return (setErr(path, 'contacto.telefono.numero inválido'), false);
+      return true;
+    }
+    if (path === 'contacto.telefono.ext') {
+      if (!isExt(telExt)) return (setErr(path, 'contacto.telefono.ext inválida'), false);
+      return true;
+    }
     if (path === 'contacto.telefono') {
-      if (!isNonEmpty(telefono)) return (setErr(path, 'contacto.telefono es obligatorio'), false);
+      // compat: BE espera string no vacía
+      const tel = buildTelefonoE164Like(telCodigoPais, telNumero, telExt);
+      if (!isNonEmpty(tel)) return (setErr(path, 'contacto.telefono es obligatorio'), false);
       return true;
     }
 
@@ -287,9 +366,7 @@ export default function RegistrarClientePage() {
       if (!norm) return (setErr(path, 'persona.fecha_nacimiento inválida (AAAAMMDD)'), false);
       if (!isYYYYMMDD(norm)) return (setErr(path, 'persona.fecha_nacimiento inválida (AAAAMMDD)'), false);
 
-      // Normaliza el input a AAAAMMDD para uniformidad
-      if (pfFechaNac.trim() != norm) setPfFechaNac(norm);
-
+      if (pfFechaNac.trim() !== norm) setPfFechaNac(norm);
       return true;
     }
     if (path === 'persona.nombres') {
@@ -313,6 +390,41 @@ export default function RegistrarClientePage() {
       return true;
     }
 
+    // PF identificación (iteración 1)
+    if (path === 'persona.identificacion.tipo') {
+      if (tipo !== 'persona_fisica') return true;
+      if (!isNonEmpty(pfIdTipo)) return (setErr(path, 'persona.identificacion.tipo es obligatorio'), false);
+      return true;
+    }
+    if (path === 'persona.identificacion.autoridad') {
+      if (tipo !== 'persona_fisica') return true;
+      if (!isNonEmpty(pfIdAutoridad)) return (setErr(path, 'persona.identificacion.autoridad es obligatoria'), false);
+      return true;
+    }
+    if (path === 'persona.identificacion.numero') {
+      if (tipo !== 'persona_fisica') return true;
+      if (!isNonEmpty(pfIdNumero)) return (setErr(path, 'persona.identificacion.numero es obligatorio'), false);
+      return true;
+    }
+    if (path === 'persona.identificacion.expedicion') {
+      if (tipo !== 'persona_fisica') return true;
+      if (!isNonEmpty(pfIdExpedicion)) return (setErr(path, 'persona.identificacion.fecha_expedicion es obligatoria'), false);
+      const norm = normalizeToYYYYMMDD(pfIdExpedicion);
+      if (!norm || !isYYYYMMDD(norm))
+        return (setErr(path, 'persona.identificacion.fecha_expedicion inválida (AAAAMMDD)'), false);
+      if (pfIdExpedicion.trim() !== norm) setPfIdExpedicion(norm);
+      return true;
+    }
+    if (path === 'persona.identificacion.expiracion') {
+      if (tipo !== 'persona_fisica') return true;
+      if (!isNonEmpty(pfIdExpiracion)) return (setErr(path, 'persona.identificacion.fecha_expiracion es obligatoria'), false);
+      const norm = normalizeToYYYYMMDD(pfIdExpiracion);
+      if (!norm || !isYYYYMMDD(norm))
+        return (setErr(path, 'persona.identificacion.fecha_expiracion inválida (AAAAMMDD)'), false);
+      if (pfIdExpiracion.trim() !== norm) setPfIdExpiracion(norm);
+      return true;
+    }
+
     // PM
     if (path === 'empresa.rfc') {
       if (tipo !== 'persona_moral') return true;
@@ -325,12 +437,9 @@ export default function RegistrarClientePage() {
       if (!isNonEmpty(pmFechaConst)) return (setErr(path, 'empresa.fecha_constitucion es obligatoria'), false);
 
       const norm = normalizeToYYYYMMDD(pmFechaConst);
-      if (!norm) return (setErr(path, 'empresa.fecha_constitucion inválida (AAAAMMDD)'), false);
-      if (!isYYYYMMDD(norm)) return (setErr(path, 'empresa.fecha_constitucion inválida (AAAAMMDD)'), false);
+      if (!norm || !isYYYYMMDD(norm)) return (setErr(path, 'empresa.fecha_constitucion inválida (AAAAMMDD)'), false);
 
-      // Normaliza el input a AAAAMMDD para uniformidad
-      if (pmFechaConst.trim() != norm) setPmFechaConst(norm);
-
+      if (pmFechaConst.trim() !== norm) setPmFechaConst(norm);
       return true;
     }
     if (path === 'empresa.giro_mercantil') {
@@ -344,7 +453,44 @@ export default function RegistrarClientePage() {
       return true;
     }
 
-    // FIDE
+    // PM identificación representante (iteración 1)
+    if (path === 'representante.identificacion.tipo.pm') {
+      if (tipo !== 'persona_moral') return true;
+      if (!isNonEmpty(pmRepIdTipo)) return (setErr(path, 'representante.identificacion.tipo es obligatorio'), false);
+      return true;
+    }
+    if (path === 'representante.identificacion.autoridad.pm') {
+      if (tipo !== 'persona_moral') return true;
+      if (!isNonEmpty(pmRepIdAutoridad)) return (setErr(path, 'representante.identificacion.autoridad es obligatoria'), false);
+      return true;
+    }
+    if (path === 'representante.identificacion.numero.pm') {
+      if (tipo !== 'persona_moral') return true;
+      if (!isNonEmpty(pmRepIdNumero)) return (setErr(path, 'representante.identificacion.numero es obligatorio'), false);
+      return true;
+    }
+    if (path === 'representante.identificacion.expedicion.pm') {
+      if (tipo !== 'persona_moral') return true;
+      if (!isNonEmpty(pmRepIdExpedicion))
+        return (setErr(path, 'representante.identificacion.fecha_expedicion es obligatoria'), false);
+      const norm = normalizeToYYYYMMDD(pmRepIdExpedicion);
+      if (!norm || !isYYYYMMDD(norm))
+        return (setErr(path, 'representante.identificacion.fecha_expedicion inválida (AAAAMMDD)'), false);
+      if (pmRepIdExpedicion.trim() !== norm) setPmRepIdExpedicion(norm);
+      return true;
+    }
+    if (path === 'representante.identificacion.expiracion.pm') {
+      if (tipo !== 'persona_moral') return true;
+      if (!isNonEmpty(pmRepIdExpiracion))
+        return (setErr(path, 'representante.identificacion.fecha_expiracion es obligatoria'), false);
+      const norm = normalizeToYYYYMMDD(pmRepIdExpiracion);
+      if (!norm || !isYYYYMMDD(norm))
+        return (setErr(path, 'representante.identificacion.fecha_expiracion inválida (AAAAMMDD)'), false);
+      if (pmRepIdExpiracion.trim() !== norm) setPmRepIdExpiracion(norm);
+      return true;
+    }
+
+    // FIDE (sin cambios)
     if (path === 'fideicomiso.identificador') {
       if (tipo !== 'fideicomiso') return true;
       if (!isNonEmpty(fidIdentificador)) return (setErr(path, 'fideicomiso.identificador es obligatorio'), false);
@@ -380,7 +526,11 @@ export default function RegistrarClientePage() {
     if (path === 'representante.fecha_nacimiento') {
       if (tipo !== 'fideicomiso') return true;
       if (!isNonEmpty(repFechaNac)) return (setErr(path, 'representante.fecha_nacimiento es obligatoria'), false);
-      if (!isYYYYMMDD(repFechaNac)) return (setErr(path, 'representante.fecha_nacimiento inválida (AAAAMMDD)'), false);
+
+      const norm = normalizeToYYYYMMDD(repFechaNac);
+      if (!norm || !isYYYYMMDD(norm)) return (setErr(path, 'representante.fecha_nacimiento inválida (AAAAMMDD)'), false);
+
+      if (repFechaNac.trim() !== norm) setRepFechaNac(norm);
       return true;
     }
     if (path === 'representante.rfc') {
@@ -400,7 +550,17 @@ export default function RegistrarClientePage() {
   }
 
   function validateAll(): boolean {
-    const fields = ['empresa_id', 'nombre_entidad', 'nacionalidad', 'contacto.pais', 'contacto.telefono'];
+    const fields = [
+      'empresa_id',
+      'nombre_entidad',
+      'nacionalidad',
+      'contacto.pais',
+      'contacto.email',
+      'contacto.telefono.codigo_pais',
+      'contacto.telefono.numero',
+      'contacto.telefono.ext',
+      'contacto.telefono'
+    ];
 
     if (tipo === 'persona_fisica') {
       fields.push(
@@ -410,11 +570,26 @@ export default function RegistrarClientePage() {
         'persona.nombres',
         'persona.apellido_paterno',
         'persona.apellido_materno',
-        'persona.actividad_economica'
+        'persona.actividad_economica',
+        'persona.identificacion.tipo',
+        'persona.identificacion.autoridad',
+        'persona.identificacion.numero',
+        'persona.identificacion.expedicion',
+        'persona.identificacion.expiracion'
       );
     }
     if (tipo === 'persona_moral') {
-      fields.push('empresa.rfc', 'empresa.fecha_constitucion', 'empresa.giro_mercantil', 'representante.nombre_completo.pm');
+      fields.push(
+        'empresa.rfc',
+        'empresa.fecha_constitucion',
+        'empresa.giro_mercantil',
+        'representante.nombre_completo.pm',
+        'representante.identificacion.tipo.pm',
+        'representante.identificacion.autoridad.pm',
+        'representante.identificacion.numero.pm',
+        'representante.identificacion.expedicion.pm',
+        'representante.identificacion.expiracion.pm'
+      );
     }
     if (tipo === 'fideicomiso') {
       fields.push(
@@ -440,14 +615,25 @@ export default function RegistrarClientePage() {
   function buildPayload() {
     const empresa_id = Number(empresaId);
 
+    const telefono = buildTelefonoE164Like(telCodigoPais, telNumero, telExt);
+
     const contacto = {
       pais: valueToCatalogKey(contactoPais),
-      telefono: telefono.trim()
+      email: email.trim(),
+      telefono,
+      telefono_detalle: {
+        codigo_pais: telCodigoPais.trim(),
+        numero: telNumero.trim(),
+        ext: telExt.trim() || null
+      }
     };
 
     if (tipo === 'persona_fisica') {
       const act = actividades.find((x) => x.clave === pfActividad);
       const normFecha = normalizeToYYYYMMDD(pfFechaNac) ?? pfFechaNac.trim();
+
+      const idExp = normalizeToYYYYMMDD(pfIdExpedicion) ?? pfIdExpedicion.trim();
+      const idExpi = normalizeToYYYYMMDD(pfIdExpiracion) ?? pfIdExpiracion.trim();
 
       return {
         empresa_id,
@@ -464,7 +650,14 @@ export default function RegistrarClientePage() {
             nombres: pfNombres.trim(),
             apellido_paterno: pfApPat.trim(),
             apellido_materno: pfApMat.trim(),
-            actividad_economica: act ? { clave: act.clave, descripcion: act.descripcion } : pfActividad
+            actividad_economica: act ? { clave: act.clave, descripcion: act.descripcion } : pfActividad,
+            identificacion: {
+              tipo: pfIdTipo.trim(),
+              autoridad: pfIdAutoridad.trim(),
+              numero: pfIdNumero.trim(),
+              fecha_expedicion: idExp,
+              fecha_expiracion: idExpi
+            }
           }
         }
       };
@@ -472,6 +665,11 @@ export default function RegistrarClientePage() {
 
     if (tipo === 'persona_moral') {
       const giro = giros.find((x) => x.clave === pmGiro);
+      const repExp = normalizeToYYYYMMDD(pmRepIdExpedicion) ?? pmRepIdExpedicion.trim();
+      const repExpi = normalizeToYYYYMMDD(pmRepIdExpiracion) ?? pmRepIdExpiracion.trim();
+
+      const pmFechaNorm = normalizeToYYYYMMDD(pmFechaConst) ?? pmFechaConst.trim();
+
       return {
         empresa_id,
         tipo_cliente: 'persona_moral',
@@ -482,18 +680,31 @@ export default function RegistrarClientePage() {
           empresa: {
             tipo: 'persona_moral',
             rfc: pmRfc.trim().toUpperCase(),
-            fecha_constitucion: normalizeToYYYYMMDD(pmFechaConst) ?? pmFechaConst.trim(),
+            fecha_constitucion: pmFechaNorm,
             giro_mercantil: giro ? { clave: giro.clave, descripcion: giro.descripcion } : pmGiro
           },
           representante: {
-            nombre_completo: pmRepNombreCompleto.trim()
+            nombre_completo: pmRepNombreCompleto.trim(),
+            identificacion: {
+              tipo: pmRepIdTipo.trim(),
+              autoridad: pmRepIdAutoridad.trim(),
+              numero: pmRepIdNumero.trim(),
+              fecha_expedicion: repExp,
+              fecha_expiracion: repExpi
+            }
           }
         }
       };
     }
 
-    // fideicomiso
-    const nombreCompleto = [repNombres, repApPat, repApMat].map((x) => x.trim()).filter(Boolean).join(' ');
+    // fideicomiso (sin cambios)
+    const nombreCompleto = [repNombres, repApPat, repApMat]
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .join(' ');
+
+    const repFechaNorm = normalizeToYYYYMMDD(repFechaNac) ?? repFechaNac.trim();
+
     return {
       empresa_id,
       tipo_cliente: 'fideicomiso',
@@ -510,7 +721,7 @@ export default function RegistrarClientePage() {
           nombre_completo: nombreCompleto,
           rfc: repRfc.trim().toUpperCase(),
           curp: repCurp.trim().toUpperCase(),
-          fecha_nacimiento: repFechaNac.trim()
+          fecha_nacimiento: repFechaNorm
         }
       }
     };
@@ -531,13 +742,13 @@ export default function RegistrarClientePage() {
       return;
     }
 
-    const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://scmvp-1jhq.onrender.com';
+    const payload = buildPayload();
 
     try {
       setLoading(true);
-      const payload = buildPayload();
+      const base = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://scmvp-1jhq.onrender.com';
 
-      const res = await fetch(`${apiBase}/api/cliente/registrar-cliente`, {
+      const res = await fetch(`${base}/api/cliente/registrar-cliente`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -554,110 +765,161 @@ export default function RegistrarClientePage() {
         return;
       }
 
-      // éxito
+      // API regresa { ok:true, cliente:{id...} }
       const id = data?.cliente?.id;
-      if (id) router.push(`/cliente/clientes/${id}`);
-      else router.push('/cliente/clientes');
-    } catch (e: any) {
-      setFatal(e?.message ?? 'Error inesperado');
+      if (id) router.push(`/cliente/clientes/${id}`); // sin auto-impresión
+      else setFatal('Registrado, pero no se recibió id. Revisa respuesta del backend.');
+    } catch (err: any) {
+      setFatal(err?.message ?? 'Error inesperado');
     } finally {
       setLoading(false);
     }
   }
 
+  const showAviso = tipo === 'persona_fisica' || tipo === 'persona_moral';
+
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">Registrar cliente</h1>
-        <button className="rounded border px-3 py-2 text-sm" onClick={() => router.back()}>
-          Volver
-        </button>
-      </div>
+    <div className="max-w-4xl mx-auto p-4 space-y-4">
+      <h1 className="text-xl font-semibold">Registrar Cliente</h1>
 
-      {fatal ? <div className="rounded border bg-red-50 p-3 text-sm text-red-700">{fatal}</div> : null}
+      {showAviso ? (
+        <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">{AVISO_LEGAL}</div>
+      ) : null}
 
-      <form className="space-y-6" onSubmit={onSubmit}>
-        {/* Discriminador */}
-        <div className="rounded border border-gray-200 p-4 space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Tipo de cliente *</label>
-              <select
-                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                value={tipo}
-                onChange={(e) => {
-                  setTipo(e.target.value as TipoCliente);
-                  setErrors({});
-                  setFatal(null);
-                }}
-              >
-                <option value="persona_fisica">Persona Física</option>
-                <option value="persona_moral">Persona Moral</option>
-                <option value="fideicomiso">Fideicomiso</option>
-              </select>
-            </div>
+      {fatal ? (
+        <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{fatal}</div>
+      ) : null}
 
-            <div className="space-y-1">
-              <label className="text-sm font-medium">empresa_id *</label>
-              <input
-                className={`w-full rounded border px-3 py-2 text-sm ${errors['empresa_id'] ? 'border-red-500' : 'border-gray-300'}`}
-                value={empresaId}
-                onChange={(e) => setEmpresaId(e.target.value)}
-                onBlur={() => validateField('empresa_id')}
-                placeholder="32"
-              />
-              {errors['empresa_id'] ? <p className="text-xs text-red-600">{errors['empresa_id']}</p> : null}
-            </div>
-
-            <SearchableSelect
-              label="Nacionalidad"
-              required
-              value={nacionalidad}
-              items={paises}
-              error={errors['nacionalidad']}
-              onChange={(v) => setNacionalidad(v)}
-              onBlur={() => validateField('nacionalidad')}
-            />
+      <form onSubmit={onSubmit} className="space-y-6">
+        {/* BASE */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Tipo de cliente *</label>
+            <select
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              value={tipo}
+              onChange={(e) => {
+                setTipo(e.target.value as TipoCliente);
+                setErrors({});
+                setFatal(null);
+              }}
+            >
+              <option value="persona_fisica">Persona Física</option>
+              <option value="persona_moral">Persona Moral</option>
+              <option value="fideicomiso">Fideicomiso</option>
+            </select>
           </div>
-        </div>
 
-        {/* Campos comunes */}
-        <div className="rounded border border-gray-200 p-4 space-y-4">
-          <h2 className="font-medium">Campos comunes</h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-1 md:col-span-2">
-              <label className="text-sm font-medium">nombre_entidad *</label>
-              <input
-                className={`w-full rounded border px-3 py-2 text-sm ${errors['nombre_entidad'] ? 'border-red-500' : 'border-gray-300'}`}
-                value={nombreEntidad}
-                onChange={(e) => setNombreEntidad(e.target.value)}
-                onBlur={() => validateField('nombre_entidad')}
-              />
-              {errors['nombre_entidad'] ? <p className="text-xs text-red-600">{errors['nombre_entidad']}</p> : null}
-            </div>
-
-            <SearchableSelect
-              label="contacto.pais"
-              required
-              value={contactoPais}
-              items={paises}
-              error={errors['contacto.pais']}
-              onChange={(v) => setContactoPais(v)}
-              onBlur={() => validateField('contacto.pais')}
+          <div className="space-y-1">
+            <label className="text-sm font-medium">
+              Empresa ID <span className="text-red-600">*</span>
+            </label>
+            <input
+              className={`w-full rounded border px-3 py-2 text-sm ${errors['empresa_id'] ? 'border-red-500' : 'border-gray-300'}`}
+              value={empresaId}
+              onChange={(e) => setEmpresaId(e.target.value)}
+              onBlur={() => validateField('empresa_id')}
+              placeholder="Ej. 32"
             />
+            {errors['empresa_id'] ? <p className="text-xs text-red-600">{errors['empresa_id']}</p> : null}
+          </div>
 
-            <div className="space-y-1">
-              <label className="text-sm font-medium">contacto.telefono *</label>
-              <input
-                className={`w-full rounded border px-3 py-2 text-sm ${errors['contacto.telefono'] ? 'border-red-500' : 'border-gray-300'}`}
-                value={telefono}
-                onChange={(e) => setTelefono(e.target.value)}
-                onBlur={() => validateField('contacto.telefono')}
-                placeholder="3333333333"
-              />
-              {errors['contacto.telefono'] ? <p className="text-xs text-red-600">{errors['contacto.telefono']}</p> : null}
-            </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">
+              Nombre entidad <span className="text-red-600">*</span>
+            </label>
+            <input
+              className={`w-full rounded border px-3 py-2 text-sm ${errors['nombre_entidad'] ? 'border-red-500' : 'border-gray-300'}`}
+              value={nombreEntidad}
+              onChange={(e) => setNombreEntidad(e.target.value)}
+              onBlur={() => validateField('nombre_entidad')}
+              placeholder="Ej. Alicia Pruebas / Servicios SA / Fideicomiso X"
+            />
+            {errors['nombre_entidad'] ? <p className="text-xs text-red-600">{errors['nombre_entidad']}</p> : null}
+          </div>
+
+          <SearchableSelect
+            label="Nacionalidad"
+            required
+            value={nacionalidad}
+            items={paises}
+            error={errors['nacionalidad']}
+            onChange={(v) => setNacionalidad(v)}
+            onBlur={() => validateField('nacionalidad')}
+          />
+
+          <SearchableSelect
+            label="País (contacto)"
+            required
+            value={contactoPais}
+            items={paises}
+            error={errors['contacto.pais']}
+            onChange={(v) => setContactoPais(v)}
+            onBlur={() => validateField('contacto.pais')}
+          />
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">
+              Email <span className="text-red-600">*</span>
+            </label>
+            <input
+              className={`w-full rounded border px-3 py-2 text-sm ${errors['contacto.email'] ? 'border-red-500' : 'border-gray-300'}`}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onBlur={() => validateField('contacto.email')}
+              placeholder="correo@dominio.com"
+            />
+            {errors['contacto.email'] ? <p className="text-xs text-red-600">{errors['contacto.email']}</p> : null}
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">
+              Teléfono (código país) <span className="text-red-600">*</span>
+            </label>
+            <input
+              className={`w-full rounded border px-3 py-2 text-sm ${
+                errors['contacto.telefono.codigo_pais'] ? 'border-red-500' : 'border-gray-300'
+              }`}
+              value={telCodigoPais}
+              onChange={(e) => setTelCodigoPais(e.target.value)}
+              onBlur={() => validateField('contacto.telefono.codigo_pais')}
+              placeholder="+52"
+            />
+            {errors['contacto.telefono.codigo_pais'] ? (
+              <p className="text-xs text-red-600">{errors['contacto.telefono.codigo_pais']}</p>
+            ) : null}
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">
+              Teléfono (número) <span className="text-red-600">*</span>
+            </label>
+            <input
+              className={`w-full rounded border px-3 py-2 text-sm ${
+                errors['contacto.telefono.numero'] ? 'border-red-500' : 'border-gray-300'
+              }`}
+              value={telNumero}
+              onChange={(e) => setTelNumero(e.target.value)}
+              onBlur={() => validateField('contacto.telefono.numero')}
+              placeholder="5512345678"
+            />
+            {errors['contacto.telefono.numero'] ? (
+              <p className="text-xs text-red-600">{errors['contacto.telefono.numero']}</p>
+            ) : null}
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Extensión</label>
+            <input
+              className={`w-full rounded border px-3 py-2 text-sm ${
+                errors['contacto.telefono.ext'] ? 'border-red-500' : 'border-gray-300'
+              }`}
+              value={telExt}
+              onChange={(e) => setTelExt(e.target.value)}
+              onBlur={() => validateField('contacto.telefono.ext')}
+              placeholder="123"
+            />
+            {errors['contacto.telefono.ext'] ? <p className="text-xs text-red-600">{errors['contacto.telefono.ext']}</p> : null}
           </div>
         </div>
 
@@ -686,7 +948,7 @@ export default function RegistrarClientePage() {
                   value={pfCurp}
                   onChange={(e) => setPfCurp(e.target.value)}
                   onBlur={() => validateField('persona.curp')}
-                  placeholder="XEXX010101HNEXXXA4"
+                  placeholder="PEPJ900101HDFRRN09"
                 />
                 {errors['persona.curp'] ? <p className="text-xs text-red-600">{errors['persona.curp']}</p> : null}
               </div>
@@ -694,7 +956,9 @@ export default function RegistrarClientePage() {
               <div className="space-y-1">
                 <label className="text-sm font-medium">Fecha nacimiento (AAAAMMDD) *</label>
                 <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${errors['persona.fecha_nacimiento'] ? 'border-red-500' : 'border-gray-300'}`}
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors['persona.fecha_nacimiento'] ? 'border-red-500' : 'border-gray-300'
+                  }`}
                   value={pfFechaNac}
                   onChange={(e) => setPfFechaNac(e.target.value)}
                   onBlur={() => validateField('persona.fecha_nacimiento')}
@@ -721,7 +985,9 @@ export default function RegistrarClientePage() {
               <div className="space-y-1">
                 <label className="text-sm font-medium">Apellido paterno *</label>
                 <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${errors['persona.apellido_paterno'] ? 'border-red-500' : 'border-gray-300'}`}
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors['persona.apellido_paterno'] ? 'border-red-500' : 'border-gray-300'
+                  }`}
                   value={pfApPat}
                   onChange={(e) => setPfApPat(e.target.value)}
                   onBlur={() => validateField('persona.apellido_paterno')}
@@ -734,7 +1000,9 @@ export default function RegistrarClientePage() {
               <div className="space-y-1">
                 <label className="text-sm font-medium">Apellido materno *</label>
                 <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${errors['persona.apellido_materno'] ? 'border-red-500' : 'border-gray-300'}`}
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors['persona.apellido_materno'] ? 'border-red-500' : 'border-gray-300'
+                  }`}
                   value={pfApMat}
                   onChange={(e) => setPfApMat(e.target.value)}
                   onBlur={() => validateField('persona.apellido_materno')}
@@ -753,6 +1021,90 @@ export default function RegistrarClientePage() {
                 onChange={(v) => setPfActividad(v)}
                 onBlur={() => validateField('persona.actividad_economica')}
               />
+            </div>
+
+            <hr className="my-2" />
+
+            <h3 className="font-medium">Identificación / Acreditación</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Tipo / nombre del documento *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors['persona.identificacion.tipo'] ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  value={pfIdTipo}
+                  onChange={(e) => setPfIdTipo(e.target.value)}
+                  onBlur={() => validateField('persona.identificacion.tipo')}
+                  placeholder="INE / Pasaporte / ..."
+                />
+                {errors['persona.identificacion.tipo'] ? (
+                  <p className="text-xs text-red-600">{errors['persona.identificacion.tipo']}</p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Autoridad que expide *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors['persona.identificacion.autoridad'] ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  value={pfIdAutoridad}
+                  onChange={(e) => setPfIdAutoridad(e.target.value)}
+                  onBlur={() => validateField('persona.identificacion.autoridad')}
+                  placeholder="INE / SRE / ..."
+                />
+                {errors['persona.identificacion.autoridad'] ? (
+                  <p className="text-xs text-red-600">{errors['persona.identificacion.autoridad']}</p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Número de identificación *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors['persona.identificacion.numero'] ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  value={pfIdNumero}
+                  onChange={(e) => setPfIdNumero(e.target.value)}
+                  onBlur={() => validateField('persona.identificacion.numero')}
+                />
+                {errors['persona.identificacion.numero'] ? (
+                  <p className="text-xs text-red-600">{errors['persona.identificacion.numero']}</p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Fecha de expedición (AAAAMMDD) *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors['persona.identificacion.expedicion'] ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  value={pfIdExpedicion}
+                  onChange={(e) => setPfIdExpedicion(e.target.value)}
+                  onBlur={() => validateField('persona.identificacion.expedicion')}
+                  placeholder="20240131 (o 2024-01-31)"
+                />
+                {errors['persona.identificacion.expedicion'] ? (
+                  <p className="text-xs text-red-600">{errors['persona.identificacion.expedicion']}</p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Fecha de expiración (AAAAMMDD) *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors['persona.identificacion.expiracion'] ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  value={pfIdExpiracion}
+                  onChange={(e) => setPfIdExpiracion(e.target.value)}
+                  onBlur={() => validateField('persona.identificacion.expiracion')}
+                  placeholder="20290131 (o 2029-01-31)"
+                />
+                {errors['persona.identificacion.expiracion'] ? (
+                  <p className="text-xs text-red-600">{errors['persona.identificacion.expiracion']}</p>
+                ) : null}
+              </div>
             </div>
           </div>
         )}
@@ -778,7 +1130,9 @@ export default function RegistrarClientePage() {
               <div className="space-y-1">
                 <label className="text-sm font-medium">Fecha constitución (AAAAMMDD) *</label>
                 <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${errors['empresa.fecha_constitucion'] ? 'border-red-500' : 'border-gray-300'}`}
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors['empresa.fecha_constitucion'] ? 'border-red-500' : 'border-gray-300'
+                  }`}
                   value={pmFechaConst}
                   onChange={(e) => setPmFechaConst(e.target.value)}
                   onBlur={() => validateField('empresa.fecha_constitucion')}
@@ -816,10 +1170,93 @@ export default function RegistrarClientePage() {
                 ) : null}
               </div>
             </div>
+
+            <hr className="my-2" />
+
+            <h3 className="font-medium">Identificación del Representante Legal</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Tipo de documento *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors['representante.identificacion.tipo.pm'] ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  value={pmRepIdTipo}
+                  onChange={(e) => setPmRepIdTipo(e.target.value)}
+                  onBlur={() => validateField('representante.identificacion.tipo.pm')}
+                  placeholder="INE / Pasaporte / ..."
+                />
+                {errors['representante.identificacion.tipo.pm'] ? (
+                  <p className="text-xs text-red-600">{errors['representante.identificacion.tipo.pm']}</p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Autoridad que lo emitió *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors['representante.identificacion.autoridad.pm'] ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  value={pmRepIdAutoridad}
+                  onChange={(e) => setPmRepIdAutoridad(e.target.value)}
+                  onBlur={() => validateField('representante.identificacion.autoridad.pm')}
+                />
+                {errors['representante.identificacion.autoridad.pm'] ? (
+                  <p className="text-xs text-red-600">{errors['representante.identificacion.autoridad.pm']}</p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Número de identificación *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors['representante.identificacion.numero.pm'] ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  value={pmRepIdNumero}
+                  onChange={(e) => setPmRepIdNumero(e.target.value)}
+                  onBlur={() => validateField('representante.identificacion.numero.pm')}
+                />
+                {errors['representante.identificacion.numero.pm'] ? (
+                  <p className="text-xs text-red-600">{errors['representante.identificacion.numero.pm']}</p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Fecha de expedición (AAAAMMDD) *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors['representante.identificacion.expedicion.pm'] ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  value={pmRepIdExpedicion}
+                  onChange={(e) => setPmRepIdExpedicion(e.target.value)}
+                  onBlur={() => validateField('representante.identificacion.expedicion.pm')}
+                  placeholder="20240131 (o 2024-01-31)"
+                />
+                {errors['representante.identificacion.expedicion.pm'] ? (
+                  <p className="text-xs text-red-600">{errors['representante.identificacion.expedicion.pm']}</p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Fecha de expiración (AAAAMMDD) *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors['representante.identificacion.expiracion.pm'] ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  value={pmRepIdExpiracion}
+                  onChange={(e) => setPmRepIdExpiracion(e.target.value)}
+                  onBlur={() => validateField('representante.identificacion.expiracion.pm')}
+                  placeholder="20290131 (o 2029-01-31)"
+                />
+                {errors['representante.identificacion.expiracion.pm'] ? (
+                  <p className="text-xs text-red-600">{errors['representante.identificacion.expiracion.pm']}</p>
+                ) : null}
+              </div>
+            </div>
           </div>
         )}
 
-        {/* Fideicomiso */}
+        {/* Fideicomiso (sin cambios) */}
         {tipo === 'fideicomiso' && (
           <div className="rounded border border-gray-200 p-4 space-y-4">
             <h2 className="font-medium">Fideicomiso</h2>
@@ -872,106 +1309,112 @@ export default function RegistrarClientePage() {
               </div>
             </div>
 
-            <div className="rounded border border-gray-100 p-3 space-y-3">
-              <div className="font-medium">Representante</div>
+            <hr className="my-2" />
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Nombre(s) *</label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${
-                      errors['representante.nombres'] ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    value={repNombres}
-                    onChange={(e) => setRepNombres(e.target.value)}
-                    onBlur={() => validateField('representante.nombres')}
-                  />
-                  {errors['representante.nombres'] ? (
-                    <p className="text-xs text-red-600">{errors['representante.nombres']}</p>
-                  ) : null}
-                </div>
+            <h3 className="font-medium">Representante / Apoderado legal</h3>
 
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Apellido paterno *</label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${
-                      errors['representante.apellido_paterno'] ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    value={repApPat}
-                    onChange={(e) => setRepApPat(e.target.value)}
-                    onBlur={() => validateField('representante.apellido_paterno')}
-                  />
-                  {errors['representante.apellido_paterno'] ? (
-                    <p className="text-xs text-red-600">{errors['representante.apellido_paterno']}</p>
-                  ) : null}
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Nombre(s) *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors['representante.nombres'] ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  value={repNombres}
+                  onChange={(e) => setRepNombres(e.target.value)}
+                  onBlur={() => validateField('representante.nombres')}
+                />
+                {errors['representante.nombres'] ? (
+                  <p className="text-xs text-red-600">{errors['representante.nombres']}</p>
+                ) : null}
+              </div>
 
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Apellido materno *</label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${
-                      errors['representante.apellido_materno'] ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    value={repApMat}
-                    onChange={(e) => setRepApMat(e.target.value)}
-                    onBlur={() => validateField('representante.apellido_materno')}
-                  />
-                  {errors['representante.apellido_materno'] ? (
-                    <p className="text-xs text-red-600">{errors['representante.apellido_materno']}</p>
-                  ) : null}
-                </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Apellido paterno *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors['representante.apellido_paterno'] ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  value={repApPat}
+                  onChange={(e) => setRepApPat(e.target.value)}
+                  onBlur={() => validateField('representante.apellido_paterno')}
+                />
+                {errors['representante.apellido_paterno'] ? (
+                  <p className="text-xs text-red-600">{errors['representante.apellido_paterno']}</p>
+                ) : null}
+              </div>
 
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Fecha nacimiento (AAAAMMDD) *</label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${
-                      errors['representante.fecha_nacimiento'] ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    value={repFechaNac}
-                    onChange={(e) => setRepFechaNac(e.target.value)}
-                    onBlur={() => validateField('representante.fecha_nacimiento')}
-                    placeholder="19900101"
-                  />
-                  {errors['representante.fecha_nacimiento'] ? (
-                    <p className="text-xs text-red-600">{errors['representante.fecha_nacimiento']}</p>
-                  ) : null}
-                </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Apellido materno *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors['representante.apellido_materno'] ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  value={repApMat}
+                  onChange={(e) => setRepApMat(e.target.value)}
+                  onBlur={() => validateField('representante.apellido_materno')}
+                />
+                {errors['representante.apellido_materno'] ? (
+                  <p className="text-xs text-red-600">{errors['representante.apellido_materno']}</p>
+                ) : null}
+              </div>
 
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">RFC *</label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${
-                      errors['representante.rfc'] ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    value={repRfc}
-                    onChange={(e) => setRepRfc(e.target.value)}
-                    onBlur={() => validateField('representante.rfc')}
-                    placeholder="XAXX010101000"
-                  />
-                  {errors['representante.rfc'] ? <p className="text-xs text-red-600">{errors['representante.rfc']}</p> : null}
-                </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Fecha de nacimiento (AAAAMMDD) *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors['representante.fecha_nacimiento'] ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  value={repFechaNac}
+                  onChange={(e) => setRepFechaNac(e.target.value)}
+                  onBlur={() => validateField('representante.fecha_nacimiento')}
+                  placeholder="19900101 (o 1990-01-01)"
+                />
+                {errors['representante.fecha_nacimiento'] ? (
+                  <p className="text-xs text-red-600">{errors['representante.fecha_nacimiento']}</p>
+                ) : (
+                  <p className="text-xs text-gray-500">Acepta AAAAMMDD o YYYY-MM-DD (se convierte a AAAAMMDD).</p>
+                )}
+              </div>
 
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">CURP *</label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${
-                      errors['representante.curp'] ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    value={repCurp}
-                    onChange={(e) => setRepCurp(e.target.value)}
-                    onBlur={() => validateField('representante.curp')}
-                    placeholder="XEXX010101HNEXXXA4"
-                  />
-                  {errors['representante.curp'] ? <p className="text-xs text-red-600">{errors['representante.curp']}</p> : null}
-                </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">RFC *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors['representante.rfc'] ? 'border-red-500' : 'border-gray-300'}`}
+                  value={repRfc}
+                  onChange={(e) => setRepRfc(e.target.value)}
+                  onBlur={() => validateField('representante.rfc')}
+                  placeholder="XAXX010101000"
+                />
+                {errors['representante.rfc'] ? <p className="text-xs text-red-600">{errors['representante.rfc']}</p> : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">CURP *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors['representante.curp'] ? 'border-red-500' : 'border-gray-300'}`}
+                  value={repCurp}
+                  onChange={(e) => setRepCurp(e.target.value)}
+                  onBlur={() => validateField('representante.curp')}
+                  placeholder="PEPJ900101HDFRRN09"
+                />
+                {errors['representante.curp'] ? <p className="text-xs text-red-600">{errors['representante.curp']}</p> : null}
               </div>
             </div>
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-2">
-          <button type="submit" disabled={loading} className="rounded bg-black px-4 py-2 text-sm font-semibold text-white">
-            {loading ? 'Guardando…' : 'Guardar'}
+        <div className="flex items-center gap-3">
+          <button type="submit" disabled={loading} className="rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-50">
+            {loading ? 'Guardando...' : 'Registrar'}
+          </button>
+
+          <button
+            type="button"
+            className="rounded border border-gray-300 px-4 py-2 text-sm"
+            onClick={() => router.push('/cliente/clientes')}
+          >
+            Cancelar
           </button>
         </div>
       </form>
