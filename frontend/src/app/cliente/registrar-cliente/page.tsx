@@ -80,13 +80,6 @@ function isExt(v: any) {
   return /^\d{1,6}$/.test(s);
 }
 
-function isPostalCode(v: any) {
-  if (!isNonEmpty(v)) return false;
-  const s = v.trim();
-  // flexible: 4–10 dígitos (MEX=5)
-  return /^\d{4,10}$/.test(s);
-}
-
 function fmtItem(i: CatalogItem) {
   return `${i.descripcion} (${i.clave})`;
 }
@@ -228,15 +221,16 @@ export default function RegistrarClientePage() {
   const [telNumero, setTelNumero] = useState('');
   const [telExt, setTelExt] = useState('');
 
-  // contacto.domicilio (iteración 1)
-  const [cDomCalle, setCDomCalle] = useState('');
-  const [cDomNumero, setCDomNumero] = useState('');
-  const [cDomInterior, setCDomInterior] = useState('');
-  const [cDomColonia, setCDomColonia] = useState('');
-  const [cDomMunicipio, setCDomMunicipio] = useState('');
-  const [cDomCiudad, setCDomCiudad] = useState('');
-  const [cDomCP, setCDomCP] = useState('');
-  const [cDomEstado, setCDomEstado] = useState('');
+  // domicilio (contacto) - México (captura manual por ahora)
+  const [domCalle, setDomCalle] = useState('');
+  const [domNumero, setDomNumero] = useState('');
+  const [domInterior, setDomInterior] = useState('');
+  const [domColonia, setDomColonia] = useState('');
+  const [domMunicipio, setDomMunicipio] = useState('');
+  const [domCiudadDelegacion, setDomCiudadDelegacion] = useState('');
+  const [domCP, setDomCP] = useState('');
+  const [domEstado, setDomEstado] = useState('');
+  const [domPais, setDomPais] = useState(''); // manual (no catálogo)
 
   // PF
   const [pfNombres, setPfNombres] = useState('');
@@ -362,38 +356,39 @@ export default function RegistrarClientePage() {
       return true;
     }
 
-    // contacto.domicilio (iteración 1)
+    // domicilio (contacto) - gate FE
     if (path === 'contacto.domicilio.calle') {
-      if (!isNonEmpty(cDomCalle)) return (setErr(path, 'contacto.domicilio.calle es obligatoria'), false);
+      if (!isNonEmpty(domCalle)) return (setErr(path, 'contacto.domicilio.calle es obligatoria'), false);
       return true;
     }
     if (path === 'contacto.domicilio.numero') {
-      if (!isNonEmpty(cDomNumero)) return (setErr(path, 'contacto.domicilio.numero es obligatorio'), false);
-      return true;
-    }
-    if (path === 'contacto.domicilio.interior') {
-      // opcional
+      if (!isNonEmpty(domNumero)) return (setErr(path, 'contacto.domicilio.numero es obligatorio'), false);
       return true;
     }
     if (path === 'contacto.domicilio.colonia') {
-      if (!isNonEmpty(cDomColonia)) return (setErr(path, 'contacto.domicilio.colonia es obligatoria'), false);
+      if (!isNonEmpty(domColonia)) return (setErr(path, 'contacto.domicilio.colonia es obligatoria'), false);
       return true;
     }
     if (path === 'contacto.domicilio.municipio') {
-      if (!isNonEmpty(cDomMunicipio)) return (setErr(path, 'contacto.domicilio.municipio es obligatorio'), false);
+      if (!isNonEmpty(domMunicipio)) return (setErr(path, 'contacto.domicilio.municipio es obligatorio'), false);
       return true;
     }
-    if (path === 'contacto.domicilio.ciudad') {
-      if (!isNonEmpty(cDomCiudad)) return (setErr(path, 'contacto.domicilio.ciudad es obligatoria'), false);
+    if (path === 'contacto.domicilio.ciudad_delegacion') {
+      if (!isNonEmpty(domCiudadDelegacion))
+        return (setErr(path, 'contacto.domicilio.ciudad_delegacion es obligatoria'), false);
       return true;
     }
     if (path === 'contacto.domicilio.codigo_postal') {
-      if (!isNonEmpty(cDomCP)) return (setErr(path, 'contacto.domicilio.codigo_postal es obligatorio'), false);
-      if (!isPostalCode(cDomCP)) return (setErr(path, 'contacto.domicilio.codigo_postal inválido'), false);
+      if (!isNonEmpty(domCP)) return (setErr(path, 'contacto.domicilio.codigo_postal es obligatorio'), false);
+      if (!/^\d{5}$/.test(domCP.trim())) return (setErr(path, 'contacto.domicilio.codigo_postal inválido'), false);
       return true;
     }
     if (path === 'contacto.domicilio.estado') {
-      if (!isNonEmpty(cDomEstado)) return (setErr(path, 'contacto.domicilio.estado es obligatorio'), false);
+      if (!isNonEmpty(domEstado)) return (setErr(path, 'contacto.domicilio.estado es obligatorio'), false);
+      return true;
+    }
+    if (path === 'contacto.domicilio.pais') {
+      if (!isNonEmpty(domPais)) return (setErr(path, 'contacto.domicilio.pais es obligatorio'), false);
       return true;
     }
 
@@ -612,15 +607,16 @@ export default function RegistrarClientePage() {
       'contacto.telefono.numero',
       'contacto.telefono.ext',
       'contacto.telefono',
-      // contacto.domicilio
+
+      // domicilio (contacto)
       'contacto.domicilio.calle',
       'contacto.domicilio.numero',
-      'contacto.domicilio.interior',
       'contacto.domicilio.colonia',
       'contacto.domicilio.municipio',
-      'contacto.domicilio.ciudad',
+      'contacto.domicilio.ciudad_delegacion',
       'contacto.domicilio.codigo_postal',
-      'contacto.domicilio.estado'
+      'contacto.domicilio.estado',
+      'contacto.domicilio.pais'
     ];
 
     if (tipo === 'persona_fisica') {
@@ -687,16 +683,17 @@ export default function RegistrarClientePage() {
         numero: telNumero.trim(),
         ext: telExt.trim() || null
       },
-      domicilio: {
-        calle: cDomCalle.trim(),
-        numero: cDomNumero.trim(),
-        interior: cDomInterior.trim() || null,
-        colonia: cDomColonia.trim(),
-        municipio: cDomMunicipio.trim(),
-        ciudad: cDomCiudad.trim(),
-        codigo_postal: cDomCP.trim(),
-        estado: cDomEstado.trim(),
-        pais: valueToCatalogKey(contactoPais)
+      // Nota: país del domicilio es captura manual por ahora (no catálogo)
+      domicilio_mexico: {
+        calle: domCalle.trim(),
+        numero: domNumero.trim(),
+        interior: domInterior.trim() || null,
+        colonia: domColonia.trim(),
+        municipio: domMunicipio.trim(),
+        ciudad_delegacion: domCiudadDelegacion.trim(),
+        codigo_postal: domCP.trim(),
+        estado: domEstado.trim(),
+        pais: domPais.trim()
       }
     };
 
@@ -995,23 +992,21 @@ export default function RegistrarClientePage() {
           </div>
         </div>
 
-        {/* DOMICILIO DE CONTACTO */}
+        {/* DOMICILIO (CONTACTO) */}
         <div className="rounded border border-gray-200 p-4 space-y-4">
-          <h2 className="font-medium">Domicilio de Contacto</h2>
+          <h2 className="font-medium">Domicilio (contacto)</h2>
+          <p className="text-xs text-gray-500">Captura manual por ahora (no catálogo). En iteraciones posteriores lo alineamos a catálogos.</p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-1 md:col-span-2">
+            <div className="space-y-1">
               <label className="text-sm font-medium">
                 Calle <span className="text-red-600">*</span>
               </label>
               <input
-                className={`w-full rounded border px-3 py-2 text-sm ${
-                  errors['contacto.domicilio.calle'] ? 'border-red-500' : 'border-gray-300'
-                }`}
-                value={cDomCalle}
-                onChange={(e) => setCDomCalle(e.target.value)}
+                className={`w-full rounded border px-3 py-2 text-sm ${errors['contacto.domicilio.calle'] ? 'border-red-500' : 'border-gray-300'}`}
+                value={domCalle}
+                onChange={(e) => setDomCalle(e.target.value)}
                 onBlur={() => validateField('contacto.domicilio.calle')}
-                placeholder="Calle / Avenida"
               />
               {errors['contacto.domicilio.calle'] ? <p className="text-xs text-red-600">{errors['contacto.domicilio.calle']}</p> : null}
             </div>
@@ -1021,13 +1016,10 @@ export default function RegistrarClientePage() {
                 Número <span className="text-red-600">*</span>
               </label>
               <input
-                className={`w-full rounded border px-3 py-2 text-sm ${
-                  errors['contacto.domicilio.numero'] ? 'border-red-500' : 'border-gray-300'
-                }`}
-                value={cDomNumero}
-                onChange={(e) => setCDomNumero(e.target.value)}
+                className={`w-full rounded border px-3 py-2 text-sm ${errors['contacto.domicilio.numero'] ? 'border-red-500' : 'border-gray-300'}`}
+                value={domNumero}
+                onChange={(e) => setDomNumero(e.target.value)}
                 onBlur={() => validateField('contacto.domicilio.numero')}
-                placeholder="123"
               />
               {errors['contacto.domicilio.numero'] ? <p className="text-xs text-red-600">{errors['contacto.domicilio.numero']}</p> : null}
             </div>
@@ -1036,10 +1028,8 @@ export default function RegistrarClientePage() {
               <label className="text-sm font-medium">Interior</label>
               <input
                 className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                value={cDomInterior}
-                onChange={(e) => setCDomInterior(e.target.value)}
-                onBlur={() => validateField('contacto.domicilio.interior')}
-                placeholder="A / 2B / ..."
+                value={domInterior}
+                onChange={(e) => setDomInterior(e.target.value)}
               />
             </div>
 
@@ -1048,13 +1038,10 @@ export default function RegistrarClientePage() {
                 Colonia <span className="text-red-600">*</span>
               </label>
               <input
-                className={`w-full rounded border px-3 py-2 text-sm ${
-                  errors['contacto.domicilio.colonia'] ? 'border-red-500' : 'border-gray-300'
-                }`}
-                value={cDomColonia}
-                onChange={(e) => setCDomColonia(e.target.value)}
+                className={`w-full rounded border px-3 py-2 text-sm ${errors['contacto.domicilio.colonia'] ? 'border-red-500' : 'border-gray-300'}`}
+                value={domColonia}
+                onChange={(e) => setDomColonia(e.target.value)}
                 onBlur={() => validateField('contacto.domicilio.colonia')}
-                placeholder="Colonia"
               />
               {errors['contacto.domicilio.colonia'] ? <p className="text-xs text-red-600">{errors['contacto.domicilio.colonia']}</p> : null}
             </div>
@@ -1064,45 +1051,39 @@ export default function RegistrarClientePage() {
                 Municipio <span className="text-red-600">*</span>
               </label>
               <input
-                className={`w-full rounded border px-3 py-2 text-sm ${
-                  errors['contacto.domicilio.municipio'] ? 'border-red-500' : 'border-gray-300'
-                }`}
-                value={cDomMunicipio}
-                onChange={(e) => setCDomMunicipio(e.target.value)}
+                className={`w-full rounded border px-3 py-2 text-sm ${errors['contacto.domicilio.municipio'] ? 'border-red-500' : 'border-gray-300'}`}
+                value={domMunicipio}
+                onChange={(e) => setDomMunicipio(e.target.value)}
                 onBlur={() => validateField('contacto.domicilio.municipio')}
-                placeholder="Municipio"
               />
               {errors['contacto.domicilio.municipio'] ? <p className="text-xs text-red-600">{errors['contacto.domicilio.municipio']}</p> : null}
             </div>
 
             <div className="space-y-1">
               <label className="text-sm font-medium">
-                Ciudad / Delegación <span className="text-red-600">*</span>
+                Ciudad/Delegación <span className="text-red-600">*</span>
               </label>
               <input
-                className={`w-full rounded border px-3 py-2 text-sm ${
-                  errors['contacto.domicilio.ciudad'] ? 'border-red-500' : 'border-gray-300'
-                }`}
-                value={cDomCiudad}
-                onChange={(e) => setCDomCiudad(e.target.value)}
-                onBlur={() => validateField('contacto.domicilio.ciudad')}
-                placeholder="Ciudad / Delegación"
+                className={`w-full rounded border px-3 py-2 text-sm ${errors['contacto.domicilio.ciudad_delegacion'] ? 'border-red-500' : 'border-gray-300'}`}
+                value={domCiudadDelegacion}
+                onChange={(e) => setDomCiudadDelegacion(e.target.value)}
+                onBlur={() => validateField('contacto.domicilio.ciudad_delegacion')}
               />
-              {errors['contacto.domicilio.ciudad'] ? <p className="text-xs text-red-600">{errors['contacto.domicilio.ciudad']}</p> : null}
+              {errors['contacto.domicilio.ciudad_delegacion'] ? (
+                <p className="text-xs text-red-600">{errors['contacto.domicilio.ciudad_delegacion']}</p>
+              ) : null}
             </div>
 
             <div className="space-y-1">
               <label className="text-sm font-medium">
-                Código postal <span className="text-red-600">*</span>
+                Código Postal <span className="text-red-600">*</span>
               </label>
               <input
-                className={`w-full rounded border px-3 py-2 text-sm ${
-                  errors['contacto.domicilio.codigo_postal'] ? 'border-red-500' : 'border-gray-300'
-                }`}
-                value={cDomCP}
-                onChange={(e) => setCDomCP(e.target.value)}
+                className={`w-full rounded border px-3 py-2 text-sm ${errors['contacto.domicilio.codigo_postal'] ? 'border-red-500' : 'border-gray-300'}`}
+                value={domCP}
+                onChange={(e) => setDomCP(e.target.value)}
                 onBlur={() => validateField('contacto.domicilio.codigo_postal')}
-                placeholder="44100"
+                placeholder="Ej. 44100"
               />
               {errors['contacto.domicilio.codigo_postal'] ? (
                 <p className="text-xs text-red-600">{errors['contacto.domicilio.codigo_postal']}</p>
@@ -1114,21 +1095,29 @@ export default function RegistrarClientePage() {
                 Estado <span className="text-red-600">*</span>
               </label>
               <input
-                className={`w-full rounded border px-3 py-2 text-sm ${
-                  errors['contacto.domicilio.estado'] ? 'border-red-500' : 'border-gray-300'
-                }`}
-                value={cDomEstado}
-                onChange={(e) => setCDomEstado(e.target.value)}
+                className={`w-full rounded border px-3 py-2 text-sm ${errors['contacto.domicilio.estado'] ? 'border-red-500' : 'border-gray-300'}`}
+                value={domEstado}
+                onChange={(e) => setDomEstado(e.target.value)}
                 onBlur={() => validateField('contacto.domicilio.estado')}
-                placeholder="Jalisco"
+                placeholder="Ej. Jalisco"
               />
               {errors['contacto.domicilio.estado'] ? <p className="text-xs text-red-600">{errors['contacto.domicilio.estado']}</p> : null}
             </div>
-          </div>
 
-          <p className="text-xs text-gray-500">
-            Nota: País del domicilio se toma de “País (contacto)” (catálogo) para mantener consistencia.
-          </p>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">
+                País (domicilio) <span className="text-red-600">*</span>
+              </label>
+              <input
+                className={`w-full rounded border px-3 py-2 text-sm ${errors['contacto.domicilio.pais'] ? 'border-red-500' : 'border-gray-300'}`}
+                value={domPais}
+                onChange={(e) => setDomPais(e.target.value)}
+                onBlur={() => validateField('contacto.domicilio.pais')}
+                placeholder="Ej. México"
+              />
+              {errors['contacto.domicilio.pais'] ? <p className="text-xs text-red-600">{errors['contacto.domicilio.pais']}</p> : null}
+            </div>
+          </div>
         </div>
 
         {/* Persona Física */}

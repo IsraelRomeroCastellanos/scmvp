@@ -39,6 +39,13 @@ function isCURP(v: any): boolean {
   return /^[A-Z][AEIOUX][A-Z]{2}\d{6}[HM][A-Z]{5}[A-Z0-9]\d$/.test(s);
 }
 
+// Email (validación básica, suficiente para gate)
+function isEmail(v: any): boolean {
+  if (!isNonEmptyString(v)) return false;
+  const s = v.trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s);
+}
+
 // Fecha AAAAMMDD
 function isYYYYMMDD(v: any): boolean {
   if (!isNonEmptyString(v)) return false;
@@ -101,7 +108,26 @@ function validateDatosCompletosOr400(res: Response, tipo: any, datos_completos: 
   // contacto común
   const contacto = datos_completos?.contacto ?? {};
   if (!isNonEmptyString(contacto?.pais)) return (badRequest(res, 'contacto.pais es obligatorio'), false);
+
+  if (!isNonEmptyString(contacto?.email)) return (badRequest(res, 'contacto.email es obligatorio'), false);
+  if (!isEmail(contacto?.email)) return (badRequest(res, 'contacto.email inválido'), false);
+
   if (!isNonEmptyString(contacto?.telefono)) return (badRequest(res, 'contacto.telefono es obligatorio'), false);
+
+  // domicilio (contacto) - México (captura manual por ahora)
+  const dom = contacto?.domicilio_mexico ?? contacto?.domicilio ?? {};
+  if (!isNonEmptyString(dom?.calle)) return (badRequest(res, 'contacto.domicilio.calle es obligatoria'), false);
+  if (!isNonEmptyString(dom?.numero)) return (badRequest(res, 'contacto.domicilio.numero es obligatorio'), false);
+  if (!isNonEmptyString(dom?.colonia)) return (badRequest(res, 'contacto.domicilio.colonia es obligatoria'), false);
+  if (!isNonEmptyString(dom?.municipio)) return (badRequest(res, 'contacto.domicilio.municipio es obligatorio'), false);
+  if (!isNonEmptyString(dom?.ciudad_delegacion))
+    return (badRequest(res, 'contacto.domicilio.ciudad_delegacion es obligatoria'), false);
+  if (!isNonEmptyString(dom?.codigo_postal)) return (badRequest(res, 'contacto.domicilio.codigo_postal es obligatorio'), false);
+  if (!/^\d{5}$/.test(String(dom?.codigo_postal).trim()))
+    return (badRequest(res, 'contacto.domicilio.codigo_postal inválido'), false);
+  if (!isNonEmptyString(dom?.estado)) return (badRequest(res, 'contacto.domicilio.estado es obligatorio'), false);
+  if (!isNonEmptyString(dom?.pais)) return (badRequest(res, 'contacto.domicilio.pais es obligatorio'), false);
+
 
   // Validaciones por tipo
   if (tipo === 'persona_fisica') {
@@ -133,6 +159,8 @@ function validateDatosCompletosOr400(res: Response, tipo: any, datos_completos: 
     if (!isNonEmptyString(empresa?.rfc)) return (badRequest(res, 'empresa.rfc es obligatorio'), false);
     if (!isRFC(empresa?.rfc)) return (badRequest(res, 'empresa.rfc inválido'), false);
     if (!isNonEmptyString(empresa?.fecha_constitucion)) return (badRequest(res, 'empresa.fecha_constitucion es obligatoria'), false);
+    if (!isYYYYMMDD(empresa?.fecha_constitucion))
+      return (badRequest(res, 'empresa.fecha_constitucion inválida (AAAAMMDD)'), false);
 
     const giro = empresa?.giro_mercantil ?? empresa?.giro;
     const giroOk =
