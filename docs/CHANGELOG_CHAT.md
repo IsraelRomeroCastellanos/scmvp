@@ -1,5 +1,11 @@
 # Changelog (Chat Sessions)
 
+
+## 2026-01-16
+- FE: Botón “Generar / Imprimir” en detalle de cliente; impresión manual (se eliminó auto-print).
+- FE: Fechas AAAAMMDD en PF y fechas de identificación.
+
+
 ## 2026-01-11
 - Hito: Contrato único de Cliente (PF/PM/FID) validado en PROD con evidencia
 - Cambio BE (cliente):
