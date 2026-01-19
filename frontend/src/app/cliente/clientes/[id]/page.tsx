@@ -13,7 +13,7 @@ type Cliente = {
   fecha_nacimiento_constitucion?: string | null;
   tipo_cliente: 'persona_fisica' | 'persona_moral' | 'fideicomiso';
   nacionalidad?: string | null;
-  domicilio_mexico?: string | null;
+  domicilio_mexico?: string | null; // legacy
   ocupacion?: string | null;
   actividad_economica?: any;
   datos_completos?: any;
@@ -92,6 +92,43 @@ function fullNameFrom(parts: any) {
   const am = String(parts?.apellido_materno ?? '').trim();
   const join = [nombres, ap, am].filter(Boolean).join(' ');
   return join || '';
+}
+
+function formatDomicilio(d: any) {
+  if (!d) return '—';
+
+  // Acepta objeto domicilio {calle, numero, interior, colonia, municipio, ciudad_delegacion, codigo_postal, estado, pais}
+  const calle = String(d?.calle ?? '').trim();
+  const numero = String(d?.numero ?? '').trim();
+  const interior = String(d?.interior ?? '').trim();
+  const colonia = String(d?.colonia ?? '').trim();
+  const municipio = String(d?.municipio ?? '').trim();
+  const ciudad =
+    String(d?.ciudad_delegacion ?? '').trim() ||
+    String(d?.ciudadDelegacion ?? '').trim() ||
+    String(d?.ciudad ?? '').trim();
+  const cp = String(d?.codigo_postal ?? '').trim() || String(d?.codigoPostal ?? '').trim();
+  const estado = String(d?.estado ?? '').trim();
+  const pais = String(d?.pais ?? '').trim();
+
+  const linea1 = [calle, numero ? `#${numero}` : '', interior ? `Int ${interior}` : '']
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  const linea2 = [colonia, municipio, ciudad].filter(Boolean).join(', ').trim();
+
+  const linea3 = [cp, estado, pais].filter(Boolean).join(', ').trim();
+
+  const out = [linea1, linea2, linea3].filter(Boolean).join(' · ').trim();
+  if (out) return out;
+
+  // fallback si el objeto viene distinto
+  try {
+    return JSON.stringify(d);
+  } catch {
+    return String(d);
+  }
 }
 
 export default function ClienteDetallePage() {
@@ -179,6 +216,15 @@ export default function ClienteDetallePage() {
     empresa?.giro ??
     null;
 
+  // ✅ Nuevo: domicilio de contacto (objeto)
+  const contactoDomicilio =
+    contacto?.domicilio_mexico ??
+    contacto?.domicilio ??
+    null;
+
+  // Legacy: texto en cliente.domicilio_mexico (si existiera)
+  const domicilioLegacy = cliente?.domicilio_mexico ?? null;
+
   if (loading) return <div className="p-6">Cargando…</div>;
 
   if (err) {
@@ -222,7 +268,7 @@ export default function ClienteDetallePage() {
             ✏️ Editar
           </button>
 
-          {/* ✅ NUEVO: Generar / Imprimir manual */}
+          {/* ✅ Generar / Imprimir manual */}
           <button
             className="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold hover:bg-gray-50"
             onClick={() => router.push(`/cliente/clientes/${cliente.id}/imprimir`)}
@@ -252,10 +298,19 @@ export default function ClienteDetallePage() {
       </Card>
 
       <Card title="Contacto">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <Row label="País" value={contacto?.pais} />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <Row label="País (contacto)" value={contacto?.pais} />
+          <Row label="Email" value={contacto?.email} />
           <Row label="Teléfono" value={contacto?.telefono} />
-          <Row label="Domicilio (México)" value={cliente.domicilio_mexico} />
+          <Row label="Domicilio (contacto)" value={formatDomicilio(contactoDomicilio)} />
+
+          {/* Legacy sólo para no “perder” info si existiera */}
+          {domicilioLegacy ? (
+            <div className="md:col-span-4">
+              <Label>Domicilio (legacy)</Label>
+              <Value>{formatAny(domicilioLegacy)}</Value>
+            </div>
+          ) : null}
         </div>
       </Card>
 
