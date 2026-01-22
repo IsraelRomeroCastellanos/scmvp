@@ -504,6 +504,8 @@ function buildContacto() {
       },
     };
 
+    function buildPayload() {
+
     if (tipo === "persona_fisica") {
       const act = actividades.find((x) => x.clave === pfActividad);
       const normFecha = normalizeToYYYYMMDD(pfFechaNac) ?? pfFechaNac.trim();
@@ -680,6 +682,10 @@ function buildContacto() {
       },
     },
   };
+
+
+  }
+
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
