@@ -34,3 +34,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# SCMVP local artifacts
+*.log
+oversize.json
+Export/
+next/
+frontend@0.1.0
+*.bak
+*.bak_*
+*.tmp
+src/app/cliente/registrar-cliente/page.tsx:Zone.Identifier
