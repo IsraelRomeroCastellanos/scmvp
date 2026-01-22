@@ -454,55 +454,14 @@ function buildContacto() {
   }
 
   function buildPayload() {
-    // --- AUTO-FIX: helper para construir `contacto` en el scope correcto ---
-    const buildContacto = () => ({
-      pais: valueToCatalogKey(contactoPais),
-      email: email.trim(),
-      telefono: {
-        codigo_pais: telCodigoPais.trim(),
-        numero: telNumero.trim(),
-        ext: telExt.trim() || null,
-      },
-      domicilio_mexico: {
-        calle: domCalle.trim(),
-        numero: domNumero.trim(),
-        interior: domInterior.trim() || null,
-        colonia: domColonia.trim(),
-        municipio: domMunicipio.trim(),
-        ciudad_delegacion: domCiudadDelegacion.trim(),
-        codigo_postal: domCP.trim(),
-        estado: domEstado.trim(),
-        pais: domPais.trim(),
-      },
-    });
-    // --- /AUTO-FIX ---
+  const contacto = buildContacto();
 
     const empresa_id = Number(empresaId);
 
     const telefono = buildTelefonoE164Like(telCodigoPais, telNumero, telExt);
 
-    const contacto = {
-      pais: valueToCatalogKey(contactoPais),
-      email: email.trim(),
-      telefono,
-      telefono_detalle: {
-        codigo_pais: telCodigoPais.trim(),
-        numero: telNumero.trim(),
-        ext: telExt.trim() || null,
-      },
-      // Nota: país del domicilio es captura manual por ahora (no catálogo)
-      domicilio_mexico: {
-        calle: domCalle.trim(),
-        numero: domNumero.trim(),
-        interior: domInterior.trim() || null,
-        colonia: domColonia.trim(),
-        municipio: domMunicipio.trim(),
-        ciudad_delegacion: domCiudadDelegacion.trim(),
-        codigo_postal: domCP.trim(),
-        estado: domEstado.trim(),
-        pais: domPais.trim(),
-      },
-    };
+    
+
 
     function buildPayload() {
 
@@ -519,9 +478,11 @@ function buildContacto() {
         tipo_cliente: "persona_fisica",
         nombre_entidad: nombreEntidad.trim(),
         nacionalidad: valueToCatalogKey(nacionalidad),
-        contacto: buildContacto(),
+        contacto,
+
         datos_completos: {
-          contacto: buildContacto(),
+          contacto,
+
           persona: {
             tipo: "persona_fisica",
             rfc: pfRfc.trim().toUpperCase(),
@@ -603,9 +564,11 @@ function buildContacto() {
       tipo_cliente: "persona_moral",
       nombre_entidad: nombreEntidad.trim(),
       nacionalidad: valueToCatalogKey(nacionalidad),
-      contacto: buildContacto(),
+      contacto,
+
       datos_completos: {
-        contacto: buildContacto(),
+        contacto,
+
         empresa: {
           tipo: "persona_moral",
           rfc: pmRfc.trim().toUpperCase(),
@@ -669,9 +632,11 @@ function buildContacto() {
     tipo_cliente: "fideicomiso",
     nombre_entidad: nombreEntidad.trim(),
     nacionalidad: valueToCatalogKey(nacionalidad),
-    contacto: buildContacto(),
+    contacto,
+
     datos_completos: {
-      contacto: buildContacto(),
+      contacto,
+
       fideicomiso: {
         identificador: fidIdentificador.trim(),
         denominacion_fiduciario: fidDenominacion.trim(),
