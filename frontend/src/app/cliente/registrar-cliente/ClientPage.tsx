@@ -423,13 +423,7 @@ function buildContacto() {
 
       email: email.trim(),
 
-      telefono: {
-        codigo_pais: telCodigoPais.trim(),
-
-        numero: telNumero.trim(),
-
-        ext: telExt.trim() || null,
-      },
+      telefono: buildTelefonoE164Like(telCodigoPais, telNumero, telExt),
 
       domicilio: {
         calle: domCalle.trim(),
