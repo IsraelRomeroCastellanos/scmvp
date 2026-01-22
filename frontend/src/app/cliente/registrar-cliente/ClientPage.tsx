@@ -519,6 +519,7 @@ function buildContacto() {
         tipo_cliente: "persona_fisica",
         nombre_entidad: nombreEntidad.trim(),
         nacionalidad: valueToCatalogKey(nacionalidad),
+        contacto: buildContacto(),
         datos_completos: {
           contacto: buildContacto(),
           persona: {
@@ -602,6 +603,7 @@ function buildContacto() {
       tipo_cliente: "persona_moral",
       nombre_entidad: nombreEntidad.trim(),
       nacionalidad: valueToCatalogKey(nacionalidad),
+      contacto: buildContacto(),
       datos_completos: {
         contacto: buildContacto(),
         empresa: {
@@ -667,6 +669,7 @@ function buildContacto() {
     tipo_cliente: "fideicomiso",
     nombre_entidad: nombreEntidad.trim(),
     nacionalidad: valueToCatalogKey(nacionalidad),
+    contacto: buildContacto(),
     datos_completos: {
       contacto: buildContacto(),
       fideicomiso: {
