@@ -1,9 +1,3 @@
-## 2026-01-17
-
-- FE: Cliente Detalle incluye CTA “🖨️ Generar / Imprimir” y pantalla /cliente/clientes/[id]/imprimir con impresión manual (sin auto-print).
-- Fechas: estandarizadas a AAAAMMDD para PF (fecha_nacimiento) e identificación (PF + representante PM).
-
-
 ## 2026-01-11
 
 - Checkpoint: Contrato único de Cliente estabilizado (PF/PM/FID) + evidencia en PROD
@@ -82,6 +76,14 @@
 
 
 
+## 2026-01-17
+
+- FE: Cliente Detalle incluye CTA “🖨️ Generar / Imprimir” y pantalla /cliente/clientes/[id]/imprimir con impresión manual (sin auto-print).
+- Fechas: estandarizadas a AAAAMMDD para PF (fecha_nacimiento) e identificación (PF + representante PM).
+
+
+
+
 ## Checkpoints
 
 ### 2026-01-18
@@ -96,3 +98,21 @@
   - gate: domicilio contacto obligatorio (400 sin contacto.domicilio.*)
   - gate: RFC único por empresa (409 RFC repetido empresa_id=32)
   - evidencia: 201 alta PF OK con domicilio + RFC nuevo (id=69, empresa_id=32)
+
+
+
+
+## 2026-01-21
+
+✅ Roundtrip datos_completos confirmado: POST registrar-cliente → GET clientes/:id conserva marcadores distribuidos por secciones.
+
+✅ Persistencia estable de datos_completos (objetos anidados y claves no tipadas regresan intactas).
+
+✅ Límite JSON activo (2MB): payload >2MB responde HTTP 413 (Payload Too Large).
+
+⚠️ Validación mínima: tipo_cliente inválido / datos_completos no objeto → HTTP 400; mensaje cae en gate contacto.pais (mejora futura, no bloqueante).
+
+🧭 Paradigma vigente: BE ligero + contrato fuerte en FE.
+
+
+
