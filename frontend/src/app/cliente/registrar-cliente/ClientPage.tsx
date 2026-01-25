@@ -448,6 +448,11 @@ function buildContacto() {
   }
 
   function buildPayload() {
+    // NORMALIZACIÓN: evita que PF termine enviando fideicomiso por valores inesperados
+    const tipoCliente: TipoCliente = (tipo === "persona_fisica" || tipo === "persona_moral" || tipo === "fideicomiso")
+      ? tipo
+      : "persona_fisica";
+
   const contacto = buildContacto();
 
     const empresa_id = Number(empresaId);
@@ -459,7 +464,8 @@ function buildContacto() {
 
     function buildPayload() {
 
-    if (tipo === "persona_fisica") {
+        // NORMALIZACIÓN: evita que PF termine enviando fideicomiso por valores inesperados
+if (tipoCliente === "persona_fisica") {
       const act = actividades.find((x) => x.clave === pfActividad);
       const normFecha = normalizeToYYYYMMDD(pfFechaNac) ?? pfFechaNac.trim();
 
@@ -544,7 +550,7 @@ function buildContacto() {
     }
   }
 
-  if (tipo === "persona_moral") {
+  if (tipoCliente === "persona_moral") {
     const giro = giros.find((x) => x.clave === pmGiro);
     const repExp =
       normalizeToYYYYMMDD(pmRepIdExpedicion) ?? pmRepIdExpedicion.trim();
