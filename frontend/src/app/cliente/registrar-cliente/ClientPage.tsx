@@ -664,6 +664,7 @@ function buildContacto() {
       return;
     }
 
+    console.log("TIPO_ANTES_DE_ENVIAR", tipo);
     const payload = buildPayload();
 
     try {
