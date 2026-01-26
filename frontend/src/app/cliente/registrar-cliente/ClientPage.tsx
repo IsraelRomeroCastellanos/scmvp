@@ -3,7 +3,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { useEffect, useMemo, useState } from "react";
+import {useEffect, useMemo, useState, useRef} from "react";
 import { useRouter } from "next/navigation";
 import { loadCatalogo, type CatalogItem } from "@/lib/catalogos";
 
@@ -221,7 +221,9 @@ const router = useRouter();
   const [fatal, setFatal] = useState<string | null>(null);
 
   const [tipo, setTipo] = useState<TipoCliente>("persona_fisica");
-  // catálogos
+  
+  const tipoRef = useRef<HTMLSelectElement | null>(null);
+// catálogos
   const [paises, setPaises] = useState<CatalogItem[]>([]);
   const [actividades, setActividades] = useState<CatalogItem[]>([]);
   const [giros, setGiros] = useState<CatalogItem[]>([]);
@@ -449,9 +451,10 @@ function buildContacto() {
 
   function buildPayload() {
     // NORMALIZACIÓN: evita que PF termine enviando fideicomiso por valores inesperados
-    const tipoCliente: TipoCliente = (tipo === "persona_fisica" || tipo === "persona_moral" || tipo === "fideicomiso")
-      ? tipo
-      : "persona_fisica";
+    const tipoFromRef = (tipoRef.current?.value as TipoCliente | undefined);
+    const tipoCliente: TipoCliente = (tipoFromRef === "persona_fisica" || tipoFromRef === "persona_moral" || tipoFromRef === "fideicomiso")
+      ? tipoFromRef
+      : ((tipo === "persona_fisica" || tipo === "persona_moral" || tipo === "fideicomiso") ? tipo : "persona_fisica");
 
   const contacto = buildContacto();
 
@@ -739,7 +742,7 @@ return (
             <label className="text-sm font-medium">Tipo de cliente *</label>
             <select
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-              value={tipo}
+              ref={tipoRef} value={tipo}
               onChange={(e) => {
                 setTipo(e.target.value as TipoCliente);
                 setErrors({});
