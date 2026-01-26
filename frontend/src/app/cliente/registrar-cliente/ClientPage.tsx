@@ -464,6 +464,8 @@ function buildContacto() {
 
     const empresa_id = Number(empresaId);
 
+
+    const telefonoStr = buildTelefonoE164Like(telCodigoPais, telNumero, telExt);
     const telefono = buildTelefonoE164Like(telCodigoPais, telNumero, telExt);
 
     
