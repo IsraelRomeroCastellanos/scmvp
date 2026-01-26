@@ -478,7 +478,7 @@ if (tipoCliente === "persona_fisica") {
         normalizeToYYYYMMDD(pfIdExpiracion) ?? pfIdExpiracion.trim();
   return {
         empresa_id: parseInt(empresaId, 10),
-        tipo_cliente: "persona_fisica",
+        tipo_cliente: tipoCliente,
         nombre_entidad: nombreEntidad.trim(),
         nacionalidad: valueToCatalogKey(nacionalidad),
         contacto,
@@ -564,7 +564,7 @@ if (tipoCliente === "persona_fisica") {
       normalizeToYYYYMMDD(pmFechaConst) ?? pmFechaConst.trim();
   return {
       empresa_id: parseInt(empresaId, 10),
-      tipo_cliente: "persona_moral",
+      tipo_cliente: tipoCliente,
       nombre_entidad: nombreEntidad.trim(),
       nacionalidad: valueToCatalogKey(nacionalidad),
       contacto,
@@ -632,7 +632,7 @@ if (tipoCliente === "persona_fisica") {
   const repFechaNorm = normalizeToYYYYMMDD(repFechaNac) ?? repFechaNac.trim();
   return {
     empresa_id: parseInt(empresaId, 10),
-    tipo_cliente: "fideicomiso",
+    tipo_cliente: tipoCliente,
     nombre_entidad: nombreEntidad.trim(),
     nacionalidad: valueToCatalogKey(nacionalidad),
     contacto,
