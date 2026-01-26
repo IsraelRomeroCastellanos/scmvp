@@ -425,7 +425,11 @@ function buildContacto() {
 
       email: email.trim(),
 
-      telefono: buildTelefonoE164Like(telCodigoPais, telNumero, telExt),
+      telefono: {
+          codigo_pais: telCodigoPais.trim(),
+          numero: telNumero.trim(),
+          ext: telExt.trim() || null,
+        },
 
       domicilio: {
         calle: domCalle.trim(),
