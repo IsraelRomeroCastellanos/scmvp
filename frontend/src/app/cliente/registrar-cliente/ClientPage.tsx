@@ -660,6 +660,7 @@ if (tipoCliente === "persona_fisica") {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    console.log("[DEBUG tipo submit]", { tipo, tipoRef: tipoRef.current?.value });
     setFatal(null);
 
     if (!validator.validateAll()) {
