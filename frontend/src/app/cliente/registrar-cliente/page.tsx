@@ -1,6 +1,8 @@
-import dynamic from "next/dynamic";
+import dynamicImport from "next/dynamic";
 
-const RegistrarClienteClient = dynamic(() => import("./ClientPage"), {
+export const dynamic = "force-dynamic";
+
+const RegistrarClienteClient = dynamicImport(() => import("./ClientPage"), {
   ssr: false,
 });
 
