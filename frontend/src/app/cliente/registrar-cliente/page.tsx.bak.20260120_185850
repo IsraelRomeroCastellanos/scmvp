@@ -1,0 +1,3701 @@
+//frontend/src/app/cliente/registrar-cliente/page.tsx
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { loadCatalogo, type CatalogItem } from "@/lib/catalogos";
+
+type TipoCliente = "persona_fisica" | "persona_moral" | "fideicomiso";
+
+type Errors = Record<string, string>;
+
+function isNonEmpty(v: any) {
+  return typeof v === "string" && v.trim().length > 0;
+}
+
+function isRFC(v: any) {
+  if (!isNonEmpty(v)) return false;
+  const s = v.trim().toUpperCase();
+  return /^[A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3}$/.test(s);
+}
+
+function isCURP(v: any) {
+  if (!isNonEmpty(v)) return false;
+  const s = v.trim().toUpperCase();
+  return /^[A-Z][AEIOUX][A-Z]{2}\d{6}[HM][A-Z]{5}[A-Z0-9]\d$/.test(s);
+}
+
+function isYYYYMMDD(v: any) {
+  if (!isNonEmpty(v)) return false;
+  const s = v.trim();
+  if (!/^\d{8}$/.test(s)) return false;
+  const y = Number(s.slice(0, 4));
+  const m = Number(s.slice(4, 6));
+  const d = Number(s.slice(6, 8));
+  if (y < 1900 || y > 2100) return false;
+  if (m < 1 || m > 12) return false;
+  if (d < 1 || d > 31) return false;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return (
+    dt.getUTCFullYear() === y &&
+    dt.getUTCMonth() === m - 1 &&
+    dt.getUTCDate() === d
+  );
+}
+
+/**
+ * Acepta:
+ * - "YYYYMMDD" -> regresa igual
+ * - "YYYY-MM-DD" -> regresa "YYYYMMDD"
+ * - otros -> regresa null
+ */
+function normalizeToYYYYMMDD(input: string): string | null {
+  const s = (input ?? "").trim();
+  if (!s) return null;
+  if (/^\d{8}$/.test(s)) return s;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s.replaceAll("-", "");
+  return null;
+}
+
+function isEmail(v: any) {
+  if (!isNonEmpty(v)) return false;
+  const s = v.trim();
+  // Simple y suficiente para gate FE
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s);
+}
+
+function isPhoneCountryCode(v: any) {
+  if (!isNonEmpty(v)) return false;
+  const s = v.trim();
+  // +52, +1, +502, etc.
+  return /^\+\d{1,4}$/.test(s);
+}
+
+function isPhoneNumber(v: any) {
+  if (!isNonEmpty(v)) return false;
+  const s = v.trim();
+  // dígitos 7 a 15 (E.164 sin el +)
+  return /^\d{7,15}$/.test(s);
+}
+
+function isExt(v: any) {
+  if (!isNonEmpty(v)) return true; // opcional
+  const s = v.trim();
+  return /^\d{1,6}$/.test(s);
+}
+
+function fmtItem(i: CatalogItem) {
+  return `${i.descripcion} (${i.clave})`;
+}
+
+function valueToCatalogKey(v: string) {
+  // En este UI guardamos "clave" en el state (ej. "MEX"), así que regresamos tal cual.
+  return v;
+}
+
+function SearchableSelect({
+  label,
+  required,
+  value,
+  items,
+  placeholder,
+  error,
+  onChange,
+  onBlur,
+}: {
+  label: string;
+  required?: boolean;
+  value: string;
+  items: CatalogItem[];
+  placeholder?: string;
+  error?: string;
+  onChange: (v: string) => void;
+  onBlur?: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+
+  const filtered = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    if (!s) return items.slice(0, 50);
+    return items
+      .filter((it) => {
+        const a = it.descripcion.toLowerCase();
+        const b = it.clave.toLowerCase();
+        return a.includes(s) || b.includes(s);
+      })
+      .slice(0, 50);
+  }, [q, items]);
+
+  const selectedLabel = useMemo(() => {
+    const found = items.find((x) => x.clave === value);
+    return found ? fmtItem(found) : "";
+  }, [items, value]);
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between gap-2">
+        <label className="text-sm font-medium">
+          {label} {required ? <span className="text-red-600">*</span> : null}
+        </label>
+      </div>
+
+      <div className="relative">
+        <input
+          className={`w-full rounded border px-3 py-2 text-sm ${error ? "border-red-500" : "border-gray-300"}`}
+          placeholder={placeholder ?? "Buscar..."}
+          value={open ? q : selectedLabel}
+          onFocus={() => {
+            setOpen(true);
+            setQ("");
+          }}
+          onChange={(e) => {
+            setOpen(true);
+            setQ(e.target.value);
+          }}
+          onBlur={() => {
+            // da chance a click en opción
+            setTimeout(() => setOpen(false), 120);
+            onBlur?.();
+          }}
+        />
+
+        {open && (
+          <div className="absolute z-20 mt-1 w-full rounded border border-gray-200 bg-white shadow">
+            <div className="max-h-64 overflow-auto">
+              {filtered.map((it) => (
+                <button
+                  key={it.clave}
+                  type="button"
+                  className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    onChange(it.clave);
+                    setOpen(false);
+                    setQ("");
+                  }}
+                >
+                  {fmtItem(it)}
+                </button>
+              ))}
+              {filtered.length === 0 && (
+                <div className="px-3 py-2 text-sm text-gray-500">
+                  Sin resultados
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {error ? <p className="text-xs text-red-600">{error}</p> : null}
+    </div>
+  );
+}
+
+const AVISO_LEGAL =
+  "DE CONFORMIDAD CON LO DISPUESTO EN LA LEY FEDERAL PARA LA PREVENCIÓN E IDENTIFICACIÓN DE OPERACIONES CON RECURSOS DE PROCEDENCIA ILÍCITA; SOLICITAMOS QUE PROPORCIONE LA SIGUIENTE INFORMACIÓN:";
+
+function buildTelefonoE164Like(cc: string, num: string, ext?: string) {
+  const a = (cc ?? "").trim();
+  const b = (num ?? "").trim();
+  const e = (ext ?? "").trim();
+  if (!a || !b) return "";
+  return e ? `${a} ${b} ext ${e}` : `${a} ${b}`;
+}
+
+export default function RegistrarClientePage() {
+  const router = useRouter();
+
+  const [loading, setLoading] = useState(false);
+  const [fatal, setFatal] = useState<string | null>(null);
+
+  const [tipo, setTipo] = useState<TipoCliente>("persona_fisica");
+
+  // catálogos
+  const [paises, setPaises] = useState<CatalogItem[]>([]);
+  const [actividades, setActividades] = useState<CatalogItem[]>([]);
+  const [giros, setGiros] = useState<CatalogItem[]>([]);
+
+  // form base
+  const [empresaId, setEmpresaId] = useState("");
+  const [nombreEntidad, setNombreEntidad] = useState("");
+  const [nacionalidad, setNacionalidad] = useState(""); // clave catálogo
+  const [contactoPais, setContactoPais] = useState(""); // clave catálogo
+
+  // contacto (iteración 1)
+  const [email, setEmail] = useState("");
+  const [telCodigoPais, setTelCodigoPais] = useState("+52");
+  const [telNumero, setTelNumero] = useState("");
+  const [telExt, setTelExt] = useState("");
+
+  // domicilio (contacto) - México (captura manual por ahora)
+  const [domCalle, setDomCalle] = useState("");
+  const [domNumero, setDomNumero] = useState("");
+  const [domInterior, setDomInterior] = useState("");
+  const [domColonia, setDomColonia] = useState("");
+  const [domMunicipio, setDomMunicipio] = useState("");
+  const [domCiudadDelegacion, setDomCiudadDelegacion] = useState("");
+  const [domCP, setDomCP] = useState("");
+  const [domEstado, setDomEstado] = useState("");
+  const [domPais, setDomPais] = useState(""); // manual (no catálogo)
+
+  // PF
+  const [pfNombres, setPfNombres] = useState("");
+  const [pfApPat, setPfApPat] = useState("");
+  const [pfApMat, setPfApMat] = useState("");
+  const [pfActividad, setPfActividad] = useState(""); // clave
+  const [pfRfc, setPfRfc] = useState("");
+  const [pfCurp, setPfCurp] = useState("");
+  const [pfFechaNac, setPfFechaNac] = useState(""); // acepta YYYY-MM-DD o AAAAMMDD
+
+  // PF Identificación (iteración 1)
+  const [pfIdTipo, setPfIdTipo] = useState("");
+  const [pfIdAutoridad, setPfIdAutoridad] = useState("");
+  const [pfIdNumero, setPfIdNumero] = useState("");
+  const [pfIdExpedicion, setPfIdExpedicion] = useState(""); // YYYY-MM-DD o AAAAMMDD
+  const [pfIdExpiracion, setPfIdExpiracion] = useState(""); // YYYY-MM-DD o AAAAMMDD
+
+  // PF Datos adicionales (iteración 2)
+  const [pfCalidadMigratoria, setPfCalidadMigratoria] = useState(""); // opcional
+  const [pfEstadoCivil, setPfEstadoCivil] = useState("");
+  const [pfRegimenMatrimonial, setPfRegimenMatrimonial] = useState("");
+  const [pfBienesMancomunados, setPfBienesMancomunados] = useState(""); // 'si' | 'no'
+
+  // PF Dirección privada
+  const [pfPrivCalle, setPfPrivCalle] = useState("");
+  const [pfPrivNumero, setPfPrivNumero] = useState("");
+  const [pfPrivColonia, setPfPrivColonia] = useState("");
+  const [pfPrivMunicipio, setPfPrivMunicipio] = useState("");
+  const [pfPrivCiudadDelegacion, setPfPrivCiudadDelegacion] = useState("");
+  const [pfPrivCP, setPfPrivCP] = useState("");
+  const [pfPrivEstado, setPfPrivEstado] = useState("");
+  const [pfPrivPais, setPfPrivPais] = useState("");
+
+  // PF Ocupación / actividad profesional
+  const [pfOcupacion, setPfOcupacion] = useState("");
+  const [pfActividadProfesional, setPfActividadProfesional] = useState("");
+
+  // PF PEP / cargo público
+  const [pfCargoPublicoActual, setPfCargoPublicoActual] = useState(""); // 'si' | 'no'
+  const [pfCargoPublicoPrevio, setPfCargoPublicoPrevio] = useState(""); // 'si' | 'no'
+  const [pfCargoPublicoFamiliar, setPfCargoPublicoFamiliar] = useState(""); // 'si' | 'no'
+
+  // PF terceros / dueño beneficiario
+  const [pfManifiestaTerceros, setPfManifiestaTerceros] = useState(false);
+  const [pfTerceroActividadGiro, setPfTerceroActividadGiro] = useState("");
+  const [pfTerceroRelacion, setPfTerceroRelacion] = useState("");
+  const [pfNoDocumentacionTercero, setPfNoDocumentacionTercero] =
+    useState(false);
+
+  // PM
+  const [pmRfc, setPmRfc] = useState("");
+  const [pmRegimenCapital, setPmRegimenCapital] = useState("");
+  const [pmFechaConst, setPmFechaConst] = useState(""); // YYYY-MM-DD o AAAAMMDD
+  const [pmGiro, setPmGiro] = useState(""); // clave
+  const [pmRepNombreCompleto, setPmRepNombreCompleto] = useState("");
+  const [pmRepNombres, setPmRepNombres] = useState("");
+  const [pmRepApPat, setPmRepApPat] = useState("");
+  const [pmRepApMat, setPmRepApMat] = useState("");
+  const [pmRepFechaNac, setPmRepFechaNac] = useState(""); // YYYY-MM-DD o AAAAMMDD
+  const [pmRepNacionalidad, setPmRepNacionalidad] = useState(""); // clave catálogo
+  const [pmRepRegimenEstancia, setPmRepRegimenEstancia] = useState(""); // opcional
+  const [pmRepCurp, setPmRepCurp] = useState("");
+  const [pmRepRfc, setPmRepRfc] = useState("");
+  const [pmRepTelCasa, setPmRepTelCasa] = useState("");
+  const [pmRepCelular, setPmRepCelular] = useState("");
+
+  // PM Domicilio representante (México)
+  const [pmRepDomCalle, setPmRepDomCalle] = useState("");
+  const [pmRepDomNumero, setPmRepDomNumero] = useState("");
+  const [pmRepDomInterior, setPmRepDomInterior] = useState("");
+  const [pmRepDomColonia, setPmRepDomColonia] = useState("");
+  const [pmRepDomMunicipio, setPmRepDomMunicipio] = useState("");
+  const [pmRepDomCiudadDelegacion, setPmRepDomCiudadDelegacion] = useState("");
+  const [pmRepDomCP, setPmRepDomCP] = useState("");
+  const [pmRepDomEstado, setPmRepDomEstado] = useState("");
+  const [pmRepDomPais, setPmRepDomPais] = useState("");
+
+  // PM Beneficiario Controlador (CFF 32-B Ter)
+  const [pmBcNombres, setPmBcNombres] = useState("");
+  const [pmBcApPat, setPmBcApPat] = useState("");
+  const [pmBcApMat, setPmBcApMat] = useState("");
+
+  // PM: Si representante NO es accionista
+  const [pmRepEsAccionista, setPmRepEsAccionista] = useState(true);
+  const [pmAccNombres, setPmAccNombres] = useState("");
+  const [pmAccApPat, setPmAccApPat] = useState("");
+  const [pmAccApMat, setPmAccApMat] = useState("");
+  const [pmAccFechaNac, setPmAccFechaNac] = useState(""); // YYYY-MM-DD o AAAAMMDD
+  const [pmAccPct, setPmAccPct] = useState("");
+  const [pmAccNacionalidad, setPmAccNacionalidad] = useState(""); // clave catálogo
+  const [pmAccActividadGiro, setPmAccActividadGiro] = useState(""); // clave
+  const [pmAccRelacion, setPmAccRelacion] = useState("");
+
+  // PM Identificación representante (iteración 1)
+  const [pmRepIdTipo, setPmRepIdTipo] = useState("");
+  const [pmRepIdAutoridad, setPmRepIdAutoridad] = useState("");
+  const [pmRepIdNumero, setPmRepIdNumero] = useState("");
+  const [pmRepIdExpedicion, setPmRepIdExpedicion] = useState("");
+  const [pmRepIdExpiracion, setPmRepIdExpiracion] = useState("");
+
+  // FIDE (sin cambios)
+  const [fidIdentificador, setFidIdentificador] = useState("");
+  const [fidDenominacion, setFidDenominacion] = useState("");
+  const [fidRfcFiduciario, setFidRfcFiduciario] = useState("");
+
+  const [repNombres, setRepNombres] = useState("");
+  const [repApPat, setRepApPat] = useState("");
+  const [repApMat, setRepApMat] = useState("");
+  const [repFechaNac, setRepFechaNac] = useState(""); // acepta YYYY-MM-DD o AAAAMMDD
+  const [repRfc, setRepRfc] = useState("");
+  const [repCurp, setRepCurp] = useState("");
+
+  const [errors, setErrors] = useState<Errors>({});
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
+    (async () => {
+      try {
+        setFatal(null);
+        const [p, a, g] = await Promise.all([
+          loadCatalogo("sat/c_pais"),
+          loadCatalogo("sat/c_actividad_economica"),
+          loadCatalogo("internos/giro_mercantil"),
+        ]);
+        setPaises(p);
+        setActividades(a);
+        setGiros(g);
+      } catch (e: any) {
+        setFatal(e?.message ?? "No se pudieron cargar catálogos");
+      }
+    })();
+  }, [router]);
+
+  function setErr(path: string, msg?: string) {
+    setErrors((prev) => {
+      const next = { ...prev };
+      if (!msg) delete next[path];
+      else next[path] = msg;
+      return next;
+    });
+  }
+
+  function validateField(path: string): boolean {
+    setErr(path, undefined);
+
+    // base
+    if (path === "empresa_id") {
+      if (!/^\d+$/.test(empresaId.trim()))
+        return (setErr(path, "empresa_id inválido"), false);
+      return true;
+    }
+    if (path === "nombre_entidad") {
+      if (!isNonEmpty(nombreEntidad))
+        return (setErr(path, "nombre_entidad es obligatorio"), false);
+      return true;
+    }
+    if (path === "nacionalidad") {
+      if (!isNonEmpty(nacionalidad))
+        return (setErr(path, "nacionalidad es obligatoria"), false);
+      return true;
+    }
+    if (path === "contacto.pais") {
+      if (!isNonEmpty(contactoPais))
+        return (setErr(path, "contacto.pais es obligatorio"), false);
+      return true;
+    }
+
+    // contacto (iteración 1)
+    if (path === "contacto.email") {
+      if (!isNonEmpty(email))
+        return (setErr(path, "contacto.email es obligatorio"), false);
+      if (!isEmail(email))
+        return (setErr(path, "contacto.email inválido"), false);
+      return true;
+    }
+    if (path === "contacto.telefono.codigo_pais") {
+      if (!isNonEmpty(telCodigoPais))
+        return (
+          setErr(path, "contacto.telefono.codigo_pais es obligatorio"),
+          false
+        );
+      if (!isPhoneCountryCode(telCodigoPais))
+        return (setErr(path, "contacto.telefono.codigo_pais inválido"), false);
+      return true;
+    }
+    if (path === "contacto.telefono.numero") {
+      if (!isNonEmpty(telNumero))
+        return (setErr(path, "contacto.telefono.numero es obligatorio"), false);
+      if (!isPhoneNumber(telNumero))
+        return (setErr(path, "contacto.telefono.numero inválido"), false);
+      return true;
+    }
+    if (path === "contacto.telefono.ext") {
+      if (!isExt(telExt))
+        return (setErr(path, "contacto.telefono.ext inválida"), false);
+      return true;
+    }
+    if (path === "contacto.telefono") {
+      // compat: BE espera string no vacía
+      const tel = buildTelefonoE164Like(telCodigoPais, telNumero, telExt);
+      if (!isNonEmpty(tel))
+        return (setErr(path, "contacto.telefono es obligatorio"), false);
+      return true;
+    }
+
+    // domicilio (contacto) - gate FE
+    if (path === "contacto.domicilio.calle") {
+      if (!isNonEmpty(domCalle))
+        return (setErr(path, "contacto.domicilio.calle es obligatoria"), false);
+      return true;
+    }
+    if (path === "contacto.domicilio.numero") {
+      if (!isNonEmpty(domNumero))
+        return (
+          setErr(path, "contacto.domicilio.numero es obligatorio"),
+          false
+        );
+      return true;
+    }
+    if (path === "contacto.domicilio.colonia") {
+      if (!isNonEmpty(domColonia))
+        return (
+          setErr(path, "contacto.domicilio.colonia es obligatoria"),
+          false
+        );
+      return true;
+    }
+    if (path === "contacto.domicilio.municipio") {
+      if (!isNonEmpty(domMunicipio))
+        return (
+          setErr(path, "contacto.domicilio.municipio es obligatorio"),
+          false
+        );
+      return true;
+    }
+    if (path === "contacto.domicilio.ciudad_delegacion") {
+      if (!isNonEmpty(domCiudadDelegacion))
+        return (
+          setErr(path, "contacto.domicilio.ciudad_delegacion es obligatoria"),
+          false
+        );
+      return true;
+    }
+    if (path === "contacto.domicilio.codigo_postal") {
+      if (!isNonEmpty(domCP))
+        return (
+          setErr(path, "contacto.domicilio.codigo_postal es obligatorio"),
+          false
+        );
+      if (!/^\d{5}$/.test(domCP.trim()))
+        return (
+          setErr(path, "contacto.domicilio.codigo_postal inválido"),
+          false
+        );
+      return true;
+    }
+    if (path === "contacto.domicilio.estado") {
+      if (!isNonEmpty(domEstado))
+        return (
+          setErr(path, "contacto.domicilio.estado es obligatorio"),
+          false
+        );
+      return true;
+    }
+    if (path === "contacto.domicilio.pais") {
+      if (!isNonEmpty(domPais))
+        return (setErr(path, "contacto.domicilio.pais es obligatorio"), false);
+      return true;
+    }
+
+    // PF
+    if (path === "persona.rfc") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfRfc))
+        return (setErr(path, "persona.rfc es obligatorio"), false);
+      if (!isRFC(pfRfc)) return (setErr(path, "persona.rfc inválido"), false);
+      return true;
+    }
+    if (path === "persona.curp") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfCurp))
+        return (setErr(path, "persona.curp es obligatorio"), false);
+      if (!isCURP(pfCurp))
+        return (setErr(path, "persona.curp inválido"), false);
+      return true;
+    }
+    if (path === "persona.fecha_nacimiento") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfFechaNac))
+        return (setErr(path, "persona.fecha_nacimiento es obligatoria"), false);
+
+      const norm = normalizeToYYYYMMDD(pfFechaNac);
+      if (!norm)
+        return (
+          setErr(path, "persona.fecha_nacimiento inválida (AAAAMMDD)"),
+          false
+        );
+      if (!isYYYYMMDD(norm))
+        return (
+          setErr(path, "persona.fecha_nacimiento inválida (AAAAMMDD)"),
+          false
+        );
+
+      if (pfFechaNac.trim() !== norm) setPfFechaNac(norm!);
+      return true;
+    }
+    if (path === "persona.nombres") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfNombres))
+        return (setErr(path, "persona.nombres es obligatorio"), false);
+      return true;
+    }
+    if (path === "persona.apellido_paterno") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfApPat))
+        return (setErr(path, "persona.apellido_paterno es obligatorio"), false);
+      return true;
+    }
+    if (path === "persona.apellido_materno") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfApMat))
+        return (setErr(path, "persona.apellido_materno es obligatorio"), false);
+      return true;
+    }
+    if (path === "persona.actividad_economica") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfActividad))
+        return (
+          setErr(path, "persona.actividad_economica es obligatoria"),
+          false
+        );
+      return true;
+    }
+
+    // PF datos adicionales
+    if (path === "persona.estado_civil") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfEstadoCivil))
+        return (setErr(path, "persona.estado_civil es obligatorio"), false);
+      return true;
+    }
+    if (path === "persona.regimen_matrimonial") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfRegimenMatrimonial))
+        return (
+          setErr(path, "persona.regimen_matrimonial es obligatorio"),
+          false
+        );
+      return true;
+    }
+    if (path === "persona.bienes_mancomunados") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfBienesMancomunados))
+        return (
+          setErr(path, "persona.bienes_mancomunados es obligatorio"),
+          false
+        );
+      return true;
+    }
+
+    // PF dirección privada
+    if (path === "persona.direccion_privada.calle") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfPrivCalle))
+        return (
+          setErr(path, "persona.direccion_privada.calle es obligatoria"),
+          false
+        );
+      return true;
+    }
+    if (path === "persona.direccion_privada.numero") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfPrivNumero))
+        return (
+          setErr(path, "persona.direccion_privada.numero es obligatorio"),
+          false
+        );
+      return true;
+    }
+    if (path === "persona.direccion_privada.colonia") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfPrivColonia))
+        return (
+          setErr(path, "persona.direccion_privada.colonia es obligatoria"),
+          false
+        );
+      return true;
+    }
+    if (path === "persona.direccion_privada.municipio") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfPrivMunicipio))
+        return (
+          setErr(path, "persona.direccion_privada.municipio es obligatorio"),
+          false
+        );
+      return true;
+    }
+    if (path === "persona.direccion_privada.ciudad_delegacion") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfPrivCiudadDelegacion))
+        return (
+          setErr(
+            path,
+            "persona.direccion_privada.ciudad_delegacion es obligatoria",
+          ),
+          false
+        );
+      return true;
+    }
+    if (path === "persona.direccion_privada.codigo_postal") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfPrivCP))
+        return (
+          setErr(
+            path,
+            "persona.direccion_privada.codigo_postal es obligatorio",
+          ),
+          false
+        );
+      if (!/^\d{5}$/.test(pfPrivCP.trim()))
+        return (
+          setErr(path, "persona.direccion_privada.codigo_postal inválido"),
+          false
+        );
+      return true;
+    }
+    if (path === "persona.direccion_privada.estado") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfPrivEstado))
+        return (
+          setErr(path, "persona.direccion_privada.estado es obligatorio"),
+          false
+        );
+      return true;
+    }
+    if (path === "persona.direccion_privada.pais") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfPrivPais))
+        return (
+          setErr(path, "persona.direccion_privada.pais es obligatorio"),
+          false
+        );
+      return true;
+    }
+
+    // PF ocupación / actividad profesional
+    if (path === "persona.ocupacion") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfOcupacion))
+        return (setErr(path, "persona.ocupacion es obligatoria"), false);
+      return true;
+    }
+    if (path === "persona.actividad_profesional") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfActividadProfesional))
+        return (
+          setErr(path, "persona.actividad_profesional es obligatoria"),
+          false
+        );
+      return true;
+    }
+
+    // PF PEP
+    if (path === "persona.cargo_publico.actual") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfCargoPublicoActual))
+        return (
+          setErr(path, "persona.cargo_publico.actual es obligatorio"),
+          false
+        );
+      return true;
+    }
+    if (path === "persona.cargo_publico.previo") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfCargoPublicoPrevio))
+        return (
+          setErr(path, "persona.cargo_publico.previo es obligatorio"),
+          false
+        );
+      return true;
+    }
+    if (path === "persona.cargo_publico.familiar") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfCargoPublicoFamiliar))
+        return (
+          setErr(path, "persona.cargo_publico.familiar es obligatorio"),
+          false
+        );
+      return true;
+    }
+
+    // PF terceros (solo si se marca el checkbox)
+    if (path === "persona.terceros.actividad_giro") {
+      if (tipo !== "persona_fisica") return true;
+      if (!pfManifiestaTerceros) return true;
+      if (!isNonEmpty(pfTerceroActividadGiro))
+        return (
+          setErr(path, "persona.terceros.actividad_giro es obligatoria"),
+          false
+        );
+      return true;
+    }
+    if (path === "persona.terceros.relacion") {
+      if (tipo !== "persona_fisica") return true;
+      if (!pfManifiestaTerceros) return true;
+      if (!isNonEmpty(pfTerceroRelacion))
+        return (
+          setErr(path, "persona.terceros.relacion es obligatoria"),
+          false
+        );
+      return true;
+    }
+    return true;
+
+    // PF identificación (iteración 1)
+    if (path === "persona.identificacion.tipo") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfIdTipo))
+        return (
+          setErr(path, "persona.identificacion.tipo es obligatorio"),
+          false
+        );
+      return true;
+    }
+    if (path === "persona.identificacion.autoridad") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfIdAutoridad))
+        return (
+          setErr(path, "persona.identificacion.autoridad es obligatoria"),
+          false
+        );
+      return true;
+    }
+    if (path === "persona.identificacion.numero") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfIdNumero))
+        return (
+          setErr(path, "persona.identificacion.numero es obligatorio"),
+          false
+        );
+      return true;
+    }
+    if (path === "persona.identificacion.expedicion") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfIdExpedicion))
+        return (
+          setErr(
+            path,
+            "persona.identificacion.fecha_expedicion es obligatoria",
+          ),
+          false
+        );
+      const norm = normalizeToYYYYMMDD(pfIdExpedicion);
+      if (!norm || !isYYYYMMDD(norm))
+        return (
+          setErr(
+            path,
+            "persona.identificacion.fecha_expedicion inválida (AAAAMMDD)",
+          ),
+          false
+        );
+      if (norm != null && pfIdExpedicion.trim() !== norm)
+        setPfIdExpedicion(norm!);
+      return true;
+    }
+    if (path === "persona.identificacion.expiracion") {
+      if (tipo !== "persona_fisica") return true;
+      if (!isNonEmpty(pfIdExpiracion))
+        return (
+          setErr(
+            path,
+            "persona.identificacion.fecha_expiracion es obligatoria",
+          ),
+          false
+        );
+      const norm = normalizeToYYYYMMDD(pfIdExpiracion);
+      if (!norm || !isYYYYMMDD(norm))
+        return (
+          setErr(
+            path,
+            "persona.identificacion.fecha_expiracion inválida (AAAAMMDD)",
+          ),
+          false
+        );
+      if (norm != null && pfIdExpiracion.trim() !== norm)
+        setPfIdExpiracion(norm!);
+      return true;
+    }
+
+    // PM
+    if (path === "empresa.rfc") {
+      if (tipo !== "persona_moral") return true;
+      if (!isNonEmpty(pmRfc))
+        return (setErr(path, "empresa.rfc es obligatorio"), false);
+      if (!isRFC(pmRfc)) return (setErr(path, "empresa.rfc inválido"), false);
+      return true;
+    }
+    if (path === "empresa.fecha_constitucion") {
+      if (tipo !== "persona_moral") return true;
+      if (!isNonEmpty(pmFechaConst))
+        return (
+          setErr(path, "empresa.fecha_constitucion es obligatoria"),
+          false
+        );
+
+      const norm = normalizeToYYYYMMDD(pmFechaConst);
+      if (!norm || !isYYYYMMDD(norm))
+        return (
+          setErr(path, "empresa.fecha_constitucion inválida (AAAAMMDD)"),
+          false
+        );
+
+      if (pmFechaConst.trim() !== norm) setPmFechaConst(norm!);
+      return true;
+    }
+    if (path === "empresa.giro_mercantil") {
+      if (tipo !== "persona_moral") return true;
+      if (!isNonEmpty(pmGiro))
+        return (setErr(path, "empresa.giro_mercantil es obligatorio"), false);
+
+      if (path === "empresa.regimen_capital") {
+        if (tipo !== "persona_moral") return true;
+        if (!isNonEmpty(pmRegimenCapital))
+          return (
+            setErr(path, "empresa.regimen_capital es obligatorio"),
+            false
+          );
+        return true;
+      }
+      return true;
+    }
+    if (path === "representante.nombre_completo.pm") {
+      if (tipo !== "persona_moral") return true;
+      if (!isNonEmpty(pmRepNombreCompleto))
+        return (
+          setErr(path, "representante.nombre_completo es obligatorio"),
+          false
+        );
+
+      // PM representante (campos separados; nombre_completo sigue siendo obligatorio para compat con BE)
+      if (path === "representante.nombres.pm") {
+        if (tipo !== "persona_moral") return true;
+        if (!isNonEmpty(pmRepNombres))
+          return (setErr(path, "representante.nombres es obligatorio"), false);
+        return true;
+      }
+      if (path === "representante.apellido_paterno.pm") {
+        if (tipo !== "persona_moral") return true;
+        if (!isNonEmpty(pmRepApPat))
+          return (
+            setErr(path, "representante.apellido_paterno es obligatorio"),
+            false
+          );
+        return true;
+      }
+      if (path === "representante.apellido_materno.pm") {
+        if (tipo !== "persona_moral") return true;
+        if (!isNonEmpty(pmRepApMat))
+          return (
+            setErr(path, "representante.apellido_materno es obligatorio"),
+            false
+          );
+        return true;
+      }
+      if (path === "representante.fecha_nacimiento.pm") {
+        if (tipo !== "persona_moral") return true;
+        if (!isNonEmpty(pmRepFechaNac))
+          return (
+            setErr(path, "representante.fecha_nacimiento es obligatoria"),
+            false
+          );
+        const norm = normalizeToYYYYMMDD(pmRepFechaNac);
+        if (!norm || !isYYYYMMDD(norm))
+          return (
+            setErr(path, "representante.fecha_nacimiento inválida (AAAAMMDD)"),
+            false
+          );
+        if (pmRepFechaNac.trim() != norm) setPmRepFechaNac(norm!);
+        return true;
+      }
+      if (path === "representante.nacionalidad.pm") {
+        if (tipo !== "persona_moral") return true;
+        if (!isNonEmpty(pmRepNacionalidad))
+          return (
+            setErr(path, "representante.nacionalidad es obligatoria"),
+            false
+          );
+        return true;
+      }
+      if (path === "representante.curp.pm") {
+        if (tipo !== "persona_moral") return true;
+        if (!isNonEmpty(pmRepCurp))
+          return (setErr(path, "representante.curp es obligatorio"), false);
+        if (!isCURP(pmRepCurp))
+          return (setErr(path, "representante.curp inválido"), false);
+        return true;
+      }
+      if (path === "representante.rfc.pm") {
+        if (tipo !== "persona_moral") return true;
+        if (!isNonEmpty(pmRepRfc))
+          return (setErr(path, "representante.rfc es obligatorio"), false);
+        if (!isRFC(pmRepRfc))
+          return (setErr(path, "representante.rfc inválido"), false);
+        return true;
+      }
+      if (path === "representante.telefono_casa.pm") {
+        if (tipo !== "persona_moral") return true;
+        if (!isNonEmpty(pmRepTelCasa))
+          return (
+            setErr(path, "representante.telefono_casa es obligatorio"),
+            false
+          );
+        return true;
+      }
+      if (path === "representante.celular.pm") {
+        if (tipo !== "persona_moral") return true;
+        if (!isNonEmpty(pmRepCelular))
+          return (setErr(path, "representante.celular es obligatorio"), false);
+        return true;
+      }
+
+      // PM domicilio representante
+      if (path === "representante.domicilio.calle.pm") {
+        if (tipo !== "persona_moral") return true;
+        if (!isNonEmpty(pmRepDomCalle))
+          return (
+            setErr(path, "representante.domicilio.calle es obligatoria"),
+            false
+          );
+        return true;
+      }
+      if (path === "representante.domicilio.numero.pm") {
+        if (tipo !== "persona_moral") return true;
+        if (!isNonEmpty(pmRepDomNumero))
+          return (
+            setErr(path, "representante.domicilio.numero es obligatorio"),
+            false
+          );
+        return true;
+      }
+      if (path === "representante.domicilio.colonia.pm") {
+        if (tipo !== "persona_moral") return true;
+        if (!isNonEmpty(pmRepDomColonia))
+          return (
+            setErr(path, "representante.domicilio.colonia es obligatoria"),
+            false
+          );
+        return true;
+      }
+      if (path === "representante.domicilio.municipio.pm") {
+        if (tipo !== "persona_moral") return true;
+        if (!isNonEmpty(pmRepDomMunicipio))
+          return (
+            setErr(path, "representante.domicilio.municipio es obligatorio"),
+            false
+          );
+        return true;
+      }
+      if (path === "representante.domicilio.ciudad_delegacion.pm") {
+        if (tipo !== "persona_moral") return true;
+        if (!isNonEmpty(pmRepDomCiudadDelegacion))
+          return (
+            setErr(
+              path,
+              "representante.domicilio.ciudad_delegacion es obligatoria",
+            ),
+            false
+          );
+        return true;
+      }
+      if (path === "representante.domicilio.codigo_postal.pm") {
+        if (tipo !== "persona_moral") return true;
+        if (!isNonEmpty(pmRepDomCP))
+          return (
+            setErr(
+              path,
+              "representante.domicilio.codigo_postal es obligatorio",
+            ),
+            false
+          );
+        if (!/^\d{5}$/.test(pmRepDomCP.trim()))
+          return (
+            setErr(path, "representante.domicilio.codigo_postal inválido"),
+            false
+          );
+        return true;
+      }
+      if (path === "representante.domicilio.estado.pm") {
+        if (tipo !== "persona_moral") return true;
+        if (!isNonEmpty(pmRepDomEstado))
+          return (
+            setErr(path, "representante.domicilio.estado es obligatorio"),
+            false
+          );
+        return true;
+      }
+      if (path === "representante.domicilio.pais.pm") {
+        if (tipo !== "persona_moral") return true;
+        if (!isNonEmpty(pmRepDomPais))
+          return (
+            setErr(path, "representante.domicilio.pais es obligatorio"),
+            false
+          );
+        return true;
+      }
+
+      // PM beneficiario controlador
+      if (path === "beneficiario_controlador.nombres") {
+        if (tipo !== "persona_moral") return true;
+        if (!isNonEmpty(pmBcNombres))
+          return (
+            setErr(path, "beneficiario_controlador.nombres es obligatorio"),
+            false
+          );
+        return true;
+      }
+      if (path === "beneficiario_controlador.apellido_paterno") {
+        if (tipo !== "persona_moral") return true;
+        if (!isNonEmpty(pmBcApPat))
+          return (
+            setErr(
+              path,
+              "beneficiario_controlador.apellido_paterno es obligatorio",
+            ),
+            false
+          );
+        return true;
+      }
+      if (path === "beneficiario_controlador.apellido_materno") {
+        if (tipo !== "persona_moral") return true;
+        if (!isNonEmpty(pmBcApMat))
+          return (
+            setErr(
+              path,
+              "beneficiario_controlador.apellido_materno es obligatorio",
+            ),
+            false
+          );
+        return true;
+      }
+
+      // PM accionista (solo si representante NO es accionista)
+      if (path === "accionista.nombres") {
+        if (tipo !== "persona_moral") return true;
+        if (pmRepEsAccionista) return true;
+        if (!isNonEmpty(pmAccNombres))
+          return (setErr(path, "accionista.nombres es obligatorio"), false);
+        return true;
+      }
+      if (path === "accionista.apellido_paterno") {
+        if (tipo !== "persona_moral") return true;
+        if (pmRepEsAccionista) return true;
+        if (!isNonEmpty(pmAccApPat))
+          return (
+            setErr(path, "accionista.apellido_paterno es obligatorio"),
+            false
+          );
+        return true;
+      }
+      if (path === "accionista.apellido_materno") {
+        if (tipo !== "persona_moral") return true;
+        if (pmRepEsAccionista) return true;
+        if (!isNonEmpty(pmAccApMat))
+          return (
+            setErr(path, "accionista.apellido_materno es obligatorio"),
+            false
+          );
+        return true;
+      }
+      if (path === "accionista.fecha_nacimiento") {
+        if (tipo !== "persona_moral") return true;
+        if (pmRepEsAccionista) return true;
+        if (!isNonEmpty(pmAccFechaNac))
+          return (
+            setErr(path, "accionista.fecha_nacimiento es obligatoria"),
+            false
+          );
+        const norm = normalizeToYYYYMMDD(pmAccFechaNac);
+        if (!norm || !isYYYYMMDD(norm))
+          return (
+            setErr(path, "accionista.fecha_nacimiento inválida (AAAAMMDD)"),
+            false
+          );
+        if (pmAccFechaNac.trim() !== norm) setPmAccFechaNac(norm!);
+        return true;
+      }
+      if (path === "accionista.porcentaje") {
+        if (tipo !== "persona_moral") return true;
+        if (pmRepEsAccionista) return true;
+        if (!isNonEmpty(pmAccPct))
+          return (setErr(path, "accionista.porcentaje es obligatorio"), false);
+        if (!/^\d{1,3}(\.\d{1,2})?$/.test(pmAccPct.trim()))
+          return (setErr(path, "accionista.porcentaje inválido"), false);
+        return true;
+      }
+      if (path === "accionista.nacionalidad") {
+        if (tipo !== "persona_moral") return true;
+        if (pmRepEsAccionista) return true;
+        if (!isNonEmpty(pmAccNacionalidad))
+          return (
+            setErr(path, "accionista.nacionalidad es obligatoria"),
+            false
+          );
+        return true;
+      }
+      if (path === "accionista.actividad_giro") {
+        if (tipo !== "persona_moral") return true;
+        if (pmRepEsAccionista) return true;
+        if (!isNonEmpty(pmAccActividadGiro))
+          return (
+            setErr(path, "accionista.actividad_giro es obligatoria"),
+            false
+          );
+        return true;
+      }
+      if (path === "accionista.relacion") {
+        if (tipo !== "persona_moral") return true;
+        if (pmRepEsAccionista) return true;
+        if (!isNonEmpty(pmAccRelacion))
+          return (setErr(path, "accionista.relacion es obligatoria"), false);
+        return true;
+      }
+      return true;
+    }
+
+    // PM identificación representante (iteración 1)
+    if (path === "representante.identificacion.tipo.pm") {
+      if (tipo !== "persona_moral") return true;
+      if (!isNonEmpty(pmRepIdTipo))
+        return (
+          setErr(path, "representante.identificacion.tipo es obligatorio"),
+          false
+        );
+      return true;
+    }
+    if (path === "representante.identificacion.autoridad.pm") {
+      if (tipo !== "persona_moral") return true;
+      if (!isNonEmpty(pmRepIdAutoridad))
+        return (
+          setErr(path, "representante.identificacion.autoridad es obligatoria"),
+          false
+        );
+      return true;
+    }
+    if (path === "representante.identificacion.numero.pm") {
+      if (tipo !== "persona_moral") return true;
+      if (!isNonEmpty(pmRepIdNumero))
+        return (
+          setErr(path, "representante.identificacion.numero es obligatorio"),
+          false
+        );
+      return true;
+    }
+    if (path === "representante.identificacion.expedicion.pm") {
+      if (tipo !== "persona_moral") return true;
+      if (!isNonEmpty(pmRepIdExpedicion))
+        return (
+          setErr(
+            path,
+            "representante.identificacion.fecha_expedicion es obligatoria",
+          ),
+          false
+        );
+      const norm = normalizeToYYYYMMDD(pmRepIdExpedicion);
+      if (!norm || !isYYYYMMDD(norm))
+        return (
+          setErr(
+            path,
+            "representante.identificacion.fecha_expedicion inválida (AAAAMMDD)",
+          ),
+          false
+        );
+      if (pmRepIdExpedicion.trim() !== norm) setPmRepIdExpedicion(norm!);
+      return true;
+    }
+    if (path === "representante.identificacion.expiracion.pm") {
+      if (tipo !== "persona_moral") return true;
+      if (!isNonEmpty(pmRepIdExpiracion))
+        return (
+          setErr(
+            path,
+            "representante.identificacion.fecha_expiracion es obligatoria",
+          ),
+          false
+        );
+      const norm = normalizeToYYYYMMDD(pmRepIdExpiracion);
+      if (!norm || !isYYYYMMDD(norm))
+        return (
+          setErr(
+            path,
+            "representante.identificacion.fecha_expiracion inválida (AAAAMMDD)",
+          ),
+          false
+        );
+      if (pmRepIdExpiracion.trim() !== norm) setPmRepIdExpiracion(norm!);
+      return true;
+    }
+
+    // FIDE (sin cambios)
+    if (path === "fideicomiso.identificador") {
+      if (tipo !== "fideicomiso") return true;
+      if (!isNonEmpty(fidIdentificador))
+        return (
+          setErr(path, "fideicomiso.identificador es obligatorio"),
+          false
+        );
+      return true;
+    }
+    if (path === "fideicomiso.denominacion_fiduciario") {
+      if (tipo !== "fideicomiso") return true;
+      if (!isNonEmpty(fidDenominacion))
+        return (
+          setErr(path, "fideicomiso.denominacion_fiduciario es obligatorio"),
+          false
+        );
+      return true;
+    }
+    if (path === "fideicomiso.rfc_fiduciario") {
+      if (tipo !== "fideicomiso") return true;
+      if (!isNonEmpty(fidRfcFiduciario))
+        return (
+          setErr(path, "fideicomiso.rfc_fiduciario es obligatorio"),
+          false
+        );
+      if (!isRFC(fidRfcFiduciario))
+        return (setErr(path, "fideicomiso.rfc_fiduciario inválido"), false);
+      return true;
+    }
+    if (path === "representante.nombres") {
+      if (tipo !== "fideicomiso") return true;
+      if (!isNonEmpty(repNombres))
+        return (setErr(path, "representante.nombres es obligatorio"), false);
+      return true;
+    }
+    if (path === "representante.apellido_paterno") {
+      if (tipo !== "fideicomiso") return true;
+      if (!isNonEmpty(repApPat))
+        return (
+          setErr(path, "representante.apellido_paterno es obligatorio"),
+          false
+        );
+      return true;
+    }
+    if (path === "representante.apellido_materno") {
+      if (tipo !== "fideicomiso") return true;
+      if (!isNonEmpty(repApMat))
+        return (
+          setErr(path, "representante.apellido_materno es obligatorio"),
+          false
+        );
+      return true;
+    }
+    if (path === "representante.fecha_nacimiento") {
+      if (tipo !== "fideicomiso") return true;
+      if (!isNonEmpty(repFechaNac))
+        return (
+          setErr(path, "representante.fecha_nacimiento es obligatoria"),
+          false
+        );
+
+      const norm = normalizeToYYYYMMDD(repFechaNac);
+      if (!norm || !isYYYYMMDD(norm))
+        return (
+          setErr(path, "representante.fecha_nacimiento inválida (AAAAMMDD)"),
+          false
+        );
+
+      if (repFechaNac.trim() !== norm) setRepFechaNac(norm!);
+      return true;
+    }
+    if (path === "representante.rfc") {
+      if (tipo !== "fideicomiso") return true;
+      if (!isNonEmpty(repRfc))
+        return (setErr(path, "representante.rfc es obligatorio"), false);
+      if (!isRFC(repRfc))
+        return (setErr(path, "representante.rfc inválido"), false);
+      return true;
+    }
+    if (path === "representante.curp") {
+      if (tipo !== "fideicomiso") return true;
+      if (!isNonEmpty(repCurp))
+        return (setErr(path, "representante.curp es obligatorio"), false);
+      if (!isCURP(repCurp))
+        return (setErr(path, "representante.curp inválido"), false);
+      return true;
+    }
+
+    return true;
+  }
+
+  function validateAll(): boolean {
+    const fields = [
+      "empresa_id",
+      "nombre_entidad",
+      "nacionalidad",
+      "contacto.pais",
+      "contacto.email",
+      "contacto.telefono.codigo_pais",
+      "contacto.telefono.numero",
+      "contacto.telefono.ext",
+      "contacto.telefono",
+
+      // domicilio (contacto)
+      "contacto.domicilio.calle",
+      "contacto.domicilio.numero",
+      "contacto.domicilio.colonia",
+      "contacto.domicilio.municipio",
+      "contacto.domicilio.ciudad_delegacion",
+      "contacto.domicilio.codigo_postal",
+      "contacto.domicilio.estado",
+      "contacto.domicilio.pais",
+    ];
+
+    if (tipo === "persona_fisica") {
+      fields.push(
+        "persona.rfc",
+        "persona.curp",
+        "persona.fecha_nacimiento",
+        "persona.nombres",
+        "persona.apellido_paterno",
+        "persona.apellido_materno",
+        "persona.actividad_economica",
+        "persona.identificacion.tipo",
+        "persona.identificacion.autoridad",
+        "persona.identificacion.numero",
+        "persona.identificacion.expedicion",
+        "persona.identificacion.expiracion",
+        "persona.estado_civil",
+        "persona.regimen_matrimonial",
+        "persona.bienes_mancomunados",
+        "persona.direccion_privada.calle",
+        "persona.direccion_privada.numero",
+        "persona.direccion_privada.colonia",
+        "persona.direccion_privada.municipio",
+        "persona.direccion_privada.ciudad_delegacion",
+        "persona.direccion_privada.codigo_postal",
+        "persona.direccion_privada.estado",
+        "persona.direccion_privada.pais",
+        "persona.ocupacion",
+        "persona.actividad_profesional",
+        "persona.cargo_publico.actual",
+        "persona.cargo_publico.previo",
+        "persona.cargo_publico.familiar",
+        "persona.terceros.actividad_giro",
+        "persona.terceros.relacion",
+      );
+    }
+    if (tipo === "persona_moral") {
+      fields.push(
+        "empresa.rfc",
+        "empresa.regimen_capital",
+        "empresa.fecha_constitucion",
+        "empresa.giro_mercantil",
+        "representante.nombre_completo.pm",
+        "representante.nombres.pm",
+        "representante.apellido_paterno.pm",
+        "representante.apellido_materno.pm",
+        "representante.fecha_nacimiento.pm",
+        "representante.nacionalidad.pm",
+        "representante.curp.pm",
+        "representante.rfc.pm",
+        "representante.telefono_casa.pm",
+        "representante.celular.pm",
+        "representante.domicilio.calle.pm",
+        "representante.domicilio.numero.pm",
+        "representante.domicilio.colonia.pm",
+        "representante.domicilio.municipio.pm",
+        "representante.domicilio.ciudad_delegacion.pm",
+        "representante.domicilio.codigo_postal.pm",
+        "representante.domicilio.estado.pm",
+        "representante.domicilio.pais.pm",
+        "beneficiario_controlador.nombres",
+        "beneficiario_controlador.apellido_paterno",
+        "beneficiario_controlador.apellido_materno",
+        "accionista.nombres",
+        "accionista.apellido_paterno",
+        "accionista.apellido_materno",
+        "accionista.fecha_nacimiento",
+        "accionista.porcentaje",
+        "accionista.nacionalidad",
+        "accionista.actividad_giro",
+        "accionista.relacion",
+        "representante.identificacion.tipo.pm",
+        "representante.identificacion.autoridad.pm",
+        "representante.identificacion.numero.pm",
+        "representante.identificacion.expedicion.pm",
+        "representante.identificacion.expiracion.pm",
+      );
+    }
+    if (tipo === "fideicomiso") {
+      fields.push(
+        "fideicomiso.identificador",
+        "fideicomiso.denominacion_fiduciario",
+        "fideicomiso.rfc_fiduciario",
+        "representante.nombres",
+        "representante.apellido_paterno",
+        "representante.apellido_materno",
+        "representante.fecha_nacimiento",
+        "representante.rfc",
+        "representante.curp",
+      );
+    }
+
+    let ok = true;
+    for (const f of fields) {
+      if (!validateField(f)) ok = false;
+    }
+    return ok;
+  }
+
+  function buildPayload() {
+    const empresa_id = Number(empresaId);
+
+    const telefono = buildTelefonoE164Like(telCodigoPais, telNumero, telExt);
+
+    const contacto = {
+      pais: valueToCatalogKey(contactoPais),
+      email: email.trim(),
+      telefono,
+      telefono_detalle: {
+        codigo_pais: telCodigoPais.trim(),
+        numero: telNumero.trim(),
+        ext: telExt.trim() || null,
+      },
+      // Nota: país del domicilio es captura manual por ahora (no catálogo)
+      domicilio_mexico: {
+        calle: domCalle.trim(),
+        numero: domNumero.trim(),
+        interior: domInterior.trim() || null,
+        colonia: domColonia.trim(),
+        municipio: domMunicipio.trim(),
+        ciudad_delegacion: domCiudadDelegacion.trim(),
+        codigo_postal: domCP.trim(),
+        estado: domEstado.trim(),
+        pais: domPais.trim(),
+      },
+    };
+
+    if (tipo === "persona_fisica") {
+      const act = actividades.find((x) => x.clave === pfActividad);
+      const normFecha = normalizeToYYYYMMDD(pfFechaNac) ?? pfFechaNac.trim();
+
+      const idExp =
+        normalizeToYYYYMMDD(pfIdExpedicion) ?? pfIdExpedicion.trim();
+      const idExpi =
+        normalizeToYYYYMMDD(pfIdExpiracion) ?? pfIdExpiracion.trim();
+
+      return {
+        empresa_id,
+        tipo_cliente: "persona_fisica",
+        nombre_entidad: nombreEntidad.trim(),
+        nacionalidad: valueToCatalogKey(nacionalidad),
+        datos_completos: {
+          contacto,
+          persona: {
+            tipo: "persona_fisica",
+            rfc: pfRfc.trim().toUpperCase(),
+            curp: pfCurp.trim().toUpperCase(),
+            fecha_nacimiento: normFecha,
+            nombres: pfNombres.trim(),
+            apellido_paterno: pfApPat.trim(),
+            apellido_materno: pfApMat.trim(),
+            actividad_economica: act
+              ? { clave: act.clave, descripcion: act.descripcion }
+              : pfActividad,
+          },
+          calidad_migratoria: pfCalidadMigratoria.trim() || null,
+          estado_civil: pfEstadoCivil.trim(),
+          regimen_matrimonial: pfRegimenMatrimonial.trim(),
+          bienes_mancomunados: pfBienesMancomunados.trim(),
+          direccion_privada: {
+            calle: pfPrivCalle.trim(),
+            numero: pfPrivNumero.trim(),
+            colonia: pfPrivColonia.trim(),
+            municipio: pfPrivMunicipio.trim(),
+            ciudad_delegacion: pfPrivCiudadDelegacion.trim(),
+            codigo_postal: pfPrivCP.trim(),
+            estado: pfPrivEstado.trim(),
+            pais: pfPrivPais.trim(),
+          },
+          ocupacion: pfOcupacion.trim(),
+          actividad_profesional: pfActividadProfesional.trim(),
+          cargo_publico: {
+            actual: pfCargoPublicoActual.trim(),
+            previo: pfCargoPublicoPrevio.trim(),
+            familiar: pfCargoPublicoFamiliar.trim(),
+          },
+          terceros: {
+            manifiesta: pfManifiestaTerceros,
+            actividad_giro: pfManifiestaTerceros
+              ? pfTerceroActividadGiro.trim()
+              : null,
+            relacion: pfManifiestaTerceros ? pfTerceroRelacion.trim() : null,
+            sin_documentacion: pfManifiestaTerceros
+              ? pfNoDocumentacionTercero
+              : null,
+          },
+        },
+        beneficiario_controlador: {
+          nombres: pmBcNombres.trim(),
+          apellido_paterno: pmBcApPat.trim(),
+          apellido_materno: pmBcApMat.trim(),
+        },
+        representante_es_accionista: pmRepEsAccionista,
+        accionista_tercero: pmRepEsAccionista
+          ? null
+          : {
+              nombres: pmAccNombres.trim(),
+              apellido_paterno: pmAccApPat.trim(),
+              apellido_materno: pmAccApMat.trim(),
+              fecha_nacimiento:
+                normalizeToYYYYMMDD(pmAccFechaNac) ?? pmAccFechaNac.trim(),
+              porcentaje_accionario: pmAccPct.trim(),
+              nacionalidad: valueToCatalogKey(pmAccNacionalidad),
+              actividad_giro: pmAccActividadGiro.trim(),
+              relacion: pmAccRelacion.trim(),
+            },
+      };
+    }
+  }
+
+  if (tipo === "persona_moral") {
+    const giro = giros.find((x) => x.clave === pmGiro);
+    const repExp =
+      normalizeToYYYYMMDD(pmRepIdExpedicion) ?? pmRepIdExpedicion.trim();
+    const repExpi =
+      normalizeToYYYYMMDD(pmRepIdExpiracion) ?? pmRepIdExpiracion.trim();
+
+    const pmFechaNorm =
+      normalizeToYYYYMMDD(pmFechaConst) ?? pmFechaConst.trim();
+
+    return {
+      empresa_id,
+      tipo_cliente: "persona_moral",
+      nombre_entidad: nombreEntidad.trim(),
+      nacionalidad: valueToCatalogKey(nacionalidad),
+      datos_completos: {
+        contacto,
+        empresa: {
+          tipo: "persona_moral",
+          rfc: pmRfc.trim().toUpperCase(),
+          regimen_capital: pmRegimenCapital.trim(),
+          fecha_constitucion: pmFechaNorm,
+          giro_mercantil: giro
+            ? { clave: giro.clave, descripcion: giro.descripcion }
+            : pmGiro,
+        },
+        representante: {
+          nombre_completo: (
+            pmRepNombreCompleto.trim() ||
+            [pmRepNombres, pmRepApPat, pmRepApMat]
+              .map((x) => x.trim())
+              .filter(Boolean)
+              .join(" ")
+          ).trim(),
+          nombres: pmRepNombres.trim(),
+          apellido_paterno: pmRepApPat.trim(),
+          apellido_materno: pmRepApMat.trim(),
+          fecha_nacimiento:
+            normalizeToYYYYMMDD(pmRepFechaNac) ?? pmRepFechaNac.trim(),
+          nacionalidad: valueToCatalogKey(pmRepNacionalidad),
+          regimen_estancia_mexico: pmRepRegimenEstancia.trim() || null,
+          curp: pmRepCurp.trim().toUpperCase(),
+          rfc: pmRepRfc.trim().toUpperCase(),
+          telefono_casa: pmRepTelCasa.trim(),
+          celular: pmRepCelular.trim(),
+          domicilio_mexico: {
+            calle: pmRepDomCalle.trim(),
+            numero: pmRepDomNumero.trim(),
+            interior: pmRepDomInterior.trim() || null,
+            colonia: pmRepDomColonia.trim(),
+            municipio: pmRepDomMunicipio.trim(),
+            ciudad_delegacion: pmRepDomCiudadDelegacion.trim(),
+            codigo_postal: pmRepDomCP.trim(),
+            estado: pmRepDomEstado.trim(),
+            pais: pmRepDomPais.trim(),
+          },
+          identificacion: {
+            tipo: pmRepIdTipo.trim(),
+            autoridad: pmRepIdAutoridad.trim(),
+            numero: pmRepIdNumero.trim(),
+            fecha_expedicion: repExp,
+            fecha_expiracion: repExpi,
+          },
+        },
+      },
+    };
+  }
+
+  // fideicomiso (sin cambios)
+  const nombreCompleto = [repNombres, repApPat, repApMat]
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .join(" ");
+
+  const repFechaNorm = normalizeToYYYYMMDD(repFechaNac) ?? repFechaNac.trim();
+
+  return {
+    empresa_id,
+    tipo_cliente: "fideicomiso",
+    nombre_entidad: nombreEntidad.trim(),
+    nacionalidad: valueToCatalogKey(nacionalidad),
+    datos_completos: {
+      contacto,
+      fideicomiso: {
+        identificador: fidIdentificador.trim(),
+        denominacion_fiduciario: fidDenominacion.trim(),
+        rfc_fiduciario: fidRfcFiduciario.trim().toUpperCase(),
+      },
+      representante: {
+        nombre_completo: nombreCompleto,
+        rfc: repRfc.trim().toUpperCase(),
+        curp: repCurp.trim().toUpperCase(),
+        fecha_nacimiento: repFechaNorm,
+      },
+    },
+  };
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setFatal(null);
+
+    if (!validateAll()) {
+      setFatal("Corrige los campos marcados en rojo.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
+    const payload = buildPayload();
+
+    try {
+      setLoading(true);
+      const base =
+        process.env.NEXT_PUBLIC_API_BASE_URL ||
+        "https://scmvp-1jhq.onrender.com";
+
+      const res = await fetch(`${base}/api/cliente/registrar-cliente`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        const msg = data?.error || `Error HTTP ${res.status}`;
+        setFatal(msg);
+        return;
+      }
+
+      // API regresa { ok:true, cliente:{id...} }
+      const id = data?.cliente?.id;
+      if (id)
+        router.push(`/cliente/clientes/${id}`); // sin auto-impresión
+      else
+        setFatal(
+          "Registrado, pero no se recibió id. Revisa respuesta del backend.",
+        );
+    } catch (err: any) {
+      setFatal(err?.message ?? "Error inesperado");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const showAviso = tipo === "persona_fisica" || tipo === "persona_moral";
+
+  return (
+    <div className="max-w-4xl mx-auto p-4 space-y-4">
+      <h1 className="text-xl font-semibold">Registrar Cliente</h1>
+
+      {showAviso ? (
+        <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          {AVISO_LEGAL}
+        </div>
+      ) : null}
+
+      {fatal ? (
+        <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {fatal}
+        </div>
+      ) : null}
+
+      <form onSubmit={onSubmit} className="space-y-6">
+        {/* BASE */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Tipo de cliente *</label>
+            <select
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              value={tipo}
+              onChange={(e) => {
+                setTipo(e.target.value as TipoCliente);
+                setErrors({});
+                setFatal(null);
+              }}
+            >
+              <option value="persona_fisica">Persona Física</option>
+              <option value="persona_moral">Persona Moral</option>
+              <option value="fideicomiso">Fideicomiso</option>
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">
+              Empresa ID <span className="text-red-600">*</span>
+            </label>
+            <input
+              className={`w-full rounded border px-3 py-2 text-sm ${errors["empresa_id"] ? "border-red-500" : "border-gray-300"}`}
+              value={empresaId}
+              onChange={(e) => setEmpresaId(e.target.value)}
+              onBlur={() => validateField("empresa_id")}
+              placeholder="Ej. 32"
+            />
+            {errors["empresa_id"] ? (
+              <p className="text-xs text-red-600">{errors["empresa_id"]}</p>
+            ) : null}
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">
+              Nombre entidad <span className="text-red-600">*</span>
+            </label>
+            <input
+              className={`w-full rounded border px-3 py-2 text-sm ${errors["nombre_entidad"] ? "border-red-500" : "border-gray-300"}`}
+              value={nombreEntidad}
+              onChange={(e) => setNombreEntidad(e.target.value)}
+              onBlur={() => validateField("nombre_entidad")}
+              placeholder="Ej. Alicia Pruebas / Servicios SA / Fideicomiso X"
+            />
+            {errors["nombre_entidad"] ? (
+              <p className="text-xs text-red-600">{errors["nombre_entidad"]}</p>
+            ) : null}
+          </div>
+
+          <SearchableSelect
+            label="Nacionalidad"
+            required
+            value={nacionalidad}
+            items={paises}
+            error={errors["nacionalidad"]}
+            onChange={(v) => setNacionalidad(v)}
+            onBlur={() => validateField("nacionalidad")}
+          />
+
+          <SearchableSelect
+            label="País (contacto)"
+            required
+            value={contactoPais}
+            items={paises}
+            error={errors["contacto.pais"]}
+            onChange={(v) => setContactoPais(v)}
+            onBlur={() => validateField("contacto.pais")}
+          />
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">
+              Email <span className="text-red-600">*</span>
+            </label>
+            <input
+              className={`w-full rounded border px-3 py-2 text-sm ${errors["contacto.email"] ? "border-red-500" : "border-gray-300"}`}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onBlur={() => validateField("contacto.email")}
+              placeholder="correo@dominio.com"
+            />
+            {errors["contacto.email"] ? (
+              <p className="text-xs text-red-600">{errors["contacto.email"]}</p>
+            ) : null}
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">
+              Teléfono (código país) <span className="text-red-600">*</span>
+            </label>
+            <input
+              className={`w-full rounded border px-3 py-2 text-sm ${
+                errors["contacto.telefono.codigo_pais"]
+                  ? "border-red-500"
+                  : "border-gray-300"
+              }`}
+              value={telCodigoPais}
+              onChange={(e) => setTelCodigoPais(e.target.value)}
+              onBlur={() => validateField("contacto.telefono.codigo_pais")}
+              placeholder="+52"
+            />
+            {errors["contacto.telefono.codigo_pais"] ? (
+              <p className="text-xs text-red-600">
+                {errors["contacto.telefono.codigo_pais"]}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">
+              Teléfono (número) <span className="text-red-600">*</span>
+            </label>
+            <input
+              className={`w-full rounded border px-3 py-2 text-sm ${
+                errors["contacto.telefono.numero"]
+                  ? "border-red-500"
+                  : "border-gray-300"
+              }`}
+              value={telNumero}
+              onChange={(e) => setTelNumero(e.target.value)}
+              onBlur={() => validateField("contacto.telefono.numero")}
+              placeholder="5512345678"
+            />
+            {errors["contacto.telefono.numero"] ? (
+              <p className="text-xs text-red-600">
+                {errors["contacto.telefono.numero"]}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Extensión</label>
+            <input
+              className={`w-full rounded border px-3 py-2 text-sm ${
+                errors["contacto.telefono.ext"]
+                  ? "border-red-500"
+                  : "border-gray-300"
+              }`}
+              value={telExt}
+              onChange={(e) => setTelExt(e.target.value)}
+              onBlur={() => validateField("contacto.telefono.ext")}
+              placeholder="123"
+            />
+            {errors["contacto.telefono.ext"] ? (
+              <p className="text-xs text-red-600">
+                {errors["contacto.telefono.ext"]}
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        {/* DOMICILIO (CONTACTO) */}
+        <div className="rounded border border-gray-200 p-4 space-y-4">
+          <h2 className="font-medium">Domicilio (contacto)</h2>
+          <p className="text-xs text-gray-500">
+            Captura manual por ahora (no catálogo). En iteraciones posteriores
+            lo alineamos a catálogos.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">
+                Calle <span className="text-red-600">*</span>
+              </label>
+              <input
+                className={`w-full rounded border px-3 py-2 text-sm ${errors["contacto.domicilio.calle"] ? "border-red-500" : "border-gray-300"}`}
+                value={domCalle}
+                onChange={(e) => setDomCalle(e.target.value)}
+                onBlur={() => validateField("contacto.domicilio.calle")}
+              />
+              {errors["contacto.domicilio.calle"] ? (
+                <p className="text-xs text-red-600">
+                  {errors["contacto.domicilio.calle"]}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">
+                Número <span className="text-red-600">*</span>
+              </label>
+              <input
+                className={`w-full rounded border px-3 py-2 text-sm ${errors["contacto.domicilio.numero"] ? "border-red-500" : "border-gray-300"}`}
+                value={domNumero}
+                onChange={(e) => setDomNumero(e.target.value)}
+                onBlur={() => validateField("contacto.domicilio.numero")}
+              />
+              {errors["contacto.domicilio.numero"] ? (
+                <p className="text-xs text-red-600">
+                  {errors["contacto.domicilio.numero"]}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Interior</label>
+              <input
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                value={domInterior}
+                onChange={(e) => setDomInterior(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">
+                Colonia <span className="text-red-600">*</span>
+              </label>
+              <input
+                className={`w-full rounded border px-3 py-2 text-sm ${errors["contacto.domicilio.colonia"] ? "border-red-500" : "border-gray-300"}`}
+                value={domColonia}
+                onChange={(e) => setDomColonia(e.target.value)}
+                onBlur={() => validateField("contacto.domicilio.colonia")}
+              />
+              {errors["contacto.domicilio.colonia"] ? (
+                <p className="text-xs text-red-600">
+                  {errors["contacto.domicilio.colonia"]}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">
+                Municipio <span className="text-red-600">*</span>
+              </label>
+              <input
+                className={`w-full rounded border px-3 py-2 text-sm ${errors["contacto.domicilio.municipio"] ? "border-red-500" : "border-gray-300"}`}
+                value={domMunicipio}
+                onChange={(e) => setDomMunicipio(e.target.value)}
+                onBlur={() => validateField("contacto.domicilio.municipio")}
+              />
+              {errors["contacto.domicilio.municipio"] ? (
+                <p className="text-xs text-red-600">
+                  {errors["contacto.domicilio.municipio"]}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">
+                Ciudad/Delegación <span className="text-red-600">*</span>
+              </label>
+              <input
+                className={`w-full rounded border px-3 py-2 text-sm ${errors["contacto.domicilio.ciudad_delegacion"] ? "border-red-500" : "border-gray-300"}`}
+                value={domCiudadDelegacion}
+                onChange={(e) => setDomCiudadDelegacion(e.target.value)}
+                onBlur={() =>
+                  validateField("contacto.domicilio.ciudad_delegacion")
+                }
+              />
+              {errors["contacto.domicilio.ciudad_delegacion"] ? (
+                <p className="text-xs text-red-600">
+                  {errors["contacto.domicilio.ciudad_delegacion"]}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">
+                Código Postal <span className="text-red-600">*</span>
+              </label>
+              <input
+                className={`w-full rounded border px-3 py-2 text-sm ${errors["contacto.domicilio.codigo_postal"] ? "border-red-500" : "border-gray-300"}`}
+                value={domCP}
+                onChange={(e) => setDomCP(e.target.value)}
+                onBlur={() => validateField("contacto.domicilio.codigo_postal")}
+                placeholder="Ej. 44100"
+              />
+              {errors["contacto.domicilio.codigo_postal"] ? (
+                <p className="text-xs text-red-600">
+                  {errors["contacto.domicilio.codigo_postal"]}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">
+                Estado <span className="text-red-600">*</span>
+              </label>
+              <input
+                className={`w-full rounded border px-3 py-2 text-sm ${errors["contacto.domicilio.estado"] ? "border-red-500" : "border-gray-300"}`}
+                value={domEstado}
+                onChange={(e) => setDomEstado(e.target.value)}
+                onBlur={() => validateField("contacto.domicilio.estado")}
+                placeholder="Ej. Jalisco"
+              />
+              {errors["contacto.domicilio.estado"] ? (
+                <p className="text-xs text-red-600">
+                  {errors["contacto.domicilio.estado"]}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">
+                País (domicilio) <span className="text-red-600">*</span>
+              </label>
+              <input
+                className={`w-full rounded border px-3 py-2 text-sm ${errors["contacto.domicilio.pais"] ? "border-red-500" : "border-gray-300"}`}
+                value={domPais}
+                onChange={(e) => setDomPais(e.target.value)}
+                onBlur={() => validateField("contacto.domicilio.pais")}
+                placeholder="Ej. México"
+              />
+              {errors["contacto.domicilio.pais"] ? (
+                <p className="text-xs text-red-600">
+                  {errors["contacto.domicilio.pais"]}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        {/* Persona Física */}
+        {tipo === "persona_fisica" && (
+          <div className="rounded border border-gray-200 p-4 space-y-4">
+            <h2 className="font-medium">Persona Física</h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">RFC *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.rfc"] ? "border-red-500" : "border-gray-300"}`}
+                  value={pfRfc}
+                  onChange={(e) => setPfRfc(e.target.value)}
+                  onBlur={() => validateField("persona.rfc")}
+                  placeholder="XAXX010101000"
+                />
+                {errors["persona.rfc"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["persona.rfc"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">CURP *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.curp"] ? "border-red-500" : "border-gray-300"}`}
+                  value={pfCurp}
+                  onChange={(e) => setPfCurp(e.target.value)}
+                  onBlur={() => validateField("persona.curp")}
+                  placeholder="PEPJ900101HDFRRN09"
+                />
+                {errors["persona.curp"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["persona.curp"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Fecha nacimiento (AAAAMMDD) *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["persona.fecha_nacimiento"]
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  value={pfFechaNac}
+                  onChange={(e) => setPfFechaNac(e.target.value)}
+                  onBlur={() => validateField("persona.fecha_nacimiento")}
+                  placeholder="19900101 (o 1990-01-01)"
+                />
+                {errors["persona.fecha_nacimiento"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["persona.fecha_nacimiento"]}
+                  </p>
+                ) : (
+                  <p className="text-xs text-gray-500">
+                    Acepta AAAAMMDD o YYYY-MM-DD (se convierte a AAAAMMDD).
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Nombre(s) *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.nombres"] ? "border-red-500" : "border-gray-300"}`}
+                  value={pfNombres}
+                  onChange={(e) => setPfNombres(e.target.value)}
+                  onBlur={() => validateField("persona.nombres")}
+                />
+                {errors["persona.nombres"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["persona.nombres"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Apellido paterno *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["persona.apellido_paterno"]
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  value={pfApPat}
+                  onChange={(e) => setPfApPat(e.target.value)}
+                  onBlur={() => validateField("persona.apellido_paterno")}
+                />
+                {errors["persona.apellido_paterno"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["persona.apellido_paterno"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Apellido materno *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["persona.apellido_materno"]
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  value={pfApMat}
+                  onChange={(e) => setPfApMat(e.target.value)}
+                  onBlur={() => validateField("persona.apellido_materno")}
+                />
+                {errors["persona.apellido_materno"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["persona.apellido_materno"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <SearchableSelect
+                label="Actividad económica"
+                required
+                value={pfActividad}
+                items={actividades}
+                error={errors["persona.actividad_economica"]}
+                onChange={(v) => setPfActividad(v)}
+                onBlur={() => validateField("persona.actividad_economica")}
+              />
+            </div>
+
+            <hr className="my-2" />
+
+            <h3 className="font-medium">Identificación / Acreditación</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Tipo / nombre del documento *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["persona.identificacion.tipo"]
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  value={pfIdTipo}
+                  onChange={(e) => setPfIdTipo(e.target.value)}
+                  onBlur={() => validateField("persona.identificacion.tipo")}
+                  placeholder="INE / Pasaporte / ..."
+                />
+                {errors["persona.identificacion.tipo"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["persona.identificacion.tipo"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Autoridad que expide *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["persona.identificacion.autoridad"]
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  value={pfIdAutoridad}
+                  onChange={(e) => setPfIdAutoridad(e.target.value)}
+                  onBlur={() =>
+                    validateField("persona.identificacion.autoridad")
+                  }
+                  placeholder="INE / SRE / ..."
+                />
+                {errors["persona.identificacion.autoridad"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["persona.identificacion.autoridad"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Número de identificación *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["persona.identificacion.numero"]
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  value={pfIdNumero}
+                  onChange={(e) => setPfIdNumero(e.target.value)}
+                  onBlur={() => validateField("persona.identificacion.numero")}
+                />
+                {errors["persona.identificacion.numero"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["persona.identificacion.numero"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Fecha de expedición (AAAAMMDD) *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["persona.identificacion.expedicion"]
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  value={pfIdExpedicion}
+                  onChange={(e) => setPfIdExpedicion(e.target.value)}
+                  onBlur={() =>
+                    validateField("persona.identificacion.expedicion")
+                  }
+                  placeholder="20240131 (o 2024-01-31)"
+                />
+                {errors["persona.identificacion.expedicion"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["persona.identificacion.expedicion"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Fecha de expiración (AAAAMMDD) *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["persona.identificacion.expiracion"]
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  value={pfIdExpiracion}
+                  onChange={(e) => setPfIdExpiracion(e.target.value)}
+                  onBlur={() =>
+                    validateField("persona.identificacion.expiracion")
+                  }
+                  placeholder="20290131 (o 2029-01-31)"
+                />
+                {errors["persona.identificacion.expiracion"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["persona.identificacion.expiracion"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <hr className="my-2" />
+
+              <h3 className="font-medium">
+                Estado civil / régimen matrimonial
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Estado civil *</label>
+                  <input
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.estado_civil"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pfEstadoCivil}
+                    onChange={(e) => setPfEstadoCivil(e.target.value)}
+                    onBlur={() => validateField("persona.estado_civil")}
+                    placeholder="Soltero(a) / Casado(a) / ..."
+                  />
+                  {errors["persona.estado_civil"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["persona.estado_civil"]}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">
+                    Régimen matrimonial *
+                  </label>
+                  <input
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.regimen_matrimonial"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pfRegimenMatrimonial}
+                    onChange={(e) => setPfRegimenMatrimonial(e.target.value)}
+                    onBlur={() => validateField("persona.regimen_matrimonial")}
+                    placeholder="Sociedad conyugal / Separación de bienes / ..."
+                  />
+                  {errors["persona.regimen_matrimonial"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["persona.regimen_matrimonial"]}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">
+                    Bienes mancomunados *
+                  </label>
+                  <select
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.bienes_mancomunados"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pfBienesMancomunados}
+                    onChange={(e) => setPfBienesMancomunados(e.target.value)}
+                    onBlur={() => validateField("persona.bienes_mancomunados")}
+                  >
+                    <option value="">Selecciona...</option>
+                    <option value="si">Sí</option>
+                    <option value="no">No</option>
+                  </select>
+                  {errors["persona.bienes_mancomunados"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["persona.bienes_mancomunados"]}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-1 md:col-span-3">
+                  <label className="text-sm font-medium">
+                    Calidad migratoria (opcional)
+                  </label>
+                  <input
+                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                    value={pfCalidadMigratoria}
+                    onChange={(e) => setPfCalidadMigratoria(e.target.value)}
+                    placeholder="Temporal / Permanente / ..."
+                  />
+                </div>
+              </div>
+
+              <hr className="my-2" />
+
+              <h3 className="font-medium">Dirección privada</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Calle *</label>
+                  <input
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.direccion_privada.calle"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pfPrivCalle}
+                    onChange={(e) => setPfPrivCalle(e.target.value)}
+                    onBlur={() =>
+                      validateField("persona.direccion_privada.calle")
+                    }
+                  />
+                  {errors["persona.direccion_privada.calle"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["persona.direccion_privada.calle"]}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Número *</label>
+                  <input
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.direccion_privada.numero"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pfPrivNumero}
+                    onChange={(e) => setPfPrivNumero(e.target.value)}
+                    onBlur={() =>
+                      validateField("persona.direccion_privada.numero")
+                    }
+                  />
+                  {errors["persona.direccion_privada.numero"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["persona.direccion_privada.numero"]}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Colonia *</label>
+                  <input
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.direccion_privada.colonia"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pfPrivColonia}
+                    onChange={(e) => setPfPrivColonia(e.target.value)}
+                    onBlur={() =>
+                      validateField("persona.direccion_privada.colonia")
+                    }
+                  />
+                  {errors["persona.direccion_privada.colonia"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["persona.direccion_privada.colonia"]}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Municipio *</label>
+                  <input
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.direccion_privada.municipio"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pfPrivMunicipio}
+                    onChange={(e) => setPfPrivMunicipio(e.target.value)}
+                    onBlur={() =>
+                      validateField("persona.direccion_privada.municipio")
+                    }
+                  />
+                  {errors["persona.direccion_privada.municipio"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["persona.direccion_privada.municipio"]}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">
+                    Ciudad/Delegación *
+                  </label>
+                  <input
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.direccion_privada.ciudad_delegacion"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pfPrivCiudadDelegacion}
+                    onChange={(e) => setPfPrivCiudadDelegacion(e.target.value)}
+                    onBlur={() =>
+                      validateField(
+                        "persona.direccion_privada.ciudad_delegacion",
+                      )
+                    }
+                  />
+                  {errors["persona.direccion_privada.ciudad_delegacion"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["persona.direccion_privada.ciudad_delegacion"]}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Código postal *</label>
+                  <input
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.direccion_privada.codigo_postal"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pfPrivCP}
+                    onChange={(e) => setPfPrivCP(e.target.value)}
+                    onBlur={() =>
+                      validateField("persona.direccion_privada.codigo_postal")
+                    }
+                    placeholder="44100"
+                  />
+                  {errors["persona.direccion_privada.codigo_postal"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["persona.direccion_privada.codigo_postal"]}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Estado *</label>
+                  <input
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.direccion_privada.estado"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pfPrivEstado}
+                    onChange={(e) => setPfPrivEstado(e.target.value)}
+                    onBlur={() =>
+                      validateField("persona.direccion_privada.estado")
+                    }
+                    placeholder="Jalisco"
+                  />
+                  {errors["persona.direccion_privada.estado"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["persona.direccion_privada.estado"]}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">País *</label>
+                  <input
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.direccion_privada.pais"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pfPrivPais}
+                    onChange={(e) => setPfPrivPais(e.target.value)}
+                    onBlur={() =>
+                      validateField("persona.direccion_privada.pais")
+                    }
+                    placeholder="México"
+                  />
+                  {errors["persona.direccion_privada.pais"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["persona.direccion_privada.pais"]}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+
+              <hr className="my-2" />
+
+              <h3 className="font-medium">Ocupación</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Ocupación *</label>
+                  <input
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.ocupacion"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pfOcupacion}
+                    onChange={(e) => setPfOcupacion(e.target.value)}
+                    onBlur={() => validateField("persona.ocupacion")}
+                  />
+                  {errors["persona.ocupacion"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["persona.ocupacion"]}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">
+                    Actividad profesional *
+                  </label>
+                  <input
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.actividad_profesional"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pfActividadProfesional}
+                    onChange={(e) => setPfActividadProfesional(e.target.value)}
+                    onBlur={() =>
+                      validateField("persona.actividad_profesional")
+                    }
+                  />
+                  {errors["persona.actividad_profesional"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["persona.actividad_profesional"]}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+
+              <hr className="my-2" />
+
+              <h3 className="font-medium">Cargo público</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">
+                    Actualmente desempeño un cargo público *
+                  </label>
+                  <select
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.cargo_publico.actual"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pfCargoPublicoActual}
+                    onChange={(e) => setPfCargoPublicoActual(e.target.value)}
+                    onBlur={() => validateField("persona.cargo_publico.actual")}
+                  >
+                    <option value="">Selecciona...</option>
+                    <option value="si">Sí</option>
+                    <option value="no">No</option>
+                  </select>
+                  {errors["persona.cargo_publico.actual"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["persona.cargo_publico.actual"]}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">
+                    He desempeñado un cargo público *
+                  </label>
+                  <select
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.cargo_publico.previo"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pfCargoPublicoPrevio}
+                    onChange={(e) => setPfCargoPublicoPrevio(e.target.value)}
+                    onBlur={() => validateField("persona.cargo_publico.previo")}
+                  >
+                    <option value="">Selecciona...</option>
+                    <option value="si">Sí</option>
+                    <option value="no">No</option>
+                  </select>
+                  {errors["persona.cargo_publico.previo"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["persona.cargo_publico.previo"]}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">
+                    Algún familiar desempeña o ha desempeñado *
+                  </label>
+                  <select
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.cargo_publico.familiar"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pfCargoPublicoFamiliar}
+                    onChange={(e) => setPfCargoPublicoFamiliar(e.target.value)}
+                    onBlur={() =>
+                      validateField("persona.cargo_publico.familiar")
+                    }
+                  >
+                    <option value="">Selecciona...</option>
+                    <option value="si">Sí</option>
+                    <option value="no">No</option>
+                  </select>
+                  {errors["persona.cargo_publico.familiar"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["persona.cargo_publico.familiar"]}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+
+              <hr className="my-2" />
+
+              <h3 className="font-medium">
+                Dueño beneficiario / recursos de terceros
+              </h3>
+              <div className="space-y-2">
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={pfManifiestaTerceros}
+                    onChange={(e) => setPfManifiestaTerceros(e.target.checked)}
+                  />
+                  <span>
+                    Manifiesto que tengo conocimiento de la existencia del dueño
+                    beneficiario y/o parte o totalidad de los recursos provienen
+                    de terceros.
+                  </span>
+                </label>
+
+                {pfManifiestaTerceros ? (
+                  <div className="rounded border border-gray-200 p-3 space-y-3">
+                    <p className="text-xs text-gray-600">
+                      En caso de responder que sí, llena la información
+                      adicional para identificar al dueño beneficiario y/o
+                      tercero.
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">
+                          Actividad o giro del negocio del tercero *
+                        </label>
+                        <input
+                          className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.terceros.actividad_giro"] ? "border-red-500" : "border-gray-300"}`}
+                          value={pfTerceroActividadGiro}
+                          onChange={(e) =>
+                            setPfTerceroActividadGiro(e.target.value)
+                          }
+                          onBlur={() =>
+                            validateField("persona.terceros.actividad_giro")
+                          }
+                        />
+                        {errors["persona.terceros.actividad_giro"] ? (
+                          <p className="text-xs text-red-600">
+                            {errors["persona.terceros.actividad_giro"]}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">
+                          Relación con el tercero *
+                        </label>
+                        <input
+                          className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.terceros.relacion"] ? "border-red-500" : "border-gray-300"}`}
+                          value={pfTerceroRelacion}
+                          onChange={(e) => setPfTerceroRelacion(e.target.value)}
+                          onBlur={() =>
+                            validateField("persona.terceros.relacion")
+                          }
+                        />
+                        {errors["persona.terceros.relacion"] ? (
+                          <p className="text-xs text-red-600">
+                            {errors["persona.terceros.relacion"]}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <label className="flex items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={pfNoDocumentacionTercero}
+                        onChange={(e) =>
+                          setPfNoDocumentacionTercero(e.target.checked)
+                        }
+                      />
+                      <span>
+                        Manifiesto que no cuento con la documentación requerida
+                        del dueño beneficiario.
+                      </span>
+                    </label>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Persona Moral */}
+        {tipo === "persona_moral" && (
+          <div className="rounded border border-gray-200 p-4 space-y-4">
+            <h2 className="font-medium">Persona Moral</h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">RFC (empresa) *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors["empresa.rfc"] ? "border-red-500" : "border-gray-300"}`}
+                  value={pmRfc}
+                  onChange={(e) => setPmRfc(e.target.value)}
+                  onBlur={() => validateField("empresa.rfc")}
+                  placeholder="XAXX010101000"
+                />
+                {errors["empresa.rfc"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["empresa.rfc"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Régimen de capital *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors["empresa.regimen_capital"] ? "border-red-500" : "border-gray-300"}`}
+                  value={pmRegimenCapital}
+                  onChange={(e) => setPmRegimenCapital(e.target.value)}
+                  onBlur={() => validateField("empresa.regimen_capital")}
+                  placeholder="Variable / Fijo / ..."
+                />
+                {errors["empresa.regimen_capital"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["empresa.regimen_capital"]}
+                  </p>
+                ) : null}
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Fecha constitución (AAAAMMDD) *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["empresa.fecha_constitucion"]
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  value={pmFechaConst}
+                  onChange={(e) => setPmFechaConst(e.target.value)}
+                  onBlur={() => validateField("empresa.fecha_constitucion")}
+                  placeholder="20010131 (o 2001-01-31)"
+                />
+                {errors["empresa.fecha_constitucion"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["empresa.fecha_constitucion"]}
+                  </p>
+                ) : (
+                  <p className="text-xs text-gray-500">
+                    Acepta AAAAMMDD o YYYY-MM-DD (se convierte a AAAAMMDD).
+                  </p>
+                )}
+              </div>
+
+              <SearchableSelect
+                label="Giro mercantil"
+                required
+                value={pmGiro}
+                items={giros}
+                error={errors["empresa.giro_mercantil"]}
+                onChange={(v) => setPmGiro(v)}
+                onBlur={() => validateField("empresa.giro_mercantil")}
+              />
+
+              <div className="space-y-1 md:col-span-3">
+                <p className="text-sm font-medium">
+                  INFORMACIÓN DEL REPRESENTANTE LEGAL
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Nombres *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.nombres.pm"] ? "border-red-500" : "border-gray-300"}`}
+                  value={pmRepNombres}
+                  onChange={(e) => setPmRepNombres(e.target.value)}
+                  onBlur={() => validateField("representante.nombres.pm")}
+                />
+                {errors["representante.nombres.pm"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["representante.nombres.pm"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Apellido paterno *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.apellido_paterno.pm"] ? "border-red-500" : "border-gray-300"}`}
+                  value={pmRepApPat}
+                  onChange={(e) => setPmRepApPat(e.target.value)}
+                  onBlur={() =>
+                    validateField("representante.apellido_paterno.pm")
+                  }
+                />
+                {errors["representante.apellido_paterno.pm"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["representante.apellido_paterno.pm"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Apellido materno *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.apellido_materno.pm"] ? "border-red-500" : "border-gray-300"}`}
+                  value={pmRepApMat}
+                  onChange={(e) => setPmRepApMat(e.target.value)}
+                  onBlur={() =>
+                    validateField("representante.apellido_materno.pm")
+                  }
+                />
+                {errors["representante.apellido_materno.pm"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["representante.apellido_materno.pm"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Fecha nacimiento (AAAAMMDD) *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.fecha_nacimiento.pm"] ? "border-red-500" : "border-gray-300"}`}
+                  value={pmRepFechaNac}
+                  onChange={(e) => setPmRepFechaNac(e.target.value)}
+                  onBlur={() =>
+                    validateField("representante.fecha_nacimiento.pm")
+                  }
+                  placeholder="19900101 (o 1990-01-01)"
+                />
+                {errors["representante.fecha_nacimiento.pm"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["representante.fecha_nacimiento.pm"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <SearchableSelect
+                label="Nacionalidad (representante)"
+                required
+                value={pmRepNacionalidad}
+                items={paises}
+                error={errors["representante.nacionalidad.pm"]}
+                onChange={(v) => setPmRepNacionalidad(v)}
+                onBlur={() => validateField("representante.nacionalidad.pm")}
+              />
+
+              <div className="space-y-1 md:col-span-3">
+                <label className="text-sm font-medium">
+                  Régimen jurídico de legal estancia en México (si aplica)
+                </label>
+                <input
+                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                  value={pmRepRegimenEstancia}
+                  onChange={(e) => setPmRepRegimenEstancia(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">CURP *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.curp.pm"] ? "border-red-500" : "border-gray-300"}`}
+                  value={pmRepCurp}
+                  onChange={(e) => setPmRepCurp(e.target.value)}
+                  onBlur={() => validateField("representante.curp.pm")}
+                />
+                {errors["representante.curp.pm"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["representante.curp.pm"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">RFC *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.rfc.pm"] ? "border-red-500" : "border-gray-300"}`}
+                  value={pmRepRfc}
+                  onChange={(e) => setPmRepRfc(e.target.value)}
+                  onBlur={() => validateField("representante.rfc.pm")}
+                />
+                {errors["representante.rfc.pm"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["representante.rfc.pm"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Teléfono de casa *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.telefono_casa.pm"] ? "border-red-500" : "border-gray-300"}`}
+                  value={pmRepTelCasa}
+                  onChange={(e) => setPmRepTelCasa(e.target.value)}
+                  onBlur={() => validateField("representante.telefono_casa.pm")}
+                  placeholder="+52 3312345678"
+                />
+                {errors["representante.telefono_casa.pm"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["representante.telefono_casa.pm"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Celular *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.celular.pm"] ? "border-red-500" : "border-gray-300"}`}
+                  value={pmRepCelular}
+                  onChange={(e) => setPmRepCelular(e.target.value)}
+                  onBlur={() => validateField("representante.celular.pm")}
+                  placeholder="+52 5512345678"
+                />
+                {errors["representante.celular.pm"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["representante.celular.pm"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1 md:col-span-3">
+                <label className="text-sm font-medium">
+                  Nombre completo (compatibilidad API) *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.nombre_completo.pm"] ? "border-red-500" : "border-gray-300"}`}
+                  value={pmRepNombreCompleto}
+                  onChange={(e) => setPmRepNombreCompleto(e.target.value)}
+                  onBlur={() =>
+                    validateField("representante.nombre_completo.pm")
+                  }
+                  placeholder="Se puede dejar vacío si llenas nombres y apellidos"
+                />
+                {errors["representante.nombre_completo.pm"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["representante.nombre_completo.pm"]}
+                  </p>
+                ) : (
+                  <p className="text-xs text-gray-500">
+                    El backend actual valida nombre_completo; lo enviamos
+                    generado si lo dejas vacío.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded border border-gray-200 p-3 space-y-3">
+              <p className="text-sm font-medium">
+                Domicilio del Representante Legal (México)
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Calle *</label>
+                  <input
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.calle.pm"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pmRepDomCalle}
+                    onChange={(e) => setPmRepDomCalle(e.target.value)}
+                    onBlur={() =>
+                      validateField("representante.domicilio.calle.pm")
+                    }
+                  />
+                  {errors["representante.domicilio.calle.pm"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["representante.domicilio.calle.pm"]}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Número *</label>
+                  <input
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.numero.pm"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pmRepDomNumero}
+                    onChange={(e) => setPmRepDomNumero(e.target.value)}
+                    onBlur={() =>
+                      validateField("representante.domicilio.numero.pm")
+                    }
+                  />
+                  {errors["representante.domicilio.numero.pm"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["representante.domicilio.numero.pm"]}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Interior</label>
+                  <input
+                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                    value={pmRepDomInterior}
+                    onChange={(e) => setPmRepDomInterior(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Colonia *</label>
+                  <input
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.colonia.pm"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pmRepDomColonia}
+                    onChange={(e) => setPmRepDomColonia(e.target.value)}
+                    onBlur={() =>
+                      validateField("representante.domicilio.colonia.pm")
+                    }
+                  />
+                  {errors["representante.domicilio.colonia.pm"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["representante.domicilio.colonia.pm"]}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Municipio *</label>
+                  <input
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.municipio.pm"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pmRepDomMunicipio}
+                    onChange={(e) => setPmRepDomMunicipio(e.target.value)}
+                    onBlur={() =>
+                      validateField("representante.domicilio.municipio.pm")
+                    }
+                  />
+                  {errors["representante.domicilio.municipio.pm"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["representante.domicilio.municipio.pm"]}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">
+                    Ciudad/Delegación *
+                  </label>
+                  <input
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.ciudad_delegacion.pm"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pmRepDomCiudadDelegacion}
+                    onChange={(e) =>
+                      setPmRepDomCiudadDelegacion(e.target.value)
+                    }
+                    onBlur={() =>
+                      validateField(
+                        "representante.domicilio.ciudad_delegacion.pm",
+                      )
+                    }
+                  />
+                  {errors["representante.domicilio.ciudad_delegacion.pm"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["representante.domicilio.ciudad_delegacion.pm"]}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Código postal *</label>
+                  <input
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.codigo_postal.pm"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pmRepDomCP}
+                    onChange={(e) => setPmRepDomCP(e.target.value)}
+                    onBlur={() =>
+                      validateField("representante.domicilio.codigo_postal.pm")
+                    }
+                    placeholder="44100"
+                  />
+                  {errors["representante.domicilio.codigo_postal.pm"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["representante.domicilio.codigo_postal.pm"]}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Estado *</label>
+                  <input
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.estado.pm"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pmRepDomEstado}
+                    onChange={(e) => setPmRepDomEstado(e.target.value)}
+                    onBlur={() =>
+                      validateField("representante.domicilio.estado.pm")
+                    }
+                  />
+                  {errors["representante.domicilio.estado.pm"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["representante.domicilio.estado.pm"]}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">País *</label>
+                  <input
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.pais.pm"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pmRepDomPais}
+                    onChange={(e) => setPmRepDomPais(e.target.value)}
+                    onBlur={() =>
+                      validateField("representante.domicilio.pais.pm")
+                    }
+                    placeholder="México"
+                  />
+                  {errors["representante.domicilio.pais.pm"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["representante.domicilio.pais.pm"]}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded border border-gray-200 p-3 space-y-3">
+              <p className="text-sm font-medium">
+                Identificar al Beneficiario Controlador (CFF 32-B Ter)
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Nombres *</label>
+                  <input
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["beneficiario_controlador.nombres"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pmBcNombres}
+                    onChange={(e) => setPmBcNombres(e.target.value)}
+                    onBlur={() =>
+                      validateField("beneficiario_controlador.nombres")
+                    }
+                  />
+                  {errors["beneficiario_controlador.nombres"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["beneficiario_controlador.nombres"]}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">
+                    Apellido paterno *
+                  </label>
+                  <input
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["beneficiario_controlador.apellido_paterno"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pmBcApPat}
+                    onChange={(e) => setPmBcApPat(e.target.value)}
+                    onBlur={() =>
+                      validateField("beneficiario_controlador.apellido_paterno")
+                    }
+                  />
+                  {errors["beneficiario_controlador.apellido_paterno"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["beneficiario_controlador.apellido_paterno"]}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">
+                    Apellido materno *
+                  </label>
+                  <input
+                    className={`w-full rounded border px-3 py-2 text-sm ${errors["beneficiario_controlador.apellido_materno"] ? "border-red-500" : "border-gray-300"}`}
+                    value={pmBcApMat}
+                    onChange={(e) => setPmBcApMat(e.target.value)}
+                    onBlur={() =>
+                      validateField("beneficiario_controlador.apellido_materno")
+                    }
+                  />
+                  {errors["beneficiario_controlador.apellido_materno"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["beneficiario_controlador.apellido_materno"]}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded border border-gray-200 p-3 space-y-3">
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={pmRepEsAccionista}
+                  onChange={(e) => setPmRepEsAccionista(e.target.checked)}
+                />
+                <span>El Representante Legal es Accionista</span>
+              </label>
+
+              {!pmRepEsAccionista ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">Nombres *</label>
+                    <input
+                      className={`w-full rounded border px-3 py-2 text-sm ${errors["accionista.nombres"] ? "border-red-500" : "border-gray-300"}`}
+                      value={pmAccNombres}
+                      onChange={(e) => setPmAccNombres(e.target.value)}
+                      onBlur={() => validateField("accionista.nombres")}
+                    />
+                    {errors["accionista.nombres"] ? (
+                      <p className="text-xs text-red-600">
+                        {errors["accionista.nombres"]}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">
+                      Apellido paterno *
+                    </label>
+                    <input
+                      className={`w-full rounded border px-3 py-2 text-sm ${errors["accionista.apellido_paterno"] ? "border-red-500" : "border-gray-300"}`}
+                      value={pmAccApPat}
+                      onChange={(e) => setPmAccApPat(e.target.value)}
+                      onBlur={() =>
+                        validateField("accionista.apellido_paterno")
+                      }
+                    />
+                    {errors["accionista.apellido_paterno"] ? (
+                      <p className="text-xs text-red-600">
+                        {errors["accionista.apellido_paterno"]}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">
+                      Apellido materno *
+                    </label>
+                    <input
+                      className={`w-full rounded border px-3 py-2 text-sm ${errors["accionista.apellido_materno"] ? "border-red-500" : "border-gray-300"}`}
+                      value={pmAccApMat}
+                      onChange={(e) => setPmAccApMat(e.target.value)}
+                      onBlur={() =>
+                        validateField("accionista.apellido_materno")
+                      }
+                    />
+                    {errors["accionista.apellido_materno"] ? (
+                      <p className="text-xs text-red-600">
+                        {errors["accionista.apellido_materno"]}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">
+                      Fecha de nacimiento (AAAAMMDD) *
+                    </label>
+                    <input
+                      className={`w-full rounded border px-3 py-2 text-sm ${errors["accionista.fecha_nacimiento"] ? "border-red-500" : "border-gray-300"}`}
+                      value={pmAccFechaNac}
+                      onChange={(e) => setPmAccFechaNac(e.target.value)}
+                      onBlur={() =>
+                        validateField("accionista.fecha_nacimiento")
+                      }
+                      placeholder="19900101"
+                    />
+                    {errors["accionista.fecha_nacimiento"] ? (
+                      <p className="text-xs text-red-600">
+                        {errors["accionista.fecha_nacimiento"]}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">
+                      % Accionario *
+                    </label>
+                    <input
+                      className={`w-full rounded border px-3 py-2 text-sm ${errors["accionista.porcentaje"] ? "border-red-500" : "border-gray-300"}`}
+                      value={pmAccPct}
+                      onChange={(e) => setPmAccPct(e.target.value)}
+                      onBlur={() => validateField("accionista.porcentaje")}
+                      placeholder="25"
+                    />
+                    {errors["accionista.porcentaje"] ? (
+                      <p className="text-xs text-red-600">
+                        {errors["accionista.porcentaje"]}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <SearchableSelect
+                    label="Nacionalidad (accionista)"
+                    required
+                    value={pmAccNacionalidad}
+                    items={paises}
+                    error={errors["accionista.nacionalidad"]}
+                    onChange={(v) => setPmAccNacionalidad(v)}
+                    onBlur={() => validateField("accionista.nacionalidad")}
+                  />
+
+                  <SearchableSelect
+                    label="Actividad / giro del negocio del tercero"
+                    required
+                    value={pmAccActividadGiro}
+                    items={giros}
+                    error={errors["accionista.actividad_giro"]}
+                    onChange={(v) => setPmAccActividadGiro(v)}
+                    onBlur={() => validateField("accionista.actividad_giro")}
+                  />
+
+                  <div className="space-y-1 md:col-span-3">
+                    <label className="text-sm font-medium">
+                      Relación con el tercero *
+                    </label>
+                    <input
+                      className={`w-full rounded border px-3 py-2 text-sm ${errors["accionista.relacion"] ? "border-red-500" : "border-gray-300"}`}
+                      value={pmAccRelacion}
+                      onChange={(e) => setPmAccRelacion(e.target.value)}
+                      onBlur={() => validateField("accionista.relacion")}
+                    />
+                    {errors["accionista.relacion"] ? (
+                      <p className="text-xs text-red-600">
+                        {errors["accionista.relacion"]}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+            <hr className="my-2" />
+
+            <h3 className="font-medium">
+              Identificación del Representante Legal
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Tipo de documento *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["representante.identificacion.tipo.pm"]
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  value={pmRepIdTipo}
+                  onChange={(e) => setPmRepIdTipo(e.target.value)}
+                  onBlur={() =>
+                    validateField("representante.identificacion.tipo.pm")
+                  }
+                  placeholder="INE / Pasaporte / ..."
+                />
+                {errors["representante.identificacion.tipo.pm"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["representante.identificacion.tipo.pm"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Autoridad que lo emitió *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["representante.identificacion.autoridad.pm"]
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  value={pmRepIdAutoridad}
+                  onChange={(e) => setPmRepIdAutoridad(e.target.value)}
+                  onBlur={() =>
+                    validateField("representante.identificacion.autoridad.pm")
+                  }
+                />
+                {errors["representante.identificacion.autoridad.pm"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["representante.identificacion.autoridad.pm"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Número de identificación *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["representante.identificacion.numero.pm"]
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  value={pmRepIdNumero}
+                  onChange={(e) => setPmRepIdNumero(e.target.value)}
+                  onBlur={() =>
+                    validateField("representante.identificacion.numero.pm")
+                  }
+                />
+                {errors["representante.identificacion.numero.pm"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["representante.identificacion.numero.pm"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Fecha de expedición (AAAAMMDD) *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["representante.identificacion.expedicion.pm"]
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  value={pmRepIdExpedicion}
+                  onChange={(e) => setPmRepIdExpedicion(e.target.value)}
+                  onBlur={() =>
+                    validateField("representante.identificacion.expedicion.pm")
+                  }
+                  placeholder="20240131 (o 2024-01-31)"
+                />
+                {errors["representante.identificacion.expedicion.pm"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["representante.identificacion.expedicion.pm"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Fecha de expiración (AAAAMMDD) *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["representante.identificacion.expiracion.pm"]
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  value={pmRepIdExpiracion}
+                  onChange={(e) => setPmRepIdExpiracion(e.target.value)}
+                  onBlur={() =>
+                    validateField("representante.identificacion.expiracion.pm")
+                  }
+                  placeholder="20290131 (o 2029-01-31)"
+                />
+                {errors["representante.identificacion.expiracion.pm"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["representante.identificacion.expiracion.pm"]}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Fideicomiso (sin cambios) */}
+        {tipo === "fideicomiso" && (
+          <div className="rounded border border-gray-200 p-4 space-y-4">
+            <h2 className="font-medium">Fideicomiso</h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-sm font-medium">
+                  Denominación o Razón Social del Fiduciario *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["fideicomiso.denominacion_fiduciario"]
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  value={fidDenominacion}
+                  onChange={(e) => setFidDenominacion(e.target.value)}
+                  onBlur={() =>
+                    validateField("fideicomiso.denominacion_fiduciario")
+                  }
+                />
+                {errors["fideicomiso.denominacion_fiduciario"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["fideicomiso.denominacion_fiduciario"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  RFC del Fiduciario *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["fideicomiso.rfc_fiduciario"]
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  value={fidRfcFiduciario}
+                  onChange={(e) => setFidRfcFiduciario(e.target.value)}
+                  onBlur={() => validateField("fideicomiso.rfc_fiduciario")}
+                  placeholder="XAXX010101000"
+                />
+                {errors["fideicomiso.rfc_fiduciario"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["fideicomiso.rfc_fiduciario"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Identificador del fideicomiso *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["fideicomiso.identificador"]
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  value={fidIdentificador}
+                  onChange={(e) => setFidIdentificador(e.target.value)}
+                  onBlur={() => validateField("fideicomiso.identificador")}
+                />
+                {errors["fideicomiso.identificador"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["fideicomiso.identificador"]}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
+            <hr className="my-2" />
+
+            <h3 className="font-medium">Representante / Apoderado legal</h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Nombre(s) *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["representante.nombres"]
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  value={repNombres}
+                  onChange={(e) => setRepNombres(e.target.value)}
+                  onBlur={() => validateField("representante.nombres")}
+                />
+                {errors["representante.nombres"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["representante.nombres"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Apellido paterno *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["representante.apellido_paterno"]
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  value={repApPat}
+                  onChange={(e) => setRepApPat(e.target.value)}
+                  onBlur={() => validateField("representante.apellido_paterno")}
+                />
+                {errors["representante.apellido_paterno"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["representante.apellido_paterno"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Apellido materno *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["representante.apellido_materno"]
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  value={repApMat}
+                  onChange={(e) => setRepApMat(e.target.value)}
+                  onBlur={() => validateField("representante.apellido_materno")}
+                />
+                {errors["representante.apellido_materno"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["representante.apellido_materno"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Fecha de nacimiento (AAAAMMDD) *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["representante.fecha_nacimiento"]
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  value={repFechaNac}
+                  onChange={(e) => setRepFechaNac(e.target.value)}
+                  onBlur={() => validateField("representante.fecha_nacimiento")}
+                  placeholder="19900101 (o 1990-01-01)"
+                />
+                {errors["representante.fecha_nacimiento"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["representante.fecha_nacimiento"]}
+                  </p>
+                ) : (
+                  <p className="text-xs text-gray-500">
+                    Acepta AAAAMMDD o YYYY-MM-DD (se convierte a AAAAMMDD).
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">RFC *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.rfc"] ? "border-red-500" : "border-gray-300"}`}
+                  value={repRfc}
+                  onChange={(e) => setRepRfc(e.target.value)}
+                  onBlur={() => validateField("representante.rfc")}
+                  placeholder="XAXX010101000"
+                />
+                {errors["representante.rfc"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["representante.rfc"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">CURP *</label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.curp"] ? "border-red-500" : "border-gray-300"}`}
+                  value={repCurp}
+                  onChange={(e) => setRepCurp(e.target.value)}
+                  onBlur={() => validateField("representante.curp")}
+                  placeholder="PEPJ900101HDFRRN09"
+                />
+                {errors["representante.curp"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["representante.curp"]}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center gap-3">
+          <button
+            type="submit"
+            disabled={loading}
+            className="rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
+          >
+            {loading ? "Guardando..." : "Registrar"}
+          </button>
+
+          <button
+            type="button"
+            className="rounded border border-gray-300 px-4 py-2 text-sm"
+            onClick={() => router.push("/cliente/clientes")}
+          >
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}

@@ -1,0 +1,22 @@
+== Inicio: Tue Jan 20 18:16:57 CST 2026 ==
+PWD: /home/israel/scmvp
+Node: v18.20.8
+NPM:  10.8.2
+
+cp: cannot stat 'src/app/cliente/registrar-cliente/page.tsx': No such file or directory
+Can't open src/app/cliente/registrar-cliente/page.tsx: No such file or directory.
+Can't open src/app/cliente/registrar-cliente/page.tsx: No such file or directory.
+=== Verificación rápida ===
+grep: src/app/cliente/registrar-cliente/page.tsx: No such file or directory
+grep: src/app/cliente/registrar-cliente/page.tsx: No such file or directory
+
+[error] No files matching the pattern were found: "src/app/cliente/registrar-cliente/page.tsx".
+
+=== BUILD ===
+npm error Missing script: "build"
+npm error
+npm error To see a list of scripts, run:
+npm error   npm run
+npm error A complete log of this run can be found in: /home/israel/.npm/_logs/2026-01-21T00_16_58_956Z-debug-0.log
+
+== OK build ==
