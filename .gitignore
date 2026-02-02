@@ -17,3 +17,16 @@ node_modules/
 *:Zone.Identifier
 backend/dist/
 docs/ops/mission/_local/
+# --- local artifacts (do not commit) ---
+build_*.log
+oversize.json
+
+# backups / snapshots
+**/*.bak.*
+**/*.stub.bak.*
+
+# Next.js outputs / exports
+frontend/.next/
+frontend/out/
+frontend/Export/
+frontend/next/
