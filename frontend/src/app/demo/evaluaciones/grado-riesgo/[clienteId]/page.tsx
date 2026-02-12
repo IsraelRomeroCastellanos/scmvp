@@ -12,7 +12,7 @@ export default function GradoRiesgoDemoPage({
   if (!isDemoEvaluacionesEnabled()) notFound();
 
   return (
-    <DemoPageShell title="Grado de Riesgo de Cliente (Demo)" subtitle={`Cliente ID: ${params.clienteId}`}>
+    <DemoPageShell title="Grado de Riesgo de Cliente" subtitle={`Cliente ID: ${params.clienteId}`}>
       <EvaluationForm config={gradoRiesgoConfig} clienteId={params.clienteId} />
     </DemoPageShell>
   );

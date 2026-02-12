@@ -12,7 +12,7 @@ export default function PerfilTransaccionalDemoPage({
   if (!isDemoEvaluacionesEnabled()) notFound();
 
   return (
-    <DemoPageShell title="Perfil Transaccional (Demo)" subtitle={`Cliente ID: ${params.clienteId}`}>
+    <DemoPageShell title="Perfil Transaccional" subtitle={`Cliente ID: ${params.clienteId}`}>
       <EvaluationForm config={perfilTransaccionalConfig} clienteId={params.clienteId} />
     </DemoPageShell>
   );
