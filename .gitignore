@@ -30,3 +30,6 @@ frontend/.next/
 frontend/out/
 frontend/Export/
 frontend/next/
+Temporal02-02-2026-SQL/
+backup_patched*.sql
+demo_evaluaciones_mock.sh
