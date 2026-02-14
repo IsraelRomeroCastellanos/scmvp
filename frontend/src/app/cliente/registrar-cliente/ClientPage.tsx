@@ -9,7 +9,7 @@ import { loadCatalogo, type CatalogItem } from "@/lib/catalogos";
 
 import { createRegistrarClienteValidator } from "./validate";
 
-export default function ClientPage(): JSX.Element {
+export default function ClientPage() {
   type TipoCliente = "persona_fisica" | "persona_moral" | "fideicomiso";
 
   type Errors = Record<string, string>;
@@ -289,6 +289,9 @@ export default function ClientPage(): JSX.Element {
   const [pfCargoPublicoActual, setPfCargoPublicoActual] = useState(""); // 'si' | 'no'
   const [pfCargoPublicoPrevio, setPfCargoPublicoPrevio] = useState(""); // 'si' | 'no'
   const [pfCargoPublicoFamiliar, setPfCargoPublicoFamiliar] = useState(""); // 'si' | 'no'
+  const [pfPaisNacimiento, setPfPaisNacimiento] = useState("");
+  const [pfResidencia, setPfResidencia] = useState(""); // Temporal | Permanente (key/string)
+  const [pfNacionalExtranjero, setPfNacionalExtranjero] = useState(""); // Nacional | Extranjero (key/string)
 
   // PF terceros / dueño beneficiario
   const [pfManifiestaTerceros, setPfManifiestaTerceros] = useState(false);
@@ -311,6 +314,9 @@ export default function ClientPage(): JSX.Element {
   const [pmRepRegimenEstancia, setPmRepRegimenEstancia] = useState(""); // opcional
   const [pmRepCurp, setPmRepCurp] = useState("");
   const [pmRepRfc, setPmRepRfc] = useState("");
+  const [pmSubtipoPm, setPmSubtipoPm] = useState(""); // key
+  const [pmRsiSubtipo, setPmRsiSubtipo] = useState(""); // key
+  const [pmBeneficiarioControlador, setPmBeneficiarioControlador] = useState(""); // "si" | "no"
   const [pmRepTelCasa, setPmRepTelCasa] = useState("");
   const [pmRepCelular, setPmRepCelular] = useState("");
 
@@ -477,7 +483,7 @@ export default function ClientPage(): JSX.Element {
         normalizeToYYYYMMDD(pfIdExpedicion) ?? pfIdExpedicion.trim();
       const idExpi =
         normalizeToYYYYMMDD(pfIdExpiracion) ?? pfIdExpiracion.trim();
-      return {
+      const payload = {
         empresa_id: parseInt(empresaId, 10),
         tipo_cliente: tipoCliente,
         nombre_entidad: nombreEntidad.trim(),
@@ -487,6 +493,10 @@ export default function ClientPage(): JSX.Element {
         datos_completos: {
           contacto,
 
+          BeneficiarioControlador: pmBeneficiarioControlador === "si",
+          // Placeholder mínimo; se reemplaza por captura recurrente PF completa
+          beneficiarios_controladores: pmBeneficiarioControlador === "si" ? [{}] : [],
+
           persona: {
             tipo: "persona_fisica",
             rfc: pfRfc.trim().toUpperCase(),
@@ -495,6 +505,11 @@ export default function ClientPage(): JSX.Element {
             nombres: pfNombres.trim(),
             apellido_paterno: pfApPat.trim(),
             apellido_materno: pfApMat.trim(),
+            pais_nacimiento: pfPaisNacimiento.trim(),
+            residencia: pfResidencia.trim(),
+            nacional_extranjero: pfNacionalExtranjero.trim(),
+            CargoPublico: pfCargoPublicoActual.trim(),
+            BeneficiarioTerceros: pfManifiestaTerceros,
             actividad_economica: act
               ? { clave: act.clave, descripcion: act.descripcion }
               : pfActividad,
@@ -520,7 +535,7 @@ export default function ClientPage(): JSX.Element {
             previo: pfCargoPublicoPrevio.trim(),
             familiar: pfCargoPublicoFamiliar.trim(),
           },
-          terceros: {
+          terceros_info: {
             manifiesta: pfManifiestaTerceros,
             actividad_giro: pfManifiestaTerceros
               ? pfTerceroActividadGiro.trim()
@@ -530,6 +545,8 @@ export default function ClientPage(): JSX.Element {
               ? pfNoDocumentacionTercero
               : null,
           },
+          // Array requerido por contrato cuando BeneficiarioTerceros=true (placeholder mínimo; se reemplaza con captura recurrente)
+          terceros: pfManifiestaTerceros ? [{}] : [],
         },
         beneficiario_controlador: {
           nombres: pmBcNombres.trim(),
@@ -551,8 +568,10 @@ export default function ClientPage(): JSX.Element {
               relacion: pmAccRelacion.trim(),
             },
       };
+      return payload;
     }
 
+    
     if (tipoCliente === "persona_moral") {
       const giro = giros.find((x) => x.clave === pmGiro);
       const repExp =
@@ -572,6 +591,10 @@ export default function ClientPage(): JSX.Element {
         datos_completos: {
           contacto,
 
+          BeneficiarioControlador: pmBeneficiarioControlador === "si",
+          // Placeholder mínimo; se reemplaza por captura recurrente PF completa
+          beneficiarios_controladores: pmBeneficiarioControlador === "si" ? [{}] : [],
+
           empresa: {
             tipo: "persona_moral",
             rfc: pmRfc.trim().toUpperCase(),
@@ -580,47 +603,24 @@ export default function ClientPage(): JSX.Element {
             giro_mercantil: giro
               ? { clave: giro.clave, descripcion: giro.descripcion }
               : pmGiro,
-          },
-          representante: {
-            nombre_completo: (
-              pmRepNombreCompleto.trim() ||
-              [pmRepNombres, pmRepApPat, pmRepApMat]
-                .map((x) => x.trim())
-                .filter(Boolean)
-                .join(" ")
-            ).trim(),
-            nombres: pmRepNombres.trim(),
-            apellido_paterno: pmRepApPat.trim(),
-            apellido_materno: pmRepApMat.trim(),
-            fecha_nacimiento:
-              normalizeToYYYYMMDD(pmRepFechaNac) ?? pmRepFechaNac.trim(),
-            nacionalidad: valueToCatalogKey(pmRepNacionalidad),
-            regimen_estancia_mexico: pmRepRegimenEstancia.trim() || null,
-            curp: pmRepCurp.trim().toUpperCase(),
-            rfc: pmRepRfc.trim().toUpperCase(),
-            telefono_casa: pmRepTelCasa.trim(),
-            celular: pmRepCelular.trim(),
-            domicilio_mexico: {
-              calle: pmRepDomCalle.trim(),
-              numero: pmRepDomNumero.trim(),
-              interior: pmRepDomInterior.trim() || null,
-              colonia: pmRepDomColonia.trim(),
-              municipio: pmRepDomMunicipio.trim(),
-              ciudad_delegacion: pmRepDomCiudadDelegacion.trim(),
-              codigo_postal: pmRepDomCP.trim(),
-              estado: pmRepDomEstado.trim(),
-              pais: pmRepDomPais.trim(),
-            },
-            identificacion: {
-              tipo: pmRepIdTipo.trim(),
-              autoridad: pmRepIdAutoridad.trim(),
-              numero: pmRepIdNumero.trim(),
-              fecha_expedicion: repExp,
-              fecha_expiracion: repExpi,
+            subtipo_pm: pmSubtipoPm.trim(),
+            rsi_aplica: pmSubtipoPm.trim() === "pm_rsi",
+            rsi_subtipo: pmSubtipoPm.trim() === "pm_rsi" ? pmRsiSubtipo.trim() : null,
+
+            representante: {
+              nombres: pmRepNombres.trim(),
+              apellido_paterno: pmRepApPat.trim(),
+              apellido_materno: pmRepApMat.trim(),
+              fecha_nacimiento:
+                normalizeToYYYYMMDD(pmRepFechaNac) ?? pmRepFechaNac.trim(),
+              nacionalidad: valueToCatalogKey(pmRepNacionalidad),
+              curp: pmRepCurp.trim().toUpperCase(),
+              rfc: pmRepRfc.trim().toUpperCase(),
             },
           },
         },
       };
+
     }
 
     // fideicomiso (sin cambios)
@@ -713,7 +713,8 @@ export default function ClientPage(): JSX.Element {
     } finally {
       setLoading(false);
     }
-  }
+
+}
 
   const showAviso = tipo === "persona_fisica" || tipo === "persona_moral";
 
@@ -1207,6 +1208,72 @@ export default function ClientPage(): JSX.Element {
                   validator.validateField("persona.actividad_economica")
                 }
               />
+              
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  País de nacimiento <span className="text-red-600">*</span>
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["persona.pais_nacimiento"] ? "border-red-500" : "border-gray-300"
+                  }`}
+                  value={pfPaisNacimiento}
+                  onChange={(e) => setPfPaisNacimiento(e.target.value)}
+                  onBlur={() => validator.validateField("persona.pais_nacimiento")}
+                  placeholder="mexico-mx"
+                />
+                {errors["persona.pais_nacimiento"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["persona.pais_nacimiento"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Residencia <span className="text-red-600">*</span>
+                </label>
+                <select
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["persona.residencia"] ? "border-red-500" : "border-gray-300"
+                  }`}
+                  value={pfResidencia}
+                  onChange={(e) => setPfResidencia(e.target.value)}
+                  onBlur={() => validator.validateField("persona.residencia")}
+                >
+                  <option value="">Selecciona</option>
+                  <option value="temporal">Temporal</option>
+                  <option value="permanente">Permanente</option>
+                </select>
+                {errors["persona.residencia"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["persona.residencia"]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Nacional / Extranjero <span className="text-red-600">*</span>
+                </label>
+                <select
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["persona.nacional_extranjero"] ? "border-red-500" : "border-gray-300"
+                  }`}
+                  value={pfNacionalExtranjero}
+                  onChange={(e) => setPfNacionalExtranjero(e.target.value)}
+                  onBlur={() => validator.validateField("persona.nacional_extranjero")}
+                >
+                  <option value="">Selecciona</option>
+                  <option value="nacional">Nacional</option>
+                  <option value="extranjero">Extranjero</option>
+                </select>
+                {errors["persona.nacional_extranjero"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["persona.nacional_extranjero"]}
+                  </p>
+                ) : null}
+              </div>
             </div>
 
             <hr className="my-2" />
@@ -1779,6 +1846,86 @@ export default function ClientPage(): JSX.Element {
         {tipo === "persona_moral" && (
           <div className="rounded border border-gray-200 p-4 space-y-4">
             <h2 className="font-medium">Persona Moral</h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Subtipo PM <span className="text-red-600">*</span>
+                </label>
+                <select
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["empresa.subtipo_pm"] ? "border-red-500" : "border-gray-300"
+                  }`}
+                  value={pmSubtipoPm}
+                  onChange={(e) => setPmSubtipoPm(e.target.value)}
+                  onBlur={() => validator.validateField("empresa.subtipo_pm")}
+                >
+                  <option value="">Selecciona</option>
+                  <option value="pm_derecho_publico_mexicano">Persona Moral Del Derecho Público Mexicano</option>
+                  <option value="pm_extranjera">Persona Moral Extranjera</option>
+                  <option value="pm_mexicana">Persona Moral Mexicana</option>
+                  <option value="pm_embajada_consulado_orgint">Embajada / Consulado / Organismo Internacional</option>
+                  <option value="pm_rsi">Morales del Régimen Simplificado de Identificación</option>
+                  <option value="pm_otro">Otro</option>
+                </select>
+                {errors["empresa.subtipo_pm"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["empresa.subtipo_pm"]}
+                  </p>
+                ) : null}
+              </div>
+
+              {pmSubtipoPm === "pm_rsi" ? (
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">
+                    RSI Subtipo <span className="text-red-600">*</span>
+                  </label>
+                  <select
+                    className={`w-full rounded border px-3 py-2 text-sm ${
+                      errors["empresa.rsi_subtipo"] ? "border-red-500" : "border-gray-300"
+                    }`}
+                    value={pmRsiSubtipo}
+                    onChange={(e) => setPmRsiSubtipo(e.target.value)}
+                    onBlur={() => validator.validateField("empresa.rsi_subtipo")}
+                  >
+                    <option value="">Selecciona</option>
+                    <option value="rsi_sistema_financiero_mexicano">Empresas del Sistema Financiero Mexicano</option>
+                    <option value="rsi_sistema_financiero_extranjero">Empresas del Sistema Financiero Extranjero</option>
+                    <option value="rsi_cotiza_bolsa">Empresas que cotizan en Bolsa</option>
+                    <option value="rsi_publicas">Empresas públicas</option>
+                    <option value="rsi_dependencias_publicas">Dependencias públicas (Fed/Est/Mun)</option>
+                  </select>
+                  {errors["empresa.rsi_subtipo"] ? (
+                    <p className="text-xs text-red-600">
+                      {errors["empresa.rsi_subtipo"]}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Beneficiario Controlador <span className="text-red-600">*</span>
+                </label>
+                <select
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["BeneficiarioControlador"] ? "border-red-500" : "border-gray-300"
+                  }`}
+                  value={pmBeneficiarioControlador}
+                  onChange={(e) => setPmBeneficiarioControlador(e.target.value)}
+                  onBlur={() => validator.validateField("BeneficiarioControlador")}
+                >
+                  <option value="">Selecciona</option>
+                  <option value="si">Sí</option>
+                  <option value="no">No</option>
+                </select>
+                {errors["BeneficiarioControlador"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["BeneficiarioControlador"]}
+                  </p>
+                ) : null}
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1">
