@@ -492,12 +492,8 @@ export default function ClientPage() {
 
         datos_completos: {
           contacto,
-
-          BeneficiarioControlador: pmBeneficiarioControlador === "si",
-          // Placeholder mínimo; se reemplaza por captura recurrente PF completa
-          beneficiarios_controladores: pmBeneficiarioControlador === "si" ? [{}] : [],
-
-          persona: {
+// Placeholder mínimo; se reemplaza por captura recurrente PF completa
+persona: {
             tipo: "persona_fisica",
             rfc: pfRfc.trim().toUpperCase(),
             curp: pfCurp.trim().toUpperCase(),
@@ -548,25 +544,7 @@ export default function ClientPage() {
           // Array requerido por contrato cuando BeneficiarioTerceros=true (placeholder mínimo; se reemplaza con captura recurrente)
           terceros: pfManifiestaTerceros ? [{}] : [],
         },
-        beneficiario_controlador: {
-          nombres: pmBcNombres.trim(),
-          apellido_paterno: pmBcApPat.trim(),
-          apellido_materno: pmBcApMat.trim(),
-        },
-        representante_es_accionista: pmRepEsAccionista,
-        accionista_tercero: pmRepEsAccionista
-          ? null
-          : {
-              nombres: pmAccNombres.trim(),
-              apellido_paterno: pmAccApPat.trim(),
-              apellido_materno: pmAccApMat.trim(),
-              fecha_nacimiento:
-                normalizeToYYYYMMDD(pmAccFechaNac) ?? pmAccFechaNac.trim(),
-              porcentaje_accionario: pmAccPct.trim(),
-              nacionalidad: valueToCatalogKey(pmAccNacionalidad),
-              actividad_giro: pmAccActividadGiro.trim(),
-              relacion: pmAccRelacion.trim(),
-            },
+
       };
       return payload;
     }
