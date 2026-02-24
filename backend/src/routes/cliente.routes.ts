@@ -170,7 +170,7 @@ function validateDatosCompletosOr400(res: Response, tipo: any, datos_completos: 
 
     const rep = datos_completos?.representante ?? {};
     if (!isNonEmptyString(rep?.nombre_completo) && !isNonEmptyString(rep?.nombres)) {
-      return (badRequest(res, 'representante.nombre_completo es obligatorio'), false);
+      if (tipo === 'fideicomiso') return (badRequest(res, 'representante.nombre_completo es obligatorio'), false);
     }
   }
 
@@ -188,7 +188,7 @@ function validateDatosCompletosOr400(res: Response, tipo: any, datos_completos: 
     if (!isRFC(fide?.rfc_fiduciario)) return (badRequest(res, 'fideicomiso.rfc_fiduciario inválido'), false);
 
     const rep = datos_completos?.representante ?? {};
-    if (!isNonEmptyString(rep?.nombre_completo)) return (badRequest(res, 'representante.nombre_completo es obligatorio'), false);
+    if (tipo === 'fideicomiso' && !isNonEmptyString(rep?.nombre_completo)) return (badRequest(res, 'representante.nombre_completo es obligatorio'), false);
     if (!isNonEmptyString(rep?.rfc)) return (badRequest(res, 'representante.rfc es obligatorio'), false);
     if (!isRFC(rep?.rfc)) return (badRequest(res, 'representante.rfc inválido'), false);
     if (!isNonEmptyString(rep?.curp)) return (badRequest(res, 'representante.curp es obligatorio'), false);
