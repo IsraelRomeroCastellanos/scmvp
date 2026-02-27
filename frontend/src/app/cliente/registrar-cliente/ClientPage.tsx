@@ -230,7 +230,7 @@ export default function ClientPage() {
   const [empresaId, setEmpresaId] = useState("");
   const [nombreEntidad, setNombreEntidad] = useState("");
   const [nacionalidad, setNacionalidad] = useState(""); // clave catálogo
-  const [contactoPais, setContactoPais] = useState(""); // clave catálogo
+  const [contactoPais, setContactoPais] = useState("MEX"); // clave catálogo
 
   // contacto (iteración 1)
   const [email, setEmail] = useState("");
@@ -247,7 +247,7 @@ export default function ClientPage() {
   const [domCiudadDelegacion, setDomCiudadDelegacion] = useState("");
   const [domCP, setDomCP] = useState("");
   const [domEstado, setDomEstado] = useState("");
-  const [domPais, setDomPais] = useState(""); // manual (no catálogo)
+  const [domPais, setDomPais] = useState("MEX"); // manual (no catálogo)
 
   // PF
   const [pfNombres, setPfNombres] = useState("");
@@ -753,8 +753,7 @@ persona: {
           </div>
 
           <div className="space-y-1">
-            <label className="text-sm font-medium">
-              Nombre entidad <span className="text-red-600">*</span>
+            <label className="text-sm font-medium">Razón social / Nombre <span className="text-red-600">*</span>
             </label>
             <input
               className={`w-full rounded border px-3 py-2 text-sm ${errors["nombre_entidad"] ? "border-red-500" : "border-gray-300"}`}
