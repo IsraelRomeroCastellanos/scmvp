@@ -301,6 +301,11 @@ export default function ClientPage() {
     useState(false);
 
   // PM
+  const [pfTerceroNombreCompleto, setPfTerceroNombreCompleto] = useState("");
+  const [pfTerceroRfc, setPfTerceroRfc] = useState("");
+  const [pfTerceroCurp, setPfTerceroCurp] = useState("");
+  const [pfTerceroFechaNac, setPfTerceroFechaNac] = useState(""); // AAAAMMDD o YYYY-MM-DD
+  const [pfTerceroNacionalidad, setPfTerceroNacionalidad] = useState("MEX");
   const [pmRfc, setPmRfc] = useState("");
   const [pmRegimenCapital, setPmRegimenCapital] = useState("");
   const [pmFechaConst, setPmFechaConst] = useState(""); // YYYY-MM-DD o AAAAMMDD
@@ -542,7 +547,22 @@ persona: {
               : null,
           },
           // Array requerido por contrato cuando BeneficiarioTerceros=true (placeholder mínimo; se reemplaza con captura recurrente)
-          terceros: pfManifiestaTerceros ? [{}] : [],
+          terceros: pfManifiestaTerceros
+            ? [
+                {
+                  nombre_completo: pfTerceroNombreCompleto.trim(),
+                  actividad_giro: pfTerceroActividadGiro.trim(),
+                  relacion: pfTerceroRelacion.trim(),
+                  sin_documentacion: pfNoDocumentacionTercero,
+                  rfc: pfNoDocumentacionTercero ? null : (pfTerceroRfc.trim().toUpperCase() || null),
+                  curp: pfNoDocumentacionTercero ? null : (pfTerceroCurp.trim().toUpperCase() || null),
+                  fecha_nacimiento: pfNoDocumentacionTercero
+                    ? null
+                    : ((normalizeToYYYYMMDD(pfTerceroFechaNac) ?? pfTerceroFechaNac.trim()) || null),
+                  nacionalidad: valueToCatalogKey(pfTerceroNacionalidad) || null,
+                },
+              ]
+            : [],
         },
 
       };
@@ -645,6 +665,36 @@ persona: {
       setFatal("Corrige los campos marcados en rojo.");
       return;
     }
+      // P1-1 PF Terceros: si manifiesta terceros, exigir minimos y no enviar placeholders
+      if (tipo === "persona_fisica" && pfManifiestaTerceros) {
+        let ok = true;
+
+        const n = (pfTerceroNombreCompleto || "").trim();
+        const ag = (pfTerceroActividadGiro || "").trim();
+        const rel = (pfTerceroRelacion || "").trim();
+
+        if (!n) { setErr("persona.terceros.nombre_completo", "Nombre completo del tercero es obligatorio"); ok = false; }
+        if (!ag) { setErr("persona.terceros.actividad_giro", "Actividad o giro del tercero es obligatorio"); ok = false; }
+        if (!rel) { setErr("persona.terceros.relacion", "Relacion con el tercero es obligatoria"); ok = false; }
+
+        if (!pfNoDocumentacionTercero) {
+          const r = (pfTerceroRfc || "").trim().toUpperCase();
+          const c = (pfTerceroCurp || "").trim().toUpperCase();
+          const f = (pfTerceroFechaNac || "").trim();
+
+          if (r && !isRFC(r)) { setErr("persona.terceros.rfc", "RFC del tercero invalido"); ok = false; }
+          if (c && !isCURP(c)) { setErr("persona.terceros.curp", "CURP del tercero invalido"); ok = false; }
+
+          const fNorm = normalizeToYYYYMMDD(f) ?? f;
+          if (f && !isYYYYMMDD(fNorm)) { setErr("persona.terceros.fecha_nacimiento", "Fecha nacimiento del tercero invalida (AAAAMMDD)"); ok = false; }
+        }
+
+        if (!ok) {
+          setFatal("Completa la seccion de Terceros para continuar.");
+          return;
+        }
+      }
+
 
     const token = localStorage.getItem("token");
     if (!token) {
@@ -654,6 +704,9 @@ persona: {
 
     console.log("TIPO_ANTES_DE_ENVIAR", tipo);
     const payload = buildPayload();
+
+      console.log('[P1-1 payload]', payload);
+
 
     try {
       setLoading(true);
@@ -1790,6 +1843,79 @@ persona: {
                             validator.validateField("persona.terceros.relacion")
                           }
                         />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium">
+                              Nombre completo del tercero <span className="text-red-600">*</span>
+                            </label>
+                            <input
+                              className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.terceros.nombre_completo"] ? "border-red-500" : "border-gray-300"}`}
+                              value={pfTerceroNombreCompleto}
+                              onChange={(e) => setPfTerceroNombreCompleto(e.target.value)}
+                              onBlur={() => setErr("persona.terceros.nombre_completo", undefined)}
+                              placeholder="Ej. Juan Pérez López"
+                            />
+                            {errors["persona.terceros.nombre_completo"] ? (
+                              <p className="text-xs text-red-600">{errors["persona.terceros.nombre_completo"]}</p>
+                            ) : null}
+                          </div>
+
+                          <SearchableSelect
+                            label="Nacionalidad del tercero"
+                            required
+                            value={pfTerceroNacionalidad}
+                            items={paises}
+                            error={errors["persona.terceros.nacionalidad"]}
+                            onChange={(v) => setPfTerceroNacionalidad(v)}
+                            onBlur={() => setErr("persona.terceros.nacionalidad", undefined)}
+                          />
+
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium">RFC del tercero</label>
+                            <input
+                              className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.terceros.rfc"] ? "border-red-500" : "border-gray-300"}`}
+                              value={pfTerceroRfc}
+                              onChange={(e) => setPfTerceroRfc(e.target.value)}
+                              onBlur={() => setErr("persona.terceros.rfc", undefined)}
+                              placeholder="XAXX010101000"
+                              disabled={pfNoDocumentacionTercero}
+                            />
+                            {errors["persona.terceros.rfc"] ? (
+                              <p className="text-xs text-red-600">{errors["persona.terceros.rfc"]}</p>
+                            ) : null}
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium">CURP del tercero</label>
+                            <input
+                              className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.terceros.curp"] ? "border-red-500" : "border-gray-300"}`}
+                              value={pfTerceroCurp}
+                              onChange={(e) => setPfTerceroCurp(e.target.value)}
+                              onBlur={() => setErr("persona.terceros.curp", undefined)}
+                              placeholder="PEPJ900101HDFRRN09"
+                              disabled={pfNoDocumentacionTercero}
+                            />
+                            {errors["persona.terceros.curp"] ? (
+                              <p className="text-xs text-red-600">{errors["persona.terceros.curp"]}</p>
+                            ) : null}
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium">Fecha de nacimiento del tercero (AAAAMMDD)</label>
+                            <input
+                              className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.terceros.fecha_nacimiento"] ? "border-red-500" : "border-gray-300"}`}
+                              value={pfTerceroFechaNac}
+                              onChange={(e) => setPfTerceroFechaNac(e.target.value)}
+                              onBlur={() => setErr("persona.terceros.fecha_nacimiento", undefined)}
+                              placeholder="19900101 (o 1990-01-01)"
+                              disabled={pfNoDocumentacionTercero}
+                            />
+                            {errors["persona.terceros.fecha_nacimiento"] ? (
+                              <p className="text-xs text-red-600">{errors["persona.terceros.fecha_nacimiento"]}</p>
+                            ) : null}
+                          </div>
+                        </div>
+
                         {errors["persona.terceros.relacion"] ? (
                           <p className="text-xs text-red-600">
                             {errors["persona.terceros.relacion"]}
