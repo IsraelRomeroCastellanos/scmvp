@@ -590,9 +590,16 @@ persona: {
           contacto,
 
           BeneficiarioControlador: pmBeneficiarioControlador === "si",
-          // Placeholder mínimo; se reemplaza por captura recurrente PF completa
-          beneficiarios_controladores: pmBeneficiarioControlador === "si" ? [{}] : [],
-
+          // P1-2 (PM BC): array real (sin placeholders)
+          beneficiarios_controladores: pmBeneficiarioControlador === "si"
+            ? [
+                {
+                  nombres: pmBcNombres.trim(),
+                  apellido_paterno: pmBcApPat.trim(),
+                  apellido_materno: pmBcApMat.trim(),
+                },
+              ]
+            : [],
           empresa: {
             tipo: "persona_moral",
             rfc: pmRfc.trim().toUpperCase(),
@@ -665,6 +672,23 @@ persona: {
       setFatal("Corrige los campos marcados en rojo.");
       return;
     }
+
+      // P1-2 (PM BC): si Beneficiario Controlador = SÍ, exigir mínimos
+      if (tipo === "persona_moral" && pmBeneficiarioControlador === "si") {
+        let ok = true;
+        const n = (pmBcNombres || "").trim();
+        const ap = (pmBcApPat || "").trim();
+        const am = (pmBcApMat || "").trim();
+
+        if (!n) { setErr("beneficiario_controlador.nombres", "Nombres del beneficiario controlador es obligatorio"); ok = false; }
+        if (!ap) { setErr("beneficiario_controlador.apellido_paterno", "Apellido paterno del beneficiario controlador es obligatorio"); ok = false; }
+        if (!am) { setErr("beneficiario_controlador.apellido_materno", "Apellido materno del beneficiario controlador es obligatorio"); ok = false; }
+
+        if (!ok) {
+          setFatal("Completa la sección de Beneficiario Controlador para continuar.");
+          return;
+        }
+      }
       // P1-1 PF Terceros: si manifiesta terceros, exigir minimos y no enviar placeholders
       if (tipo === "persona_fisica" && pfManifiestaTerceros) {
         let ok = true;
@@ -2015,7 +2039,19 @@ persona: {
                     errors["BeneficiarioControlador"] ? "border-red-500" : "border-gray-300"
                   }`}
                   value={pmBeneficiarioControlador}
-                  onChange={(e) => setPmBeneficiarioControlador(e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setPmBeneficiarioControlador(v);
+                    // P1-2: si BC=NO, limpiar captura
+                    if (v !== "si") {
+                      setPmBcNombres("");
+                      setPmBcApPat("");
+                      setPmBcApMat("");
+                      setErr("beneficiario_controlador.nombres", undefined);
+                      setErr("beneficiario_controlador.apellido_paterno", undefined);
+                      setErr("beneficiario_controlador.apellido_materno", undefined);
+                    }
+                  }}
                   onBlur={() => validator.validateField("BeneficiarioControlador")}
                 >
                   <option value="">Selecciona</option>
