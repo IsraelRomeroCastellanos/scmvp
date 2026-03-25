@@ -600,6 +600,20 @@ persona: {
                 },
               ]
             : [],
+          representante_es_accionista: pmRepEsAccionista,
+          accionista_tercero: pmRepEsAccionista
+            ? null
+            : {
+                nombres: pmAccNombres.trim(),
+                apellido_paterno: pmAccApPat.trim(),
+                apellido_materno: pmAccApMat.trim(),
+                fecha_nacimiento:
+                  normalizeToYYYYMMDD(pmAccFechaNac) ?? pmAccFechaNac.trim(),
+                porcentaje_accionario: pmAccPct.trim(),
+                nacionalidad: valueToCatalogKey(pmAccNacionalidad),
+                actividad_giro: pmAccActividadGiro.trim(),
+                relacion: pmAccRelacion.trim(),
+              },
           empresa: {
             tipo: "persona_moral",
             rfc: pmRfc.trim().toUpperCase(),
