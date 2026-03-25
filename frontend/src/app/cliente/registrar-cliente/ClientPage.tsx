@@ -351,6 +351,15 @@ export default function ClientPage() {
   const [pmAccNacionalidad, setPmAccNacionalidad] = useState(""); // clave catálogo
   const [pmAccActividadGiro, setPmAccActividadGiro] = useState(""); // clave
   const [pmAccRelacion, setPmAccRelacion] = useState("");
+  const [fidIdentificador, setFidIdentificador] = useState("");
+  const [fidDenominacionFiduciario, setFidDenominacionFiduciario] = useState("");
+  const [fidRfcFiduciario, setFidRfcFiduciario] = useState("");
+  const [fidNombre, setFidNombre] = useState("");
+  const [fidRepNombreCompleto, setFidRepNombreCompleto] = useState("");
+  const [fidRepRfc, setFidRepRfc] = useState("");
+  const [fidRepCurp, setFidRepCurp] = useState("");
+  const [fidRepFechaNac, setFidRepFechaNac] = useState("");
+
 
   // PM Identificación representante (iteración 1)
   const [pmRepIdTipo, setPmRepIdTipo] = useState("");
@@ -688,7 +697,45 @@ persona: {
     }
 
       // P1-2 (PM BC): si Beneficiario Controlador = SÍ, exigir mínimos
-      if (tipo === "persona_moral" && pmBeneficiarioControlador === "si") {
+  
+    if (tipo === "fideicomiso") {
+      let ok = true;
+
+      const fid = (fidIdentificador || "").trim();
+      const den = (fidDenominacionFiduciario || "").trim();
+      const rfcF = (fidRfcFiduciario || "").trim().toUpperCase();
+      const nom = (fidNombre || "").trim();
+
+      const repNom = (fidRepNombreCompleto || "").trim();
+      const repRfc = (fidRepRfc || "").trim().toUpperCase();
+      const repCurp = (fidRepCurp || "").trim().toUpperCase();
+      const repFecha = (fidRepFechaNac || "").trim();
+      const repFechaNorm = normalizeToYYYYMMDD(repFecha) ?? repFecha;
+
+      if (!fid) { setErr("fideicomiso.identificador", "Identificador del fideicomiso es obligatorio"); ok = false; }
+      if (!den) { setErr("fideicomiso.denominacion_fiduciario", "Denominacion del fiduciario es obligatoria"); ok = false; }
+      if (!rfcF) { setErr("fideicomiso.rfc_fiduciario", "RFC del fiduciario es obligatorio"); ok = false; }
+      else if (!isRFC(rfcF)) { setErr("fideicomiso.rfc_fiduciario", "RFC del fiduciario invalido"); ok = false; }
+
+      if (!nom) { setErr("fideicomiso.fideicomiso_nombre", "Nombre del fideicomiso es obligatorio"); ok = false; }
+
+      if (!repNom) { setErr("representante.nombre_completo", "Nombre completo del representante es obligatorio"); ok = false; }
+      if (!repRfc) { setErr("representante.rfc", "RFC del representante es obligatorio"); ok = false; }
+      else if (!isRFC(repRfc)) { setErr("representante.rfc", "RFC del representante invalido"); ok = false; }
+
+      if (!repCurp) { setErr("representante.curp", "CURP del representante es obligatorio"); ok = false; }
+      else if (!isCURP(repCurp)) { setErr("representante.curp", "CURP del representante invalido"); ok = false; }
+
+      if (!repFecha) { setErr("representante.fecha_nacimiento", "Fecha de nacimiento del representante es obligatoria"); ok = false; }
+      else if (!isYYYYMMDD(repFechaNorm)) { setErr("representante.fecha_nacimiento", "Fecha de nacimiento del representante invalida (AAAAMMDD)"); ok = false; }
+
+      if (!ok) {
+        setFatal("Completa la seccion de Fideicomiso para continuar.");
+        return;
+      }
+    }
+
+    if (tipo === "persona_moral" && pmBeneficiarioControlador === "si") {
         let ok = true;
         const n = (pmBcNombres || "").trim();
         const ap = (pmBcApPat || "").trim();
