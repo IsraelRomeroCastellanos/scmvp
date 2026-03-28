@@ -651,33 +651,28 @@ persona: {
 
     }
 
-    // fideicomiso (sin cambios)
-    const nombreCompleto = [repNombres, repApPat, repApMat]
-      .map((x) => x.trim())
-      .filter(Boolean)
-      .join(" ");
-
-    const repFechaNorm = normalizeToYYYYMMDD(repFechaNac) ?? repFechaNac.trim();
+    // fideicomiso
     return {
       empresa_id: parseInt(empresaId, 10),
-      tipo_cliente: tipoCliente,
+      tipo_cliente: "fideicomiso",
       nombre_entidad: nombreEntidad.trim(),
       nacionalidad: valueToCatalogKey(nacionalidad),
       contacto,
 
       datos_completos: {
         contacto,
-
         fideicomiso: {
           identificador: fidIdentificador.trim(),
-          denominacion_fiduciario: fidDenominacion.trim(),
+          denominacion_fiduciario: fidDenominacionFiduciario.trim(),
           rfc_fiduciario: fidRfcFiduciario.trim().toUpperCase(),
+          fideicomiso_nombre: fidNombre.trim(),
         },
         representante: {
-          nombre_completo: nombreCompleto,
-          rfc: repRfc.trim().toUpperCase(),
-          curp: repCurp.trim().toUpperCase(),
-          fecha_nacimiento: repFechaNorm,
+          nombre_completo: fidRepNombreCompleto.trim(),
+          rfc: fidRepRfc.trim().toUpperCase(),
+          curp: fidRepCurp.trim().toUpperCase(),
+          fecha_nacimiento:
+            normalizeToYYYYMMDD(fidRepFechaNac) ?? fidRepFechaNac.trim(),
         },
       },
     };
