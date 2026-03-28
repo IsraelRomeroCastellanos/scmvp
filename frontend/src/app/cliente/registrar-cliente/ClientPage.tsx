@@ -2926,7 +2926,7 @@ persona: {
           </div>
         )}
 
-        {/* Fideicomiso (sin cambios) */}
+                {/* Fideicomiso */}
         {tipo === "fideicomiso" && (
           <div className="rounded border border-gray-200 p-4 space-y-4">
             <h2 className="font-medium">Fideicomiso</h2>
@@ -2945,9 +2945,7 @@ persona: {
                   value={fidDenominacion}
                   onChange={(e) => setFidDenominacion(e.target.value)}
                   onBlur={() =>
-                    validator.validateField(
-                      "fideicomiso.denominacion_fiduciario",
-                    )
+                    validator.validateField("fideicomiso.denominacion_fiduciario")
                   }
                 />
                 {errors["fideicomiso.denominacion_fiduciario"] ? (
@@ -2968,7 +2966,7 @@ persona: {
                       : "border-gray-300"
                   }`}
                   value={fidRfcFiduciario}
-                  onChange={(e) => setFidRfcFiduciario(e.target.value)}
+                  onChange={(e) => setFidRfcFiduciario(e.target.value.toUpperCase())}
                   onBlur={() =>
                     validator.validateField("fideicomiso.rfc_fiduciario")
                   }
@@ -3003,76 +3001,89 @@ persona: {
                   </p>
                 ) : null}
               </div>
+
+              <div className="space-y-1 md:col-span-3">
+                <label className="text-sm font-medium">
+                  Nombre del fideicomiso *
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    errors["fideicomiso.fideicomiso_nombre"]
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  value={fidNombre}
+                  onChange={(e) => setFidNombre(e.target.value)}
+                  onBlur={() => setErr("fideicomiso.fideicomiso_nombre", undefined)}
+                  placeholder="Nombre del fideicomiso"
+                />
+                {errors["fideicomiso.fideicomiso_nombre"] ? (
+                  <p className="text-xs text-red-600">
+                    {errors["fideicomiso.fideicomiso_nombre"]}
+                  </p>
+                ) : null}
+              </div>
             </div>
 
             <hr className="my-2" />
 
             <h3 className="font-medium">Representante / Apoderado legal</h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Nombre(s) *</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-sm font-medium">
+                  Nombre completo del representante *
+                </label>
                 <input
                   className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors["representante.nombres"]
+                    errors["representante.nombre_completo"]
                       ? "border-red-500"
                       : "border-gray-300"
                   }`}
-                  value={repNombres}
-                  onChange={(e) => setRepNombres(e.target.value)}
-                  onBlur={() =>
-                    validator.validateField("representante.nombres")
-                  }
+                  value={fidRepNombreCompleto}
+                  onChange={(e) => setFidRepNombreCompleto(e.target.value)}
+                  onBlur={() => setErr("representante.nombre_completo", undefined)}
+                  placeholder="Nombre completo del representante"
                 />
-                {errors["representante.nombres"] ? (
+                {errors["representante.nombre_completo"] ? (
                   <p className="text-xs text-red-600">
-                    {errors["representante.nombres"]}
+                    {errors["representante.nombre_completo"]}
                   </p>
                 ) : null}
               </div>
 
               <div className="space-y-1">
-                <label className="text-sm font-medium">
-                  Apellido paterno *
-                </label>
+                <label className="text-sm font-medium">RFC *</label>
                 <input
                   className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors["representante.apellido_paterno"]
-                      ? "border-red-500"
-                      : "border-gray-300"
+                    errors["representante.rfc"] ? "border-red-500" : "border-gray-300"
                   }`}
-                  value={repApPat}
-                  onChange={(e) => setRepApPat(e.target.value)}
-                  onBlur={() =>
-                    validator.validateField("representante.apellido_paterno")
-                  }
+                  value={fidRepRfc}
+                  onChange={(e) => setFidRepRfc(e.target.value.toUpperCase())}
+                  onBlur={() => validator.validateField("representante.rfc")}
+                  placeholder="XAXX010101000"
                 />
-                {errors["representante.apellido_paterno"] ? (
+                {errors["representante.rfc"] ? (
                   <p className="text-xs text-red-600">
-                    {errors["representante.apellido_paterno"]}
+                    {errors["representante.rfc"]}
                   </p>
                 ) : null}
               </div>
 
               <div className="space-y-1">
-                <label className="text-sm font-medium">
-                  Apellido materno *
-                </label>
+                <label className="text-sm font-medium">CURP *</label>
                 <input
                   className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors["representante.apellido_materno"]
-                      ? "border-red-500"
-                      : "border-gray-300"
+                    errors["representante.curp"] ? "border-red-500" : "border-gray-300"
                   }`}
-                  value={repApMat}
-                  onChange={(e) => setRepApMat(e.target.value)}
-                  onBlur={() =>
-                    validator.validateField("representante.apellido_materno")
-                  }
+                  value={fidRepCurp}
+                  onChange={(e) => setFidRepCurp(e.target.value.toUpperCase())}
+                  onBlur={() => validator.validateField("representante.curp")}
+                  placeholder="PEPJ900101HDFRRN09"
                 />
-                {errors["representante.apellido_materno"] ? (
+                {errors["representante.curp"] ? (
                   <p className="text-xs text-red-600">
-                    {errors["representante.apellido_materno"]}
+                    {errors["representante.curp"]}
                   </p>
                 ) : null}
               </div>
@@ -3087,8 +3098,8 @@ persona: {
                       ? "border-red-500"
                       : "border-gray-300"
                   }`}
-                  value={repFechaNac}
-                  onChange={(e) => setRepFechaNac(e.target.value)}
+                  value={fidRepFechaNac}
+                  onChange={(e) => setFidRepFechaNac(e.target.value)}
                   onBlur={() =>
                     validator.validateField("representante.fecha_nacimiento")
                   }
@@ -3104,42 +3115,9 @@ persona: {
                   </p>
                 )}
               </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium">RFC *</label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.rfc"] ? "border-red-500" : "border-gray-300"}`}
-                  value={repRfc}
-                  onChange={(e) => setRepRfc(e.target.value)}
-                  onBlur={() => validator.validateField("representante.rfc")}
-                  placeholder="XAXX010101000"
-                />
-                {errors["representante.rfc"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["representante.rfc"]}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium">CURP *</label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.curp"] ? "border-red-500" : "border-gray-300"}`}
-                  value={repCurp}
-                  onChange={(e) => setRepCurp(e.target.value)}
-                  onBlur={() => validator.validateField("representante.curp")}
-                  placeholder="PEPJ900101HDFRRN09"
-                />
-                {errors["representante.curp"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["representante.curp"]}
-                  </p>
-                ) : null}
-              </div>
             </div>
           </div>
         )}
-
         <div className="flex items-center gap-3">
           <button
             type="submit"
