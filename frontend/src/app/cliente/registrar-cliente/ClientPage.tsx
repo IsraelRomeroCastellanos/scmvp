@@ -217,6 +217,7 @@ export default function ClientPage() {
 
   const [loading, setLoading] = useState(false);
   const [fatal, setFatal] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Errors>({});
 
   const [tipo, setTipo] = useState<TipoCliente>("persona_fisica");
 
@@ -368,13 +369,14 @@ export default function ClientPage() {
   const [pmRepIdExpedicion, setPmRepIdExpedicion] = useState("");
   const [pmRepIdExpiracion, setPmRepIdExpiracion] = useState("");
 
-  // FIDE (sin cambios)
-      // Ejemplos (ajusta a tus nombres reales):
-      // empresaId,
-      // nombreEntidad,
-      // nacionalidad,
-      // contactoPais,
-      // contactoEmail,
+  const validator = createRegistrarClienteValidator({
+    tipoCliente: tipo,
+    values: {
+      tipoCliente: tipo,
+      nombreEntidad,
+      nacionalidad,
+      contactoPais,
+      contactoEmail: email,
     },
     setErrors,
     isEmailValid: (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
@@ -2924,8 +2926,8 @@ persona: {
                       ? "border-red-500"
                       : "border-gray-300"
                   }`}
-                  value={fidDenominacion}
-                  onChange={(e) => setFidDenominacion(e.target.value)}
+                  value={fidDenominacionFiduciario}
+                  onChange={(e) => setFidDenominacionFiduciario(e.target.value)}
                   onBlur={() =>
                     validator.validateField("fideicomiso.denominacion_fiduciario")
                   }
