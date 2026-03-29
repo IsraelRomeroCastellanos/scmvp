@@ -369,24 +369,6 @@ export default function ClientPage() {
   const [pmRepIdExpiracion, setPmRepIdExpiracion] = useState("");
 
   // FIDE (sin cambios)
-  const [fidIdentificador, setFidIdentificador] = useState("");
-  const [fidDenominacion, setFidDenominacion] = useState("");
-  const [fidRfcFiduciario, setFidRfcFiduciario] = useState("");
-
-  const [repNombres, setRepNombres] = useState("");
-  const [repApPat, setRepApPat] = useState("");
-  const [repApMat, setRepApMat] = useState("");
-  const [repFechaNac, setRepFechaNac] = useState(""); // acepta YYYY-MM-DD o AAAAMMDD
-  const [repRfc, setRepRfc] = useState("");
-  const [repCurp, setRepCurp] = useState("");
-
-  const [errors, setErrors] = useState<Errors>({});
-
-  // Validator (extraído a ./validate.ts)
-  const validator = createRegistrarClienteValidator({
-    tipoCliente: tipo,
-    values: {
-      // TODO: agrega aquí tus estados/valores usados por validate.ts
       // Ejemplos (ajusta a tus nombres reales):
       // empresaId,
       // nombreEntidad,
