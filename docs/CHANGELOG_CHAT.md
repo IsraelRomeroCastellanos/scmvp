@@ -65,3 +65,11 @@
 🧭 Decisión confirmada: paradigma (1) — BE ligero, contrato fuerte en FE.
 
 🔒 Sin cambios de secretos o credenciales.
+
+## Clientes v2
+- Cierre operativo de PF terceros / recursos de terceros con payload real y validación FE.
+- Cierre operativo de PM beneficiario controlador con payload real y validación FE.
+- Cierre operativo de PM accionista tercero / `representante_es_accionista`.
+- Cierre operativo de Fideicomiso con payload final, validación FE y captura UI de campos obligatorios.
+- Incidente de DB para `tipo_cliente='fideicomiso'` diagnosticado y posteriormente resuelto.
+- Alineación final UI vs contrato completada para `fideicomiso_nombre` y representante (`nombre_completo`, `rfc`, `curp`, `fecha_nacimiento`).

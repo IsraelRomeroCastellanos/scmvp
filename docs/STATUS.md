@@ -116,3 +116,11 @@
 
 
 
+
+## Clientes v2
+- Clientes v2 en cierre avanzado; Contrato Cliente v2 implementado en frontend con payload real y validación FE por tipo.
+- PF: completado bloque de terceros / recursos de terceros con payload real y validación sin placeholders.
+- PM: completados bloques de beneficiario controlador y accionista tercero / representante es accionista.
+- Fideicomiso: completado payload `datos_completos.fideicomiso` + `datos_completos.representante`, validación FE y cierre de captura UI para campos obligatorios.
+- Alineación UI vs contrato completada para `fideicomiso_nombre` y representante (`nombre_completo`, `rfc`, `curp`, `fecha_nacimiento`).
+- Incidente DB de fideicomiso identificado y resuelto; inserción correcta confirmada en validación final.
