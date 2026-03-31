@@ -1,5 +1,6 @@
 // backend/src/routes/cliente.routes.ts
 import { Router, Request, Response } from 'express';
+import { PoolClient } from 'pg';
 import pool from '../db';
 import { authenticate } from '../middleware/auth.middleware';
 
@@ -81,12 +82,34 @@ function deepMerge(base: any, patch: any): any {
   return out;
 }
 
-/**
- * Extrae RFC "principal" del payload, según tipo_cliente.
- * - PF: datos_completos.persona.rfc
- * - PM: datos_completos.empresa.rfc
- * - FID: (por ahora no definido en este gate; devuelve null)
- */
+function hasOwn(obj: any, key: string): boolean {
+  return !!obj && Object.prototype.hasOwnProperty.call(obj, key);
+}
+
+function parseBooleanLike(v: any): boolean | null {
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'string') {
+    const s = v.trim().toLowerCase();
+    if (['true', '1', 'si', 'sí', 'yes'].includes(s)) return true;
+    if (['false', '0', 'no'].includes(s)) return false;
+  }
+  return null;
+}
+
+function trimOrNull(v: any): string | null {
+  return isNonEmptyString(v) ? v.trim() : null;
+}
+
+function upperOrNull(v: any): string | null {
+  return isNonEmptyString(v) ? v.trim().toUpperCase() : null;
+}
+
+function numberOrNull(v: any): number | null {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 function extractRfcPrincipal(tipo: any, datos_completos: any): string | null {
   const t = String(tipo || '').trim();
   const dc = datos_completos ?? {};
@@ -97,8 +120,440 @@ function extractRfcPrincipal(tipo: any, datos_completos: any): string | null {
   else if (t === 'fideicomiso') rfc = null; // pendiente definir gate para FID
 
   if (!isNonEmptyString(rfc)) return null;
-  const norm = rfc.trim().toUpperCase();
-  return norm;
+  return rfc.trim().toUpperCase();
+}
+
+function normalizeDuenoBeneficiarioItem(item: any) {
+  return {
+    nombres: trimOrNull(item?.nombres),
+    apellido_paterno: trimOrNull(item?.apellido_paterno),
+    apellido_materno: trimOrNull(item?.apellido_materno),
+    fecha_nacimiento: trimOrNull(item?.fecha_nacimiento),
+    nacionalidad: trimOrNull(item?.nacionalidad),
+    relacion_con_cliente: trimOrNull(item?.relacion_con_cliente ?? item?.relacion),
+    rfc: upperOrNull(item?.rfc),
+    curp: upperOrNull(item?.curp),
+    porcentaje_participacion: numberOrNull(item?.porcentaje_participacion),
+    observaciones: trimOrNull(item?.observaciones),
+  };
+}
+
+function normalizeRecursoTerceroCanonical(item: any) {
+  return {
+    tipo_tercero: trimOrNull(item?.tipo_tercero),
+    nombre_razon_social: trimOrNull(item?.nombre_razon_social),
+    relacion_con_cliente: trimOrNull(item?.relacion_con_cliente),
+    actividad_giro: trimOrNull(item?.actividad_giro),
+    nacionalidad: trimOrNull(item?.nacionalidad),
+    sin_documentacion: parseBooleanLike(item?.sin_documentacion),
+    rfc: upperOrNull(item?.rfc),
+    curp: upperOrNull(item?.curp),
+    fecha_nacimiento: trimOrNull(item?.fecha_nacimiento),
+    observaciones: trimOrNull(item?.observaciones),
+  };
+}
+
+function normalizeRecursoTerceroLegacy(item: any) {
+  return {
+    tipo_tercero: 'persona_fisica',
+    nombre_razon_social: trimOrNull(item?.nombre_razon_social ?? item?.nombre_completo),
+    relacion_con_cliente: trimOrNull(item?.relacion_con_cliente ?? item?.relacion),
+    actividad_giro: trimOrNull(item?.actividad_giro),
+    nacionalidad: trimOrNull(item?.nacionalidad),
+    sin_documentacion: parseBooleanLike(item?.sin_documentacion),
+    rfc: upperOrNull(item?.rfc),
+    curp: upperOrNull(item?.curp),
+    fecha_nacimiento: trimOrNull(item?.fecha_nacimiento),
+    observaciones: trimOrNull(item?.observaciones),
+  };
+}
+
+function extractChildState(tipo: string, datos_completos: any) {
+  const dc = datos_completos ?? {};
+
+  let duenosAplica: boolean | null = null;
+  let recursosAplica: boolean | null = null;
+  let duenosSource: 'canonical' | 'legacy' | 'none' = 'none';
+  let recursosSource: 'canonical' | 'legacy' | 'none' = 'none';
+
+  let duenosBeneficiarios: any[] = [];
+  let recursosTerceros: any[] = [];
+
+  if (tipo === 'persona_fisica') {
+    if (Array.isArray(dc?.recursos_terceros)) {
+      recursosSource = 'canonical';
+      recursosTerceros = dc.recursos_terceros.map(normalizeRecursoTerceroCanonical);
+    } else if (Array.isArray(dc?.terceros)) {
+      recursosSource = 'legacy';
+      recursosTerceros = dc.terceros.map(normalizeRecursoTerceroLegacy);
+    }
+
+    recursosAplica =
+      parseBooleanLike(dc?.recursos_terceros_aplica) ??
+      parseBooleanLike(dc?.terceros_info?.manifiesta);
+
+    if (recursosAplica === null && recursosTerceros.length > 0) recursosAplica = true;
+  }
+
+  if (tipo === 'persona_moral' || tipo === 'fideicomiso') {
+    if (Array.isArray(dc?.duenos_beneficiarios)) {
+      duenosSource = 'canonical';
+      duenosBeneficiarios = dc.duenos_beneficiarios.map(normalizeDuenoBeneficiarioItem);
+    } else if (Array.isArray(dc?.beneficiarios_controladores)) {
+      duenosSource = 'legacy';
+      duenosBeneficiarios = dc.beneficiarios_controladores.map(normalizeDuenoBeneficiarioItem);
+    }
+
+    duenosAplica =
+      parseBooleanLike(dc?.duenos_beneficiarios_aplica) ??
+      parseBooleanLike(dc?.BeneficiarioControlador);
+
+    if (duenosAplica === null && duenosBeneficiarios.length > 0) duenosAplica = true;
+  }
+
+  return {
+    duenosAplica,
+    recursosAplica,
+    duenosSource,
+    recursosSource,
+    duenosBeneficiarios,
+    recursosTerceros,
+  };
+}
+
+function validateDuenoBeneficiarioOr400(
+  res: Response,
+  item: any,
+  idx: number,
+  mode: 'canonical' | 'legacy',
+): boolean {
+  const prefix = `duenos_beneficiarios[${idx}]`;
+
+  if (!isNonEmptyString(item?.nombres)) return (badRequest(res, `${prefix}.nombres es obligatorio`), false);
+  if (!isNonEmptyString(item?.apellido_paterno))
+    return (badRequest(res, `${prefix}.apellido_paterno es obligatorio`), false);
+  if (!isNonEmptyString(item?.apellido_materno))
+    return (badRequest(res, `${prefix}.apellido_materno es obligatorio`), false);
+
+  if (mode === 'canonical') {
+    if (!isNonEmptyString(item?.fecha_nacimiento))
+      return (badRequest(res, `${prefix}.fecha_nacimiento es obligatoria`), false);
+    if (!isYYYYMMDD(item?.fecha_nacimiento))
+      return (badRequest(res, `${prefix}.fecha_nacimiento inválida (AAAAMMDD)`), false);
+    if (!isNonEmptyString(item?.nacionalidad))
+      return (badRequest(res, `${prefix}.nacionalidad es obligatoria`), false);
+    if (!isNonEmptyString(item?.relacion_con_cliente))
+      return (badRequest(res, `${prefix}.relacion_con_cliente es obligatoria`), false);
+  } else {
+    if (isNonEmptyString(item?.fecha_nacimiento) && !isYYYYMMDD(item?.fecha_nacimiento))
+      return (badRequest(res, `${prefix}.fecha_nacimiento inválida (AAAAMMDD)`), false);
+    if (item?.relacion_con_cliente && !isNonEmptyString(item?.relacion_con_cliente))
+      return (badRequest(res, `${prefix}.relacion_con_cliente inválida`), false);
+  }
+
+  if (isNonEmptyString(item?.rfc) && !isRFC(item?.rfc))
+    return (badRequest(res, `${prefix}.rfc inválido`), false);
+
+  if (isNonEmptyString(item?.curp) && !isCURP(item?.curp))
+    return (badRequest(res, `${prefix}.curp inválido`), false);
+
+  if (item?.porcentaje_participacion !== null && item?.porcentaje_participacion !== undefined) {
+    const n = Number(item?.porcentaje_participacion);
+    if (!Number.isFinite(n) || n <= 0 || n > 100)
+      return (badRequest(res, `${prefix}.porcentaje_participacion inválido`), false);
+  }
+
+  return true;
+}
+
+function validateRecursoTerceroOr400(
+  res: Response,
+  item: any,
+  idx: number,
+  mode: 'canonical' | 'legacy',
+): boolean {
+  const prefix = `recursos_terceros[${idx}]`;
+
+  if (mode === 'canonical') {
+    if (!isNonEmptyString(item?.tipo_tercero))
+      return (badRequest(res, `${prefix}.tipo_tercero es obligatorio`), false);
+    if (!['persona_fisica', 'persona_moral'].includes(String(item?.tipo_tercero)))
+      return (badRequest(res, `${prefix}.tipo_tercero inválido`), false);
+    if (!isNonEmptyString(item?.nombre_razon_social))
+      return (badRequest(res, `${prefix}.nombre_razon_social es obligatorio`), false);
+    if (!isNonEmptyString(item?.relacion_con_cliente))
+      return (badRequest(res, `${prefix}.relacion_con_cliente es obligatoria`), false);
+    if (!isNonEmptyString(item?.actividad_giro))
+      return (badRequest(res, `${prefix}.actividad_giro es obligatorio`), false);
+    if (!isNonEmptyString(item?.nacionalidad))
+      return (badRequest(res, `${prefix}.nacionalidad es obligatoria`), false);
+
+    const sinDoc = parseBooleanLike(item?.sin_documentacion);
+    if (sinDoc === null) return (badRequest(res, `${prefix}.sin_documentacion es obligatorio`), false);
+
+    if (!sinDoc && item?.tipo_tercero === 'persona_fisica') {
+      if (!isNonEmptyString(item?.rfc)) return (badRequest(res, `${prefix}.rfc es obligatorio`), false);
+      if (!isRFC(item?.rfc)) return (badRequest(res, `${prefix}.rfc inválido`), false);
+      if (!isNonEmptyString(item?.curp)) return (badRequest(res, `${prefix}.curp es obligatorio`), false);
+      if (!isCURP(item?.curp)) return (badRequest(res, `${prefix}.curp inválido`), false);
+      if (!isNonEmptyString(item?.fecha_nacimiento))
+        return (badRequest(res, `${prefix}.fecha_nacimiento es obligatoria`), false);
+      if (!isYYYYMMDD(item?.fecha_nacimiento))
+        return (badRequest(res, `${prefix}.fecha_nacimiento inválida (AAAAMMDD)`), false);
+    }
+
+    if (!sinDoc && item?.tipo_tercero === 'persona_moral') {
+      if (!isNonEmptyString(item?.rfc)) return (badRequest(res, `${prefix}.rfc es obligatorio`), false);
+      if (!isRFC(item?.rfc)) return (badRequest(res, `${prefix}.rfc inválido`), false);
+    }
+
+    return true;
+  }
+
+  if (!isNonEmptyString(item?.nombre_razon_social))
+    return (badRequest(res, `${prefix}.nombre_razon_social es obligatorio`), false);
+  if (!isNonEmptyString(item?.relacion_con_cliente))
+    return (badRequest(res, `${prefix}.relacion_con_cliente es obligatoria`), false);
+  if (!isNonEmptyString(item?.actividad_giro))
+    return (badRequest(res, `${prefix}.actividad_giro es obligatorio`), false);
+
+  const sinDoc = parseBooleanLike(item?.sin_documentacion);
+  if (sinDoc === null) return (badRequest(res, `${prefix}.sin_documentacion es obligatorio`), false);
+
+  if (!sinDoc) {
+    if (!isNonEmptyString(item?.rfc)) return (badRequest(res, `${prefix}.rfc es obligatorio`), false);
+    if (!isRFC(item?.rfc)) return (badRequest(res, `${prefix}.rfc inválido`), false);
+    if (!isNonEmptyString(item?.curp)) return (badRequest(res, `${prefix}.curp es obligatorio`), false);
+    if (!isCURP(item?.curp)) return (badRequest(res, `${prefix}.curp inválido`), false);
+    if (!isNonEmptyString(item?.fecha_nacimiento))
+      return (badRequest(res, `${prefix}.fecha_nacimiento es obligatoria`), false);
+    if (!isYYYYMMDD(item?.fecha_nacimiento))
+      return (badRequest(res, `${prefix}.fecha_nacimiento inválida (AAAAMMDD)`), false);
+  }
+
+  if (isNonEmptyString(item?.rfc) && !isRFC(item?.rfc))
+    return (badRequest(res, `${prefix}.rfc inválido`), false);
+  if (isNonEmptyString(item?.curp) && !isCURP(item?.curp))
+    return (badRequest(res, `${prefix}.curp inválido`), false);
+  if (isNonEmptyString(item?.fecha_nacimiento) && !isYYYYMMDD(item?.fecha_nacimiento))
+    return (badRequest(res, `${prefix}.fecha_nacimiento inválida (AAAAMMDD)`), false);
+
+  return true;
+}
+
+function validateChildListsOr400(res: Response, tipo: string, datos_completos: any): boolean {
+  const childState = extractChildState(tipo, datos_completos);
+
+  if (tipo === 'persona_fisica') {
+    const effectiveAplica = childState.recursosAplica === true || childState.recursosTerceros.length > 0;
+    if (effectiveAplica && childState.recursosTerceros.length < 1)
+      return (badRequest(res, 'recursos_terceros requiere al menos un registro'), false);
+
+    for (let i = 0; i < childState.recursosTerceros.length; i += 1) {
+      const ok = validateRecursoTerceroOr400(
+        res,
+        childState.recursosTerceros[i],
+        i,
+        childState.recursosSource === 'canonical' ? 'canonical' : 'legacy',
+      );
+      if (!ok) return false;
+    }
+  }
+
+  if (tipo === 'persona_moral' || tipo === 'fideicomiso') {
+    const effectiveAplica = childState.duenosAplica === true || childState.duenosBeneficiarios.length > 0;
+    if (effectiveAplica && childState.duenosBeneficiarios.length < 1)
+      return (badRequest(res, 'duenos_beneficiarios requiere al menos un registro'), false);
+
+    for (let i = 0; i < childState.duenosBeneficiarios.length; i += 1) {
+      const ok = validateDuenoBeneficiarioOr400(
+        res,
+        childState.duenosBeneficiarios[i],
+        i,
+        childState.duenosSource === 'canonical' ? 'canonical' : 'legacy',
+      );
+      if (!ok) return false;
+    }
+  }
+
+  return true;
+}
+
+function hasChildPatchForTipo(tipo: string, patchDatos: any): boolean {
+  if (!isPlainObject(patchDatos)) return false;
+
+  if (tipo === 'persona_fisica') {
+    return (
+      hasOwn(patchDatos, 'recursos_terceros_aplica') ||
+      hasOwn(patchDatos, 'recursos_terceros') ||
+      hasOwn(patchDatos, 'terceros') ||
+      hasOwn(patchDatos, 'terceros_info')
+    );
+  }
+
+  if (tipo === 'persona_moral' || tipo === 'fideicomiso') {
+    return (
+      hasOwn(patchDatos, 'duenos_beneficiarios_aplica') ||
+      hasOwn(patchDatos, 'duenos_beneficiarios') ||
+      hasOwn(patchDatos, 'BeneficiarioControlador') ||
+      hasOwn(patchDatos, 'beneficiarios_controladores')
+    );
+  }
+
+  return false;
+}
+
+function buildPersistableDuenoRows(datos_completos: any) {
+  const childState = extractChildState('persona_moral', datos_completos);
+  const effectiveAplica = childState.duenosAplica === true || childState.duenosBeneficiarios.length > 0;
+  if (!effectiveAplica) return [];
+
+  return childState.duenosBeneficiarios
+    .filter((item) =>
+      isNonEmptyString(item?.nombres) &&
+      isNonEmptyString(item?.apellido_paterno) &&
+      isNonEmptyString(item?.apellido_materno) &&
+      isNonEmptyString(item?.fecha_nacimiento) &&
+      isNonEmptyString(item?.nacionalidad) &&
+      isNonEmptyString(item?.relacion_con_cliente),
+    )
+    .map((item, idx) => ({
+      orden: idx + 1,
+      activo: true,
+      ...item,
+    }));
+}
+
+function buildPersistableRecursoRows(datos_completos: any) {
+  const childState = extractChildState('persona_fisica', datos_completos);
+  const effectiveAplica = childState.recursosAplica === true || childState.recursosTerceros.length > 0;
+  if (!effectiveAplica) return [];
+
+  return childState.recursosTerceros
+    .filter((item) =>
+      isNonEmptyString(item?.tipo_tercero) &&
+      isNonEmptyString(item?.nombre_razon_social) &&
+      isNonEmptyString(item?.relacion_con_cliente) &&
+      isNonEmptyString(item?.actividad_giro) &&
+      parseBooleanLike(item?.sin_documentacion) !== null,
+    )
+    .map((item, idx) => ({
+      orden: idx + 1,
+      activo: true,
+      ...item,
+      sin_documentacion: parseBooleanLike(item?.sin_documentacion) === true,
+    }));
+}
+
+async function replaceChildCollectionsForTipo(
+  client: PoolClient,
+  clienteId: number,
+  tipo: string,
+  datos_completos: any,
+) {
+  if (tipo === 'persona_fisica') {
+    await client.query(`DELETE FROM public.cliente_recursos_terceros WHERE cliente_id=$1`, [clienteId]);
+    const rows = buildPersistableRecursoRows(datos_completos);
+    for (const row of rows) {
+      await client.query(
+        `INSERT INTO public.cliente_recursos_terceros
+          (cliente_id, orden, activo, tipo_tercero, nombre_razon_social, relacion_con_cliente, actividad_giro, nacionalidad, sin_documentacion, rfc, curp, fecha_nacimiento, observaciones)
+         VALUES
+          ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+        [
+          clienteId,
+          row.orden,
+          row.activo,
+          row.tipo_tercero,
+          row.nombre_razon_social,
+          row.relacion_con_cliente,
+          row.actividad_giro,
+          row.nacionalidad,
+          row.sin_documentacion,
+          row.rfc,
+          row.curp,
+          row.fecha_nacimiento,
+          row.observaciones,
+        ],
+      );
+    }
+  }
+
+  if (tipo === 'persona_moral' || tipo === 'fideicomiso') {
+    await client.query(`DELETE FROM public.cliente_duenos_beneficiarios WHERE cliente_id=$1`, [clienteId]);
+    const rows = buildPersistableDuenoRows(datos_completos);
+    for (const row of rows) {
+      await client.query(
+        `INSERT INTO public.cliente_duenos_beneficiarios
+          (cliente_id, orden, activo, nombres, apellido_paterno, apellido_materno, fecha_nacimiento, nacionalidad, relacion_con_cliente, rfc, curp, porcentaje_participacion, observaciones)
+         VALUES
+          ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+        [
+          clienteId,
+          row.orden,
+          row.activo,
+          row.nombres,
+          row.apellido_paterno,
+          row.apellido_materno,
+          row.fecha_nacimiento,
+          row.nacionalidad,
+          row.relacion_con_cliente,
+          row.rfc,
+          row.curp,
+          row.porcentaje_participacion,
+          row.observaciones,
+        ],
+      );
+    }
+  }
+}
+
+async function materializeChildren(clienteId: number, tipo: string, datos_completos: any) {
+  const baseDatos = isPlainObject(datos_completos) ? { ...datos_completos } : {};
+
+  if (tipo === 'persona_fisica') {
+    const rows = await pool.query(
+      `SELECT orden, activo, tipo_tercero, nombre_razon_social, relacion_con_cliente, actividad_giro, nacionalidad, sin_documentacion, rfc, curp, fecha_nacimiento, observaciones
+       FROM public.cliente_recursos_terceros
+       WHERE cliente_id=$1
+       ORDER BY orden ASC, id ASC`,
+      [clienteId],
+    );
+
+    return {
+      ...baseDatos,
+      recursos_terceros_aplica:
+        rows.rows.length > 0
+          ? true
+          : (parseBooleanLike(baseDatos?.recursos_terceros_aplica) ??
+            parseBooleanLike(baseDatos?.terceros_info?.manifiesta) ??
+            false),
+      recursos_terceros: rows.rows,
+    };
+  }
+
+  if (tipo === 'persona_moral' || tipo === 'fideicomiso') {
+    const rows = await pool.query(
+      `SELECT orden, activo, nombres, apellido_paterno, apellido_materno, fecha_nacimiento, nacionalidad, relacion_con_cliente, rfc, curp, porcentaje_participacion, observaciones
+       FROM public.cliente_duenos_beneficiarios
+       WHERE cliente_id=$1
+       ORDER BY orden ASC, id ASC`,
+      [clienteId],
+    );
+
+    return {
+      ...baseDatos,
+      duenos_beneficiarios_aplica:
+        rows.rows.length > 0
+          ? true
+          : (parseBooleanLike(baseDatos?.duenos_beneficiarios_aplica) ??
+            parseBooleanLike(baseDatos?.BeneficiarioControlador) ??
+            false),
+      duenos_beneficiarios: rows.rows,
+    };
+  }
+
+  return baseDatos;
 }
 
 /**
@@ -127,7 +582,6 @@ function validateDatosCompletosOr400(res: Response, tipo: any, datos_completos: 
     return (badRequest(res, 'contacto.domicilio.codigo_postal inválido'), false);
   if (!isNonEmptyString(dom?.estado)) return (badRequest(res, 'contacto.domicilio.estado es obligatorio'), false);
   if (!isNonEmptyString(dom?.pais)) return (badRequest(res, 'contacto.domicilio.pais es obligatorio'), false);
-
 
   // Validaciones por tipo
   if (tipo === 'persona_fisica') {
@@ -199,7 +653,7 @@ function validateDatosCompletosOr400(res: Response, tipo: any, datos_completos: 
       return (badRequest(res, 'representante.fecha_nacimiento inválida (AAAAMMDD)'), false);
   }
 
-  return true;
+  return validateChildListsOr400(res, tipo, datos_completos);
 }
 
 /**
@@ -247,7 +701,10 @@ router.get('/clientes/:id', authenticate, async (req: Request, res: Response) =>
 
     if (result.rows.length === 0) return res.status(404).json({ error: 'Cliente no encontrado' });
 
-    return res.json({ cliente: result.rows[0] });
+    const row = result.rows[0];
+    row.datos_completos = await materializeChildren(row.id, row.tipo_cliente, row.datos_completos);
+
+    return res.json({ cliente: row });
   } catch (error) {
     console.error('Error al obtener cliente:', error);
     return res.status(500).json({ error: 'Error al obtener cliente' });
@@ -260,6 +717,7 @@ router.get('/clientes/:id', authenticate, async (req: Request, res: Response) =>
  * ===============================
  */
 router.post('/registrar-cliente', authenticate, async (req: Request, res: Response) => {
+  const client = await pool.connect();
   try {
     const empresa_id = parsePositiveInt(req.body.empresa_id);
     const tipo = req.body.tipo_cliente;
@@ -274,34 +732,47 @@ router.post('/registrar-cliente', authenticate, async (req: Request, res: Respon
 
     if (!validateDatosCompletosOr400(res, tipo, datos_completos)) return;
 
-    // Gate RFC único por empresa (PF/PM)
     const rfc_principal = extractRfcPrincipal(tipo, datos_completos);
+
+    await client.query('BEGIN');
+
     if (rfc_principal) {
-      const dupRfc = await pool.query(
+      const dupRfc = await client.query(
         `SELECT id FROM clientes WHERE empresa_id=$1 AND rfc_principal=$2 LIMIT 1`,
         [empresa_id, rfc_principal]
       );
-      if (dupRfc.rows.length > 0) return conflict(res, 'RFC ya existe en el registro');
+      if (dupRfc.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return conflict(res, 'RFC ya existe en el registro');
+      }
     }
 
-    // Duplicate check existente: (empresa_id + nombre_entidad)
-    const dupName = await pool.query(
+    const dupName = await client.query(
       `SELECT id FROM clientes WHERE empresa_id=$1 AND nombre_entidad=$2 LIMIT 1`,
       [empresa_id, nombre_entidad]
     );
-    if (dupName.rows.length > 0) return res.status(409).json({ error: 'Cliente duplicado para esa empresa' });
+    if (dupName.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Cliente duplicado para esa empresa' });
+    }
 
-    const insert = await pool.query(
+    const insert = await client.query(
       `INSERT INTO clientes (empresa_id, nombre_entidad, tipo_cliente, nacionalidad, estado, datos_completos, rfc_principal)
        VALUES ($1, $2, $3, $4, 'activo', $5, $6)
        RETURNING id, empresa_id, nombre_entidad, tipo_cliente, nacionalidad, estado, creado_en, actualizado_en`,
       [empresa_id, nombre_entidad, tipo, nacionalidad, datos_completos, rfc_principal]
     );
 
+    await replaceChildCollectionsForTipo(client, insert.rows[0].id, tipo, datos_completos);
+
+    await client.query('COMMIT');
     return res.status(201).json({ ok: true, cliente: insert.rows[0] });
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Error al registrar cliente:', error);
     return res.status(500).json({ error: 'Error al registrar cliente' });
+  } finally {
+    client.release();
   }
 });
 
@@ -311,22 +782,28 @@ router.post('/registrar-cliente', authenticate, async (req: Request, res: Respon
  * - merge de datos_completos
  * - valida por tipo si se intenta actualizar datos_completos
  * - mantiene rfc_principal y bloquea duplicados por empresa (PF/PM)
+ * - replace-all temporal para listas hijas
  * ===============================
  */
 router.put('/clientes/:id', authenticate, async (req: Request, res: Response) => {
+  const client = await pool.connect();
   try {
     const id = parsePositiveInt(req.params.id);
     if (!id) return badRequest(res, 'id inválido');
 
-    // cargar cliente actual (tipo + datos + empresa_id)
-    const current = await pool.query(
+    await client.query('BEGIN');
+
+    const current = await client.query(
       `SELECT id, empresa_id, tipo_cliente, datos_completos
        FROM clientes
        WHERE id=$1
        LIMIT 1`,
       [id]
     );
-    if (current.rows.length === 0) return res.status(404).json({ error: 'Cliente no encontrado' });
+    if (current.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Cliente no encontrado' });
+    }
 
     const empresa_id = current.rows[0].empresa_id;
     const tipo = current.rows[0].tipo_cliente;
@@ -339,20 +816,25 @@ router.put('/clientes/:id', authenticate, async (req: Request, res: Response) =>
 
     if (req.body.datos_completos !== undefined) {
       nextDatos = deepMerge(currentDatos, req.body.datos_completos);
-      if (!validateDatosCompletosOr400(res, tipo, nextDatos)) return;
+      if (!validateDatosCompletosOr400(res, tipo, nextDatos)) {
+        await client.query('ROLLBACK');
+        return;
+      }
 
-      // recalcular RFC principal y validar unicidad si cambió (PF/PM)
       nextRfcPrincipal = extractRfcPrincipal(tipo, nextDatos);
       if (nextRfcPrincipal) {
-        const dupRfc = await pool.query(
+        const dupRfc = await client.query(
           `SELECT id FROM clientes WHERE empresa_id=$1 AND rfc_principal=$2 AND id<>$3 LIMIT 1`,
           [empresa_id, nextRfcPrincipal, id]
         );
-        if (dupRfc.rows.length > 0) return conflict(res, 'RFC ya existe en el registro');
+        if (dupRfc.rows.length > 0) {
+          await client.query('ROLLBACK');
+          return conflict(res, 'RFC ya existe en el registro');
+        }
       }
     }
 
-    const result = await pool.query(
+    const result = await client.query(
       `UPDATE clientes
        SET nombre_entidad = COALESCE($1, nombre_entidad),
            nacionalidad = COALESCE($2, nacionalidad),
@@ -365,10 +847,18 @@ router.put('/clientes/:id', authenticate, async (req: Request, res: Response) =>
       [nombre_entidad, nacionalidad, nextDatos, estado, nextRfcPrincipal, id]
     );
 
+    if (req.body.datos_completos !== undefined && hasChildPatchForTipo(tipo, req.body.datos_completos)) {
+      await replaceChildCollectionsForTipo(client, id, tipo, nextDatos);
+    }
+
+    await client.query('COMMIT');
     return res.json({ ok: true, cliente: result.rows[0] });
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Error al editar cliente:', error);
     return res.status(500).json({ error: 'Error al editar cliente' });
+  } finally {
+    client.release();
   }
 });
 
