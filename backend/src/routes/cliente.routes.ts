@@ -445,6 +445,183 @@ function buildPersistableRecursoRows(datos_completos: any) {
     }));
 }
 
+function buildRelacionadoNombreEntidadDueno(item: any): string | null {
+  const partes = [item?.nombres, item?.apellido_paterno, item?.apellido_materno]
+    .map((v) => trimOrNull(v))
+    .filter((v): v is string => !!v);
+  return partes.length > 0 ? partes.join(' ') : null;
+}
+
+function buildRelacionadosRecursoRows(datos_completos: any) {
+  const childState = extractChildState('persona_fisica', datos_completos);
+  const effectiveAplica = childState.recursosAplica === true || childState.recursosTerceros.length > 0;
+  if (!effectiveAplica) return [];
+
+  return childState.recursosTerceros
+    .filter(
+      (item) =>
+        isNonEmptyString(item?.tipo_tercero) &&
+        isNonEmptyString(item?.nombre_razon_social) &&
+        isNonEmptyString(item?.relacion_con_cliente) &&
+        isNonEmptyString(item?.actividad_giro) &&
+        isNonEmptyString(item?.nacionalidad) &&
+        parseBooleanLike(item?.sin_documentacion) !== null,
+    )
+    .map((item, idx) => {
+      const sin_documentacion = parseBooleanLike(item?.sin_documentacion) === true;
+      const normalized = {
+        tipo_tercero: item.tipo_tercero,
+        nombre_razon_social: item.nombre_razon_social,
+        relacion_con_cliente: item.relacion_con_cliente,
+        actividad_giro: item.actividad_giro,
+        nacionalidad: item.nacionalidad,
+        sin_documentacion,
+        rfc: item.rfc,
+        curp: item.curp,
+        fecha_nacimiento: item.fecha_nacimiento,
+        observaciones: item.observaciones,
+      };
+
+      return {
+        categoria_relacion: 'recurso_tercero',
+        tipo_entidad: item.tipo_tercero,
+        nombre_entidad: item.nombre_razon_social,
+        nacionalidad: item.nacionalidad,
+        relacion_con_cliente: item.relacion_con_cliente,
+        porcentaje_participacion: null,
+        sin_documentacion,
+        observaciones: item.observaciones,
+        datos_completos: normalized,
+        orden: idx + 1,
+        activo: true,
+      };
+    });
+}
+
+function buildRelacionadosDuenoRows(datos_completos: any) {
+  const childState = extractChildState('persona_moral', datos_completos);
+  const effectiveAplica = childState.duenosAplica === true || childState.duenosBeneficiarios.length > 0;
+  if (!effectiveAplica) return [];
+
+  return childState.duenosBeneficiarios
+    .filter(
+      (item) =>
+        isNonEmptyString(item?.nombres) &&
+        isNonEmptyString(item?.apellido_paterno) &&
+        isNonEmptyString(item?.apellido_materno) &&
+        isNonEmptyString(item?.fecha_nacimiento) &&
+        isNonEmptyString(item?.nacionalidad) &&
+        isNonEmptyString(item?.relacion_con_cliente),
+    )
+    .map((item, idx) => ({
+      categoria_relacion: 'dueno_beneficiario',
+      tipo_entidad: 'persona_fisica',
+      nombre_entidad: buildRelacionadoNombreEntidadDueno(item),
+      nacionalidad: item.nacionalidad,
+      relacion_con_cliente: item.relacion_con_cliente,
+      porcentaje_participacion: item.porcentaje_participacion,
+      sin_documentacion: false,
+      observaciones: item.observaciones,
+      datos_completos: {
+        nombres: item.nombres,
+        apellido_paterno: item.apellido_paterno,
+        apellido_materno: item.apellido_materno,
+        fecha_nacimiento: item.fecha_nacimiento,
+        nacionalidad: item.nacionalidad,
+        relacion_con_cliente: item.relacion_con_cliente,
+        rfc: item.rfc,
+        curp: item.curp,
+        porcentaje_participacion: item.porcentaje_participacion,
+        observaciones: item.observaciones,
+      },
+      orden: idx + 1,
+      activo: true,
+    }));
+}
+
+async function replaceRelacionadosByCategoria(
+  client: PoolClient,
+  clienteId: number,
+  categoria: 'recurso_tercero' | 'dueno_beneficiario',
+  rows: Array<{
+    categoria_relacion: string;
+    tipo_entidad: string;
+    nombre_entidad: string | null;
+    nacionalidad: string | null;
+    relacion_con_cliente: string | null;
+    porcentaje_participacion: number | null;
+    sin_documentacion: boolean;
+    observaciones: string | null;
+    datos_completos: Record<string, any>;
+    orden: number;
+    activo: boolean;
+  }>,
+) {
+  await client.query(
+    `DELETE FROM public.cliente_relacionados WHERE cliente_id=$1 AND categoria_relacion=$2`,
+    [clienteId, categoria],
+  );
+
+  for (const row of rows) {
+    await client.query(
+      `INSERT INTO public.cliente_relacionados
+        (cliente_id, categoria_relacion, tipo_entidad, nombre_entidad, nacionalidad, relacion_con_cliente, porcentaje_participacion, sin_documentacion, observaciones, datos_completos, orden, activo)
+       VALUES
+        ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [
+        clienteId,
+        row.categoria_relacion,
+        row.tipo_entidad,
+        row.nombre_entidad,
+        row.nacionalidad,
+        row.relacion_con_cliente,
+        row.porcentaje_participacion,
+        row.sin_documentacion,
+        row.observaciones,
+        row.datos_completos,
+        row.orden,
+        row.activo,
+      ],
+    );
+  }
+}
+
+function materializeRecursoRelacionadoRow(row: any) {
+  const dc = isPlainObject(row?.datos_completos) ? row.datos_completos : {};
+  return {
+    orden: row.orden,
+    activo: row.activo,
+    tipo_tercero: row.tipo_entidad,
+    nombre_razon_social: row.nombre_entidad,
+    relacion_con_cliente: row.relacion_con_cliente,
+    actividad_giro: dc?.actividad_giro ?? null,
+    nacionalidad: row.nacionalidad,
+    sin_documentacion: row.sin_documentacion,
+    rfc: dc?.rfc ?? null,
+    curp: dc?.curp ?? null,
+    fecha_nacimiento: dc?.fecha_nacimiento ?? null,
+    observaciones: row.observaciones ?? dc?.observaciones ?? null,
+  };
+}
+
+function materializeDuenoRelacionadoRow(row: any) {
+  const dc = isPlainObject(row?.datos_completos) ? row.datos_completos : {};
+  return {
+    orden: row.orden,
+    activo: row.activo,
+    nombres: dc?.nombres ?? null,
+    apellido_paterno: dc?.apellido_paterno ?? null,
+    apellido_materno: dc?.apellido_materno ?? null,
+    fecha_nacimiento: dc?.fecha_nacimiento ?? null,
+    nacionalidad: row.nacionalidad,
+    relacion_con_cliente: row.relacion_con_cliente,
+    rfc: dc?.rfc ?? null,
+    curp: dc?.curp ?? null,
+    porcentaje_participacion: row.porcentaje_participacion,
+    observaciones: row.observaciones ?? dc?.observaciones ?? null,
+  };
+}
+
 async function replaceChildCollectionsForTipo(
   client: PoolClient,
   clienteId: number,
@@ -477,6 +654,8 @@ async function replaceChildCollectionsForTipo(
         ],
       );
     }
+
+    await replaceRelacionadosByCategoria(client, clienteId, 'recurso_tercero', buildRelacionadosRecursoRows(datos_completos));
   }
 
   if (tipo === 'persona_moral' || tipo === 'fideicomiso') {
@@ -505,6 +684,8 @@ async function replaceChildCollectionsForTipo(
         ],
       );
     }
+
+    await replaceRelacionadosByCategoria(client, clienteId, 'dueno_beneficiario', buildRelacionadosDuenoRows(datos_completos));
   }
 }
 
@@ -512,6 +693,22 @@ async function materializeChildren(clienteId: number, tipo: string, datos_comple
   const baseDatos = isPlainObject(datos_completos) ? { ...datos_completos } : {};
 
   if (tipo === 'persona_fisica') {
+    const related = await pool.query(
+      `SELECT orden, activo, tipo_entidad, nombre_entidad, nacionalidad, relacion_con_cliente, sin_documentacion, observaciones, datos_completos
+       FROM public.cliente_relacionados
+       WHERE cliente_id=$1 AND categoria_relacion='recurso_tercero'
+       ORDER BY orden ASC, id ASC`,
+      [clienteId],
+    );
+
+    if (related.rows.length > 0) {
+      return {
+        ...baseDatos,
+        recursos_terceros_aplica: true,
+        recursos_terceros: related.rows.map(materializeRecursoRelacionadoRow),
+      };
+    }
+
     const rows = await pool.query(
       `SELECT orden, activo, tipo_tercero, nombre_razon_social, relacion_con_cliente, actividad_giro, nacionalidad, sin_documentacion, rfc, curp, fecha_nacimiento, observaciones
        FROM public.cliente_recursos_terceros
@@ -533,6 +730,22 @@ async function materializeChildren(clienteId: number, tipo: string, datos_comple
   }
 
   if (tipo === 'persona_moral' || tipo === 'fideicomiso') {
+    const related = await pool.query(
+      `SELECT orden, activo, tipo_entidad, nombre_entidad, nacionalidad, relacion_con_cliente, porcentaje_participacion, observaciones, datos_completos
+       FROM public.cliente_relacionados
+       WHERE cliente_id=$1 AND categoria_relacion='dueno_beneficiario'
+       ORDER BY orden ASC, id ASC`,
+      [clienteId],
+    );
+
+    if (related.rows.length > 0) {
+      return {
+        ...baseDatos,
+        duenos_beneficiarios_aplica: true,
+        duenos_beneficiarios: related.rows.map(materializeDuenoRelacionadoRow),
+      };
+    }
+
     const rows = await pool.query(
       `SELECT orden, activo, nombres, apellido_paterno, apellido_materno, fecha_nacimiento, nacionalidad, relacion_con_cliente, rfc, curp, porcentaje_participacion, observaciones
        FROM public.cliente_duenos_beneficiarios
