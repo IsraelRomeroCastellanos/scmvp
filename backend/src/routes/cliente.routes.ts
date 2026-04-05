@@ -452,6 +452,17 @@ function buildRelacionadoNombreEntidadDueno(item: any): string | null {
   return partes.length > 0 ? partes.join(' ') : null;
 }
 
+function stripEmbeddedChildCollections(tipo: string, datos_completos: any) {
+  const base = isPlainObject(datos_completos) ? { ...datos_completos } : {};
+  if (tipo === 'persona_fisica') {
+    delete base.recursos_terceros;
+  }
+  if (tipo === 'persona_moral' || tipo === 'fideicomiso') {
+    delete base.duenos_beneficiarios;
+  }
+  return base;
+}
+
 function buildRelacionadosRecursoRows(datos_completos: any) {
   const childState = extractChildState('persona_fisica', datos_completos);
   const effectiveAplica = childState.recursosAplica === true || childState.recursosTerceros.length > 0;
@@ -556,11 +567,13 @@ async function replaceRelacionadosByCategoria(
     orden: number;
     activo: boolean;
   }>,
-) {
+): Promise<number> {
   await client.query(
-    `DELETE FROM public.cliente_relacionados WHERE cliente_id=$1 AND categoria_relacion=$2`,
+    DELETE FROM public.cliente_relacionados WHERE cliente_id=$1 AND categoria_relacion=$2,
     [clienteId, categoria],
   );
+
+  let inserted = 0;
 
   for (const row of rows) {
     await client.query(
@@ -583,7 +596,10 @@ async function replaceRelacionadosByCategoria(
         row.activo,
       ],
     );
+    inserted += 1;
   }
+
+  return inserted;
 }
 
 function materializeRecursoRelacionadoRow(row: any) {
@@ -627,9 +643,11 @@ async function replaceChildCollectionsForTipo(
   clienteId: number,
   tipo: string,
   datos_completos: any,
-) {
+): Promise<{ recurso_tercero: number; dueno_beneficiario: number }> {
+  const summary = { recurso_tercero: 0, dueno_beneficiario: 0 };
+
   if (tipo === 'persona_fisica') {
-    await client.query(`DELETE FROM public.cliente_recursos_terceros WHERE cliente_id=$1`, [clienteId]);
+    await client.query(DELETE FROM public.cliente_recursos_terceros WHERE cliente_id=$1, [clienteId]);
     const rows = buildPersistableRecursoRows(datos_completos);
     for (const row of rows) {
       await client.query(
@@ -655,11 +673,16 @@ async function replaceChildCollectionsForTipo(
       );
     }
 
-    await replaceRelacionadosByCategoria(client, clienteId, 'recurso_tercero', buildRelacionadosRecursoRows(datos_completos));
+    summary.recurso_tercero = await replaceRelacionadosByCategoria(
+      client,
+      clienteId,
+      'recurso_tercero',
+      buildRelacionadosRecursoRows(datos_completos),
+    );
   }
 
   if (tipo === 'persona_moral' || tipo === 'fideicomiso') {
-    await client.query(`DELETE FROM public.cliente_duenos_beneficiarios WHERE cliente_id=$1`, [clienteId]);
+    await client.query(DELETE FROM public.cliente_duenos_beneficiarios WHERE cliente_id=$1, [clienteId]);
     const rows = buildPersistableDuenoRows(datos_completos);
     for (const row of rows) {
       await client.query(
@@ -685,7 +708,37 @@ async function replaceChildCollectionsForTipo(
       );
     }
 
-    await replaceRelacionadosByCategoria(client, clienteId, 'dueno_beneficiario', buildRelacionadosDuenoRows(datos_completos));
+    summary.dueno_beneficiario = await replaceRelacionadosByCategoria(
+      client,
+      clienteId,
+      'dueno_beneficiario',
+      buildRelacionadosDuenoRows(datos_completos),
+    );
+  }
+
+  return summary;
+}
+
+async function assertRelacionadosPersistedForTipo(
+  client: PoolClient,
+  clienteId: number,
+  tipo: string,
+  datos_completos: any,
+  summary: { recurso_tercero: number; dueno_beneficiario: number },
+) {
+  if (tipo === 'persona_fisica') {
+    const expected = buildRelacionadosRecursoRows(datos_completos).length;
+    if (expected > 0 && summary.recurso_tercero !== expected) {
+      throw new Error(Persistencia incompleta en cliente_relacionados (recurso_tercero): expected=${expected} inserted=${summary.recurso_tercero});
+    }
+    return;
+  }
+
+  if (tipo === 'persona_moral' || tipo === 'fideicomiso') {
+    const expected = buildRelacionadosDuenoRows(datos_completos).length;
+    if (expected > 0 && summary.dueno_beneficiario !== expected) {
+      throw new Error(Persistencia incompleta en cliente_relacionados (dueno_beneficiario): expected=${expected} inserted=${summary.dueno_beneficiario});
+    }
   }
 }
 
@@ -915,7 +968,11 @@ router.get('/clientes/:id', authenticate, async (req: Request, res: Response) =>
     if (result.rows.length === 0) return res.status(404).json({ error: 'Cliente no encontrado' });
 
     const row = result.rows[0];
-    row.datos_completos = await materializeChildren(row.id, row.tipo_cliente, row.datos_completos);
+    row.datos_completos = await materializeChildren(
+      row.id,
+      row.tipo_cliente,
+      stripEmbeddedChildCollections(row.tipo_cliente, row.datos_completos),
+    );
 
     return res.json({ cliente: row });
   } catch (error) {
@@ -969,14 +1026,17 @@ router.post('/registrar-cliente', authenticate, async (req: Request, res: Respon
       return res.status(409).json({ error: 'Cliente duplicado para esa empresa' });
     }
 
+    const storedDatos = stripEmbeddedChildCollections(tipo, datos_completos);
+
     const insert = await client.query(
       `INSERT INTO clientes (empresa_id, nombre_entidad, tipo_cliente, nacionalidad, estado, datos_completos, rfc_principal)
        VALUES ($1, $2, $3, $4, 'activo', $5, $6)
        RETURNING id, empresa_id, nombre_entidad, tipo_cliente, nacionalidad, estado, creado_en, actualizado_en`,
-      [empresa_id, nombre_entidad, tipo, nacionalidad, datos_completos, rfc_principal]
+      [empresa_id, nombre_entidad, tipo, nacionalidad, storedDatos, rfc_principal]
     );
 
-    await replaceChildCollectionsForTipo(client, insert.rows[0].id, tipo, datos_completos);
+    const childSync = await replaceChildCollectionsForTipo(client, insert.rows[0].id, tipo, datos_completos);
+    await assertRelacionadosPersistedForTipo(client, insert.rows[0].id, tipo, datos_completos, childSync);
 
     await client.query('COMMIT');
     return res.status(201).json({ ok: true, cliente: insert.rows[0] });
@@ -1047,6 +1107,8 @@ router.put('/clientes/:id', authenticate, async (req: Request, res: Response) =>
       }
     }
 
+    const storedNextDatos = nextDatos === null ? null : stripEmbeddedChildCollections(tipo, nextDatos);
+
     const result = await client.query(
       `UPDATE clientes
        SET nombre_entidad = COALESCE($1, nombre_entidad),
@@ -1057,11 +1119,12 @@ router.put('/clientes/:id', authenticate, async (req: Request, res: Response) =>
            actualizado_en = NOW()
        WHERE id=$6
        RETURNING id, empresa_id, nombre_entidad, tipo_cliente, nacionalidad, estado, creado_en, actualizado_en`,
-      [nombre_entidad, nacionalidad, nextDatos, estado, nextRfcPrincipal, id]
+      [nombre_entidad, nacionalidad, storedNextDatos, estado, nextRfcPrincipal, id]
     );
 
     if (req.body.datos_completos !== undefined && hasChildPatchForTipo(tipo, req.body.datos_completos)) {
-      await replaceChildCollectionsForTipo(client, id, tipo, nextDatos);
+      const childSync = await replaceChildCollectionsForTipo(client, id, tipo, nextDatos);
+      await assertRelacionadosPersistedForTipo(client, id, tipo, nextDatos, childSync);
     }
 
     await client.query('COMMIT');
