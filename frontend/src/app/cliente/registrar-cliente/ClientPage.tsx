@@ -666,6 +666,295 @@ export default function ClientPage() {
     };
   }
 
+  function isPlainObject(value: any): value is Record<string, any> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+
+  function buildCanonicalPFPayloadData(data: RelatedPFData): RelatedPFData {
+    const contacto = isPlainObject(data?.contacto) ? data.contacto : {};
+    const persona = isPlainObject(data?.persona) ? data.persona : {};
+
+    return {
+      contacto,
+      persona: {
+        ...persona,
+        nombres: safeInput(persona?.nombres).trim(),
+        apellido_paterno: safeInput(persona?.apellido_paterno).trim(),
+        apellido_materno: safeInput(persona?.apellido_materno).trim(),
+        fecha_nacimiento:
+          normalizeToYYYYMMDD(persona?.fecha_nacimiento) ??
+          safeInput(persona?.fecha_nacimiento).trim(),
+        rfc: safeInput(persona?.rfc).trim().toUpperCase(),
+        curp: safeInput(persona?.curp).trim().toUpperCase(),
+        actividad_economica: safeInput(persona?.actividad_economica).trim(),
+      },
+    };
+  }
+
+  function buildCanonicalPMPayloadData(data: RelatedPMData): RelatedPMData {
+    const contacto = isPlainObject(data?.contacto) ? data.contacto : {};
+    const empresa = isPlainObject(data?.empresa) ? data.empresa : {};
+    const representante = isPlainObject(data?.representante) ? data.representante : {};
+
+    return {
+      contacto,
+      empresa: {
+        ...empresa,
+        rfc: safeInput(empresa?.rfc).trim().toUpperCase(),
+        fecha_constitucion:
+          normalizeToYYYYMMDD(empresa?.fecha_constitucion) ??
+          safeInput(empresa?.fecha_constitucion).trim(),
+        giro_mercantil: safeInput(empresa?.giro_mercantil).trim(),
+        nombre_entidad: safeInput(empresa?.nombre_entidad).trim(),
+        razon_social: safeInput(empresa?.razon_social).trim(),
+      },
+      representante: {
+        ...representante,
+        nombres: safeInput(representante?.nombres).trim(),
+        apellido_paterno: safeInput(representante?.apellido_paterno).trim(),
+        apellido_materno: safeInput(representante?.apellido_materno).trim(),
+        fecha_nacimiento:
+          normalizeToYYYYMMDD(representante?.fecha_nacimiento) ??
+          safeInput(representante?.fecha_nacimiento).trim(),
+        rfc: safeInput(representante?.rfc).trim().toUpperCase(),
+        curp: safeInput(representante?.curp).trim().toUpperCase(),
+      },
+    };
+  }
+
+  function buildCanonicalFIDPayloadData(data: RelatedFIDData): RelatedFIDData {
+    const contacto = isPlainObject(data?.contacto) ? data.contacto : {};
+    const fideicomiso = isPlainObject(data?.fideicomiso) ? data.fideicomiso : {};
+    const representante = isPlainObject(data?.representante) ? data.representante : {};
+
+    return {
+      contacto,
+      fideicomiso: {
+        ...fideicomiso,
+        nombre_entidad: safeInput(fideicomiso?.nombre_entidad).trim(),
+        denominacion: safeInput(fideicomiso?.denominacion).trim(),
+        nombre_fideicomiso: safeInput(fideicomiso?.nombre_fideicomiso).trim(),
+      },
+      representante: {
+        ...representante,
+        nombres: safeInput(representante?.nombres).trim(),
+        apellido_paterno: safeInput(representante?.apellido_paterno).trim(),
+        apellido_materno: safeInput(representante?.apellido_materno).trim(),
+        fecha_nacimiento:
+          normalizeToYYYYMMDD(representante?.fecha_nacimiento) ??
+          safeInput(representante?.fecha_nacimiento).trim(),
+        rfc: safeInput(representante?.rfc).trim().toUpperCase(),
+        curp: safeInput(representante?.curp).trim().toUpperCase(),
+      },
+    };
+  }
+
+  function buildCanonicalRecursoRowFromRelated(row: RelatedRecursoRow) {
+    const datos_completos =
+      row.tipo_entidad === "persona_fisica"
+        ? buildCanonicalPFPayloadData(row.datos_completos as RelatedPFData)
+        : row.tipo_entidad === "persona_moral"
+          ? buildCanonicalPMPayloadData(row.datos_completos as RelatedPMData)
+          : buildCanonicalFIDPayloadData(row.datos_completos as RelatedFIDData);
+
+    return {
+      tipo_entidad: row.tipo_entidad,
+      nombre_entidad:
+        deriveRelatedNombreEntidad(row.tipo_entidad, datos_completos) ||
+        safeInput(row.nombre_entidad).trim(),
+      nacionalidad: valueToCatalogKey(row.nacionalidad) || safeInput(row.nacionalidad).trim() || "MEX",
+      relacion_con_cliente: safeInput(row.relacion_con_cliente).trim(),
+      sin_documentacion: !!row.sin_documentacion,
+      observaciones: safeInput(row.observaciones).trim(),
+      datos_completos,
+    };
+  }
+
+  function buildCanonicalRecursoRowFromLegacy(row: RecursoTerceroItem) {
+    const tipo_entidad = (safeInput(row.tipo_tercero).trim() || "persona_fisica") as RelatedTipoEntidad;
+
+    if (tipo_entidad === "persona_moral") {
+      const datos_completos = buildCanonicalPMPayloadData({
+        contacto: { pais: row.nacionalidad || "MEX", email: "", telefono: "", domicilio: {} },
+        empresa: {
+          nombre_entidad: row.nombre_razon_social,
+          razon_social: row.nombre_razon_social,
+          rfc: row.rfc,
+          fecha_constitucion: "",
+          giro_mercantil: row.actividad_giro,
+        },
+        representante: {},
+      });
+
+      return {
+        tipo_entidad,
+        nombre_entidad:
+          deriveRelatedNombreEntidad(tipo_entidad, datos_completos) ||
+          safeInput(row.nombre_razon_social).trim(),
+        nacionalidad: valueToCatalogKey(row.nacionalidad) || safeInput(row.nacionalidad).trim() || "MEX",
+        relacion_con_cliente: safeInput(row.relacion_con_cliente).trim(),
+        sin_documentacion: !!row.sin_documentacion,
+        observaciones: safeInput(row.observaciones).trim(),
+        datos_completos,
+      };
+    }
+
+    if (tipo_entidad === "fideicomiso") {
+      const datos_completos = buildCanonicalFIDPayloadData({
+        contacto: { pais: row.nacionalidad || "MEX", email: "", telefono: "", domicilio: {} },
+        fideicomiso: {
+          nombre_entidad: row.nombre_razon_social,
+          denominacion: row.nombre_razon_social,
+          nombre_fideicomiso: row.nombre_razon_social,
+        },
+        representante: {},
+      });
+
+      return {
+        tipo_entidad,
+        nombre_entidad:
+          deriveRelatedNombreEntidad(tipo_entidad, datos_completos) ||
+          safeInput(row.nombre_razon_social).trim(),
+        nacionalidad: valueToCatalogKey(row.nacionalidad) || safeInput(row.nacionalidad).trim() || "MEX",
+        relacion_con_cliente: safeInput(row.relacion_con_cliente).trim(),
+        sin_documentacion: !!row.sin_documentacion,
+        observaciones: safeInput(row.observaciones).trim(),
+        datos_completos,
+      };
+    }
+
+    const datos_completos = buildCanonicalPFPayloadData({
+      contacto: { pais: row.nacionalidad || "MEX", email: "", telefono: "", domicilio: {} },
+      persona: {
+        nombres: row.nombre_razon_social,
+        apellido_paterno: "",
+        apellido_materno: "",
+        fecha_nacimiento: row.fecha_nacimiento,
+        rfc: row.rfc,
+        curp: row.curp,
+        actividad_economica: row.actividad_giro,
+      },
+    });
+
+    return {
+      tipo_entidad: "persona_fisica" as const,
+      nombre_entidad:
+        deriveRelatedNombreEntidad("persona_fisica", datos_completos) ||
+        safeInput(row.nombre_razon_social).trim(),
+      nacionalidad: valueToCatalogKey(row.nacionalidad) || safeInput(row.nacionalidad).trim() || "MEX",
+      relacion_con_cliente: safeInput(row.relacion_con_cliente).trim(),
+      sin_documentacion: !!row.sin_documentacion,
+      observaciones: safeInput(row.observaciones).trim(),
+      datos_completos,
+    };
+  }
+
+  function buildCanonicalDuenoRowFromRelated(row: RelatedDuenoRow) {
+    const datos_completos = buildCanonicalPFPayloadData(row.datos_completos);
+
+    return {
+      tipo_entidad: "persona_fisica" as const,
+      nombre_entidad:
+        deriveRelatedNombreEntidad("persona_fisica", datos_completos) ||
+        safeInput(row.nombre_entidad).trim(),
+      nacionalidad: valueToCatalogKey(row.nacionalidad) || safeInput(row.nacionalidad).trim() || "MEX",
+      relacion_con_cliente: safeInput(row.relacion_con_cliente).trim(),
+      porcentaje_participacion: safeInput(row.porcentaje_participacion).trim(),
+      observaciones: safeInput(row.observaciones).trim(),
+      datos_completos,
+    };
+  }
+
+  function buildCanonicalDuenoRowFromLegacy(row: DuenoBeneficiarioItem) {
+    const datos_completos = buildCanonicalPFPayloadData({
+      contacto: { pais: row.nacionalidad || "MEX", email: "", telefono: "", domicilio: {} },
+      persona: {
+        nombres: row.nombres,
+        apellido_paterno: row.apellido_paterno,
+        apellido_materno: row.apellido_materno,
+        fecha_nacimiento: row.fecha_nacimiento,
+        rfc: row.rfc,
+        curp: row.curp,
+        actividad_economica: "",
+      },
+    });
+
+    return {
+      tipo_entidad: "persona_fisica" as const,
+      nombre_entidad:
+        deriveRelatedNombreEntidad("persona_fisica", datos_completos) ||
+        [row.nombres, row.apellido_paterno, row.apellido_materno]
+          .map((v) => safeInput(v).trim())
+          .filter(Boolean)
+          .join(" "),
+      nacionalidad: valueToCatalogKey(row.nacionalidad) || safeInput(row.nacionalidad).trim() || "MEX",
+      relacion_con_cliente: safeInput(row.relacion_con_cliente).trim(),
+      porcentaje_participacion: safeInput(row.porcentaje_participacion).trim(),
+      observaciones: safeInput(row.observaciones).trim(),
+      datos_completos,
+    };
+  }
+
+  function buildCanonicalRecursosPayload() {
+    if (relatedRecursos.length > 0) {
+      return relatedRecursos.map(buildCanonicalRecursoRowFromRelated);
+    }
+
+    if (recursosTerceros.length > 0) {
+      return recursosTerceros.map(buildCanonicalRecursoRowFromLegacy);
+    }
+
+    if (pfManifiestaTerceros) {
+      return [
+        buildCanonicalRecursoRowFromLegacy({
+          tipo_tercero: "persona_fisica",
+          nombre_razon_social: pfTerceroNombreCompleto.trim(),
+          relacion_con_cliente: pfTerceroRelacion.trim(),
+          actividad_giro: pfTerceroActividadGiro.trim(),
+          nacionalidad: valueToCatalogKey(pfTerceroNacionalidad) || "MEX",
+          sin_documentacion: pfNoDocumentacionTercero,
+          rfc: pfNoDocumentacionTercero ? "" : pfTerceroRfc.trim().toUpperCase(),
+          curp: pfNoDocumentacionTercero ? "" : pfTerceroCurp.trim().toUpperCase(),
+          fecha_nacimiento: pfNoDocumentacionTercero
+            ? ""
+            : (normalizeToYYYYMMDD(pfTerceroFechaNac) ?? pfTerceroFechaNac.trim()),
+          observaciones: "",
+        }),
+      ];
+    }
+
+    return [];
+  }
+
+  function buildCanonicalDuenosPayload() {
+    if (relatedDuenos.length > 0) {
+      return relatedDuenos.map(buildCanonicalDuenoRowFromRelated);
+    }
+
+    if (duenosBeneficiarios.length > 0) {
+      return duenosBeneficiarios.map(buildCanonicalDuenoRowFromLegacy);
+    }
+
+    if (pmBeneficiarioControlador === "si") {
+      return [
+        buildCanonicalDuenoRowFromLegacy({
+          nombres: pmBcNombres.trim(),
+          apellido_paterno: pmBcApPat.trim(),
+          apellido_materno: pmBcApMat.trim(),
+          fecha_nacimiento: "",
+          nacionalidad: "MEX",
+          relacion_con_cliente: "",
+          rfc: "",
+          curp: "",
+          porcentaje_participacion: "",
+          observaciones: "",
+        }),
+      ];
+    }
+
+    return [];
+  }
+
   function safeInput(value: any): string {
     if (value === null || value === undefined) return "";
     return String(value);
@@ -883,49 +1172,8 @@ persona: {
             familiar: pfCargoPublicoFamiliar.trim(),
           },
             recursos_terceros_aplica:
-              recursosTercerosAplica || pfManifiestaTerceros,
-            recursos_terceros: (
-              recursosTerceros.length > 0
-                ? recursosTerceros
-                : pfManifiestaTerceros
-                  ? [
-                      {
-                        tipo_tercero: "persona_fisica",
-                        nombre_razon_social: pfTerceroNombreCompleto.trim(),
-                        relacion_con_cliente: pfTerceroRelacion.trim(),
-                        actividad_giro: pfTerceroActividadGiro.trim(),
-                        nacionalidad:
-                          valueToCatalogKey(pfTerceroNacionalidad) || "MEX",
-                        sin_documentacion: pfNoDocumentacionTercero,
-                        rfc: pfNoDocumentacionTercero
-                          ? ""
-                          : pfTerceroRfc.trim().toUpperCase(),
-                        curp: pfNoDocumentacionTercero
-                          ? ""
-                          : pfTerceroCurp.trim().toUpperCase(),
-                        fecha_nacimiento: pfNoDocumentacionTercero
-                          ? ""
-                          : (normalizeToYYYYMMDD(pfTerceroFechaNac) ??
-                            pfTerceroFechaNac.trim()),
-                        observaciones: "",
-                      },
-                    ]
-                  : []
-            ).map((row) => ({
-              tipo_tercero: row.tipo_tercero || "persona_fisica",
-              nombre_razon_social: row.nombre_razon_social.trim(),
-              relacion_con_cliente: row.relacion_con_cliente.trim(),
-              actividad_giro: row.actividad_giro.trim(),
-              nacionalidad: valueToCatalogKey(row.nacionalidad) || "MEX",
-              sin_documentacion: !!row.sin_documentacion,
-              rfc: row.sin_documentacion ? "" : row.rfc.trim().toUpperCase(),
-              curp: row.sin_documentacion ? "" : row.curp.trim().toUpperCase(),
-              fecha_nacimiento: row.sin_documentacion
-                ? ""
-                : (normalizeToYYYYMMDD(row.fecha_nacimiento) ??
-                  row.fecha_nacimiento.trim()),
-              observaciones: row.observaciones.trim(),
-            })),
+              relatedRecursosAplica || recursosTercerosAplica || pfManifiestaTerceros,
+            recursos_terceros: buildCanonicalRecursosPayload(),
         },
 
       };
@@ -953,40 +1201,8 @@ persona: {
           contacto,
 
           duenos_beneficiarios_aplica:
-            duenosBeneficiariosAplica || pmBeneficiarioControlador === "si",
-          duenos_beneficiarios: (
-            duenosBeneficiarios.length > 0
-              ? duenosBeneficiarios
-              : pmBeneficiarioControlador === "si"
-                ? [
-                    {
-                      nombres: pmBcNombres.trim(),
-                      apellido_paterno: pmBcApPat.trim(),
-                      apellido_materno: pmBcApMat.trim(),
-                      fecha_nacimiento: "",
-                      nacionalidad: "MEX",
-                      relacion_con_cliente: "",
-                      rfc: "",
-                      curp: "",
-                      porcentaje_participacion: "",
-                      observaciones: "",
-                    },
-                  ]
-                : []
-          ).map((row) => ({
-            nombres: row.nombres.trim(),
-            apellido_paterno: row.apellido_paterno.trim(),
-            apellido_materno: row.apellido_materno.trim(),
-            fecha_nacimiento:
-              normalizeToYYYYMMDD(row.fecha_nacimiento) ??
-              row.fecha_nacimiento.trim(),
-            nacionalidad: valueToCatalogKey(row.nacionalidad) || "MEX",
-            relacion_con_cliente: row.relacion_con_cliente.trim(),
-            rfc: row.rfc.trim().toUpperCase(),
-            curp: row.curp.trim().toUpperCase(),
-            porcentaje_participacion: row.porcentaje_participacion.trim(),
-            observaciones: row.observaciones.trim(),
-          })),
+            relatedDuenosAplica || duenosBeneficiariosAplica || pmBeneficiarioControlador === "si",
+          duenos_beneficiarios: buildCanonicalDuenosPayload(),
           representante_es_accionista: pmRepEsAccionista,
           accionista_tercero: pmRepEsAccionista
             ? null
