@@ -569,7 +569,7 @@ async function replaceRelacionadosByCategoria(
   }>,
 ): Promise<number> {
   await client.query(
-    DELETE FROM public.cliente_relacionados WHERE cliente_id=$1 AND categoria_relacion=$2,
+    `DELETE FROM public.cliente_relacionados WHERE cliente_id=$1 AND categoria_relacion=$2`,
     [clienteId, categoria],
   );
 
@@ -647,7 +647,7 @@ async function replaceChildCollectionsForTipo(
   const summary = { recurso_tercero: 0, dueno_beneficiario: 0 };
 
   if (tipo === 'persona_fisica') {
-    await client.query(DELETE FROM public.cliente_recursos_terceros WHERE cliente_id=$1, [clienteId]);
+    await client.query(`DELETE FROM public.cliente_recursos_terceros WHERE cliente_id=$1`, [clienteId]);
     const rows = buildPersistableRecursoRows(datos_completos);
     for (const row of rows) {
       await client.query(
@@ -682,7 +682,7 @@ async function replaceChildCollectionsForTipo(
   }
 
   if (tipo === 'persona_moral' || tipo === 'fideicomiso') {
-    await client.query(DELETE FROM public.cliente_duenos_beneficiarios WHERE cliente_id=$1, [clienteId]);
+    await client.query(`DELETE FROM public.cliente_duenos_beneficiarios WHERE cliente_id=$1`, [clienteId]);
     const rows = buildPersistableDuenoRows(datos_completos);
     for (const row of rows) {
       await client.query(
@@ -729,7 +729,7 @@ async function assertRelacionadosPersistedForTipo(
   if (tipo === 'persona_fisica') {
     const expected = buildRelacionadosRecursoRows(datos_completos).length;
     if (expected > 0 && summary.recurso_tercero !== expected) {
-      throw new Error(Persistencia incompleta en cliente_relacionados (recurso_tercero): expected=${expected} inserted=${summary.recurso_tercero});
+      throw new Error(`Persistencia incompleta en cliente_relacionados (recurso_tercero): expected=${expected} inserted=${summary.recurso_tercero}`);
     }
     return;
   }
@@ -737,7 +737,7 @@ async function assertRelacionadosPersistedForTipo(
   if (tipo === 'persona_moral' || tipo === 'fideicomiso') {
     const expected = buildRelacionadosDuenoRows(datos_completos).length;
     if (expected > 0 && summary.dueno_beneficiario !== expected) {
-      throw new Error(Persistencia incompleta en cliente_relacionados (dueno_beneficiario): expected=${expected} inserted=${summary.dueno_beneficiario});
+      throw new Error(`Persistencia incompleta en cliente_relacionados (dueno_beneficiario): expected=${expected} inserted=${summary.dueno_beneficiario}`);
     }
   }
 }
