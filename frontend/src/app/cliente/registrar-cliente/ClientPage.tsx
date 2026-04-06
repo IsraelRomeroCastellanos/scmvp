@@ -1416,6 +1416,380 @@ export default function ClientPage() {
     return String(value ?? "").replace(/\D+/g, "");
   }
 
+  function addRelatedDuenoRow() {
+    setRelatedDuenos((prev) => [...prev, createEmptyRelatedDueno()]);
+  }
+
+  function removeRelatedDuenoRow(index: number) {
+    setRelatedDuenos((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function updateRelatedDuenoRow(
+    index: number,
+    updater: (row: RelatedDuenoRow) => RelatedDuenoRow,
+  ) {
+    setRelatedDuenos((prev) =>
+      prev.map((row, i) => {
+        if (i !== index) return row;
+        const next = updater(row);
+        return {
+          ...next,
+          nombre_entidad:
+            deriveRelatedNombreEntidad("persona_fisica", next.datos_completos) ||
+            safeInput(next.nombre_entidad).trim(),
+        };
+      }),
+    );
+  }
+
+  function updateRelatedDuenoCommonField(
+    index: number,
+    key:
+      | "nacionalidad"
+      | "relacion_con_cliente"
+      | "porcentaje_participacion"
+      | "observaciones",
+    value: string,
+  ) {
+    updateRelatedDuenoRow(index, (row) => ({
+      ...row,
+      [key]: value,
+    }));
+  }
+
+  function updateRelatedDuenoDataField(
+    index: number,
+    section: "persona" | "contacto",
+    key: string,
+    value: string,
+  ) {
+    updateRelatedDuenoRow(index, (row) => ({
+      ...row,
+      datos_completos: {
+        ...(row.datos_completos as Record<string, any>),
+        [section]: {
+          ...(((row.datos_completos as Record<string, any>)[section] || {}) as Record<string, any>),
+          [key]: value,
+        },
+      } as unknown as RelatedPFData,
+    }));
+  }
+
+  function updateRelatedDuenoDomicilioField(index: number, key: string, value: string) {
+    updateRelatedDuenoRow(index, (row) => {
+      const contacto = (((row.datos_completos as Record<string, any>).contacto || {}) as Record<string, any>);
+      const domicilio = ((contacto.domicilio || {}) as Record<string, any>);
+
+      return {
+        ...row,
+        datos_completos: {
+          ...(row.datos_completos as Record<string, any>),
+          contacto: {
+            ...contacto,
+            domicilio: {
+              ...domicilio,
+              [key]: value,
+            },
+          },
+        } as unknown as RelatedPFData,
+      };
+    });
+  }
+
+  function renderRelatedDuenoContactoFields(row: RelatedDuenoRow, index: number) {
+    const contacto = (((row.datos_completos as Record<string, any>).contacto || {}) as Record<string, any>);
+    const domicilio = ((contacto.domicilio || {}) as Record<string, any>);
+
+    return (
+      <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="space-y-1">
+            <label className="text-sm font-medium">País</label>
+            <input
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              value={safeInput(contacto.pais)}
+              onChange={(e) => updateRelatedDuenoDataField(index, "contacto", "pais", e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Email</label>
+            <input
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              value={safeInput(contacto.email)}
+              onChange={(e) => updateRelatedDuenoDataField(index, "contacto", "email", e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Teléfono</label>
+            <input
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              value={safeInput(contacto.telefono)}
+              onChange={(e) => updateRelatedDuenoDataField(index, "contacto", "telefono", e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Calle</label>
+            <input
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              value={safeInput(domicilio.calle)}
+              onChange={(e) => updateRelatedDuenoDomicilioField(index, "calle", e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Número</label>
+            <input
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              value={safeInput(domicilio.numero)}
+              onChange={(e) => updateRelatedDuenoDomicilioField(index, "numero", e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Colonia</label>
+            <input
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              value={safeInput(domicilio.colonia)}
+              onChange={(e) => updateRelatedDuenoDomicilioField(index, "colonia", e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Municipio</label>
+            <input
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              value={safeInput(domicilio.municipio)}
+              onChange={(e) => updateRelatedDuenoDomicilioField(index, "municipio", e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Ciudad / delegación</label>
+            <input
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              value={safeInput(domicilio.ciudad_delegacion)}
+              onChange={(e) => updateRelatedDuenoDomicilioField(index, "ciudad_delegacion", e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Código postal</label>
+            <input
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              value={safeInput(domicilio.codigo_postal)}
+              onChange={(e) => updateRelatedDuenoDomicilioField(index, "codigo_postal", e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Estado</label>
+            <input
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              value={safeInput(domicilio.estado)}
+              onChange={(e) => updateRelatedDuenoDomicilioField(index, "estado", e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">País domicilio</label>
+            <input
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              value={safeInput(domicilio.pais)}
+              onChange={(e) => updateRelatedDuenoDomicilioField(index, "pais", e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderRelatedDuenoPFFields(row: RelatedDuenoRow, index: number) {
+    const persona = ((((row.datos_completos as Record<string, any>).persona) || {}) as Record<string, any>);
+
+    return (
+      <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Nombres</label>
+            <input
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              value={safeInput(persona.nombres)}
+              onChange={(e) => updateRelatedDuenoDataField(index, "persona", "nombres", e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Apellido paterno</label>
+            <input
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              value={safeInput(persona.apellido_paterno)}
+              onChange={(e) => updateRelatedDuenoDataField(index, "persona", "apellido_paterno", e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Apellido materno</label>
+            <input
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              value={safeInput(persona.apellido_materno)}
+              onChange={(e) => updateRelatedDuenoDataField(index, "persona", "apellido_materno", e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Fecha nac. (AAAAMMDD)</label>
+            <input
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              value={safeInput(persona.fecha_nacimiento)}
+              onChange={(e) => updateRelatedDuenoDataField(index, "persona", "fecha_nacimiento", onlyDigits(e.target.value).slice(0, 8))}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">RFC</label>
+            <input
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              value={safeInput(persona.rfc)}
+              onChange={(e) => updateRelatedDuenoDataField(index, "persona", "rfc", e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">CURP</label>
+            <input
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              value={safeInput(persona.curp)}
+              onChange={(e) => updateRelatedDuenoDataField(index, "persona", "curp", e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1 sm:col-span-3">
+            <label className="text-sm font-medium">Actividad económica</label>
+            <input
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              value={safeInput(persona.actividad_economica)}
+              onChange={(e) => updateRelatedDuenoDataField(index, "persona", "actividad_economica", e.target.value)}
+            />
+          </div>
+        </div>
+
+        {renderRelatedDuenoContactoFields(row, index)}
+      </div>
+    );
+  }
+
+  function renderRelatedDuenosList() {
+    return (
+      <div className="rounded border border-gray-200 p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium">Dueños beneficiarios</p>
+          <button
+            type="button"
+            className="rounded border border-gray-300 px-3 py-1 text-sm"
+            onClick={() => addRelatedDuenoRow()}
+          >
+            Agregar
+          </button>
+        </div>
+
+        {relatedDuenos.map((row, index) => (
+          <div key={index} className="rounded border border-gray-200 p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium">
+                Dueño beneficiario #{index + 1}
+              </p>
+              <button
+                type="button"
+                className="rounded border border-red-300 px-3 py-1 text-sm text-red-700"
+                onClick={() => removeRelatedDuenoRow(index)}
+              >
+                Eliminar
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Relación con cliente</label>
+                <input
+                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                  value={row.relacion_con_cliente}
+                  onChange={(e) =>
+                    updateRelatedDuenoCommonField(
+                      index,
+                      "relacion_con_cliente",
+                      e.target.value,
+                    )
+                  }
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Nacionalidad</label>
+                <input
+                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                  value={row.nacionalidad}
+                  onChange={(e) =>
+                    updateRelatedDuenoCommonField(
+                      index,
+                      "nacionalidad",
+                      e.target.value,
+                    )
+                  }
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Porcentaje participación</label>
+                <input
+                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                  value={row.porcentaje_participacion}
+                  onChange={(e) =>
+                    updateRelatedDuenoCommonField(
+                      index,
+                      "porcentaje_participacion",
+                      e.target.value,
+                    )
+                  }
+                />
+              </div>
+
+              <div className="space-y-1 sm:col-span-2">
+                <label className="text-sm font-medium">Nombre entidad (derivado)</label>
+                <input
+                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                  value={row.nombre_entidad}
+                  readOnly
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Observaciones</label>
+                <input
+                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                  value={row.observaciones}
+                  onChange={(e) =>
+                    updateRelatedDuenoCommonField(
+                      index,
+                      "observaciones",
+                      e.target.value,
+                    )
+                  }
+                />
+              </div>
+            </div>
+
+            {renderRelatedDuenoPFFields(row, index)}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   function safeInput(value: any): string {
     if (value === null || value === undefined) return "";
     return String(value);
