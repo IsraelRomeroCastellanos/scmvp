@@ -955,6 +955,467 @@ export default function ClientPage() {
     return [];
   }
 
+  function addRelatedRecursoRow(tipo_entidad: RelatedTipoEntidad = "persona_fisica") {
+    setRelatedRecursos((prev) => [...prev, createEmptyRelatedRecurso(tipo_entidad)]);
+  }
+
+  function removeRelatedRecursoRow(index: number) {
+    setRelatedRecursos((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function updateRelatedRecursoRow(
+    index: number,
+    updater: (row: RelatedRecursoRow) => RelatedRecursoRow,
+  ) {
+    setRelatedRecursos((prev) =>
+      prev.map((row, i) => {
+        if (i !== index) return row;
+        const next = updater(row);
+        return {
+          ...next,
+          nombre_entidad:
+            deriveRelatedNombreEntidad(next.tipo_entidad, next.datos_completos) ||
+            safeInput(next.nombre_entidad).trim(),
+        };
+      }),
+    );
+  }
+
+  function updateRelatedRecursoCommonField(
+    index: number,
+    key: "nacionalidad" | "relacion_con_cliente" | "sin_documentacion" | "observaciones",
+    value: string | boolean,
+  ) {
+    updateRelatedRecursoRow(index, (row) => ({
+      ...row,
+      [key]: value,
+    }));
+  }
+
+  function updateRelatedRecursoSubtype(index: number, nextTipo: RelatedTipoEntidad) {
+    updateRelatedRecursoRow(index, (row) => changeRelatedRecursoSubtype(row, nextTipo));
+  }
+
+  function updateRelatedRecursoDataField(
+    index: number,
+    section: "persona" | "empresa" | "representante" | "fideicomiso" | "contacto",
+    key: string,
+    value: string,
+  ) {
+    updateRelatedRecursoRow(index, (row) => ({
+      ...row,
+      datos_completos: {
+        ...(row.datos_completos as Record<string, any>),
+        [section]: {
+          ...(((row.datos_completos as Record<string, any>)[section] || {}) as Record<string, any>),
+          [key]: value,
+        },
+      } as unknown as RelatedPFData | RelatedPMData | RelatedFIDData,
+    }));
+  }
+
+  function updateRelatedRecursoDomicilioField(index: number, key: string, value: string) {
+    updateRelatedRecursoRow(index, (row) => {
+      const contacto = (((row.datos_completos as Record<string, any>).contacto || {}) as Record<string, any>);
+      const domicilio = ((contacto.domicilio || {}) as Record<string, any>);
+
+      return {
+        ...row,
+        datos_completos: {
+          ...(row.datos_completos as Record<string, any>),
+          contacto: {
+            ...contacto,
+            domicilio: {
+              ...domicilio,
+              [key]: value,
+            },
+          },
+        } as unknown as RelatedPFData | RelatedPMData | RelatedFIDData,
+      };
+    });
+  }
+
+  function renderRelatedRecursoContactoFields(row: RelatedRecursoRow, index: number) {
+    const contacto = (((row.datos_completos as Record<string, any>).contacto || {}) as Record<string, any>);
+    const domicilio = ((contacto.domicilio || {}) as Record<string, any>);
+
+    return (
+      <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="space-y-1">
+            <label className="text-sm font-medium">País</label>
+            <input
+              value={safeInput(contacto.pais)}
+              onChange={(e) => updateRelatedRecursoDataField(index, "contacto", "pais", e.target.value)}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Email</label>
+            <input
+              value={safeInput(contacto.email)}
+              onChange={(e) => updateRelatedRecursoDataField(index, "contacto", "email", e.target.value)}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Teléfono</label>
+            <input
+              value={safeInput(contacto.telefono)}
+              onChange={(e) => updateRelatedRecursoDataField(index, "contacto", "telefono", e.target.value)}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Calle</label>
+            <input
+              value={safeInput(domicilio.calle)}
+              onChange={(e) => updateRelatedRecursoDomicilioField(index, "calle", e.target.value)}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Número</label>
+            <input
+              value={safeInput(domicilio.numero)}
+              onChange={(e) => updateRelatedRecursoDomicilioField(index, "numero", e.target.value)}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Colonia</label>
+            <input
+              value={safeInput(domicilio.colonia)}
+              onChange={(e) => updateRelatedRecursoDomicilioField(index, "colonia", e.target.value)}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Municipio</label>
+            <input
+              value={safeInput(domicilio.municipio)}
+              onChange={(e) => updateRelatedRecursoDomicilioField(index, "municipio", e.target.value)}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Ciudad / delegación</label>
+            <input
+              value={safeInput(domicilio.ciudad_delegacion)}
+              onChange={(e) => updateRelatedRecursoDomicilioField(index, "ciudad_delegacion", e.target.value)}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Código postal</label>
+            <input
+              value={safeInput(domicilio.codigo_postal)}
+              onChange={(e) => updateRelatedRecursoDomicilioField(index, "codigo_postal", e.target.value)}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Estado</label>
+            <input
+              value={safeInput(domicilio.estado)}
+              onChange={(e) => updateRelatedRecursoDomicilioField(index, "estado", e.target.value)}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">País domicilio</label>
+            <input
+              value={safeInput(domicilio.pais)}
+              onChange={(e) => updateRelatedRecursoDomicilioField(index, "pais", e.target.value)}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderRelatedRecursoSubtypeFields(row: RelatedRecursoRow, index: number) {
+    if (row.tipo_entidad === "persona_fisica") {
+      const persona = ((((row.datos_completos as Record<string, any>).persona) || {}) as Record<string, any>);
+
+      return (
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Nombres</label>
+              <input
+                value={safeInput(persona.nombres)}
+                onChange={(e) => updateRelatedRecursoDataField(index, "persona", "nombres", e.target.value)}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Apellido paterno</label>
+              <input
+                value={safeInput(persona.apellido_paterno)}
+                onChange={(e) => updateRelatedRecursoDataField(index, "persona", "apellido_paterno", e.target.value)}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Apellido materno</label>
+              <input
+                value={safeInput(persona.apellido_materno)}
+                onChange={(e) => updateRelatedRecursoDataField(index, "persona", "apellido_materno", e.target.value)}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Fecha nac. (AAAAMMDD)</label>
+              <input
+                value={safeInput(persona.fecha_nacimiento)}
+                onChange={(e) => updateRelatedRecursoDataField(index, "persona", "fecha_nacimiento", onlyDigits(e.target.value).slice(0, 8))}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">RFC</label>
+              <input
+                value={safeInput(persona.rfc)}
+                onChange={(e) => updateRelatedRecursoDataField(index, "persona", "rfc", e.target.value)}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">CURP</label>
+              <input
+                value={safeInput(persona.curp)}
+                onChange={(e) => updateRelatedRecursoDataField(index, "persona", "curp", e.target.value)}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="space-y-1 sm:col-span-3">
+              <label className="text-sm font-medium">Actividad económica</label>
+              <input
+                value={safeInput(persona.actividad_economica)}
+                onChange={(e) => updateRelatedRecursoDataField(index, "persona", "actividad_economica", e.target.value)}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+
+          {renderRelatedRecursoContactoFields(row, index)}
+        </div>
+      );
+    }
+
+    if (row.tipo_entidad === "persona_moral") {
+      const empresa = ((((row.datos_completos as Record<string, any>).empresa) || {}) as Record<string, any>);
+      const representante = ((((row.datos_completos as Record<string, any>).representante) || {}) as Record<string, any>);
+
+      return (
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="space-y-1 sm:col-span-3">
+              <label className="text-sm font-medium">Razón social</label>
+              <input
+                value={safeInput(empresa.razon_social || empresa.nombre_entidad)}
+                onChange={(e) => {
+                  updateRelatedRecursoDataField(index, "empresa", "razon_social", e.target.value);
+                  updateRelatedRecursoDataField(index, "empresa", "nombre_entidad", e.target.value);
+                }}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">RFC</label>
+              <input
+                value={safeInput(empresa.rfc)}
+                onChange={(e) => updateRelatedRecursoDataField(index, "empresa", "rfc", e.target.value)}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Fecha constitución</label>
+              <input
+                value={safeInput(empresa.fecha_constitucion)}
+                onChange={(e) => updateRelatedRecursoDataField(index, "empresa", "fecha_constitucion", onlyDigits(e.target.value).slice(0, 8))}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Giro mercantil</label>
+              <input
+                value={safeInput(empresa.giro_mercantil)}
+                onChange={(e) => updateRelatedRecursoDataField(index, "empresa", "giro_mercantil", e.target.value)}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+
+          {renderRelatedRecursoContactoFields(row, index)}
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Rep. nombres</label>
+              <input
+                value={safeInput(representante.nombres)}
+                onChange={(e) => updateRelatedRecursoDataField(index, "representante", "nombres", e.target.value)}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Rep. apellido paterno</label>
+              <input
+                value={safeInput(representante.apellido_paterno)}
+                onChange={(e) => updateRelatedRecursoDataField(index, "representante", "apellido_paterno", e.target.value)}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Rep. apellido materno</label>
+              <input
+                value={safeInput(representante.apellido_materno)}
+                onChange={(e) => updateRelatedRecursoDataField(index, "representante", "apellido_materno", e.target.value)}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Rep. fecha nac.</label>
+              <input
+                value={safeInput(representante.fecha_nacimiento)}
+                onChange={(e) => updateRelatedRecursoDataField(index, "representante", "fecha_nacimiento", onlyDigits(e.target.value).slice(0, 8))}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Rep. RFC</label>
+              <input
+                value={safeInput(representante.rfc)}
+                onChange={(e) => updateRelatedRecursoDataField(index, "representante", "rfc", e.target.value)}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Rep. CURP</label>
+              <input
+                value={safeInput(representante.curp)}
+                onChange={(e) => updateRelatedRecursoDataField(index, "representante", "curp", e.target.value)}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const fideicomiso = ((((row.datos_completos as Record<string, any>).fideicomiso) || {}) as Record<string, any>);
+    const representante = ((((row.datos_completos as Record<string, any>).representante) || {}) as Record<string, any>);
+
+    return (
+      <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-1 sm:col-span-2">
+            <label className="text-sm font-medium">Nombre fideicomiso</label>
+            <input
+              value={safeInput(fideicomiso.nombre_fideicomiso || fideicomiso.denominacion || fideicomiso.nombre_entidad)}
+              onChange={(e) => {
+                updateRelatedRecursoDataField(index, "fideicomiso", "nombre_fideicomiso", e.target.value);
+                updateRelatedRecursoDataField(index, "fideicomiso", "denominacion", e.target.value);
+                updateRelatedRecursoDataField(index, "fideicomiso", "nombre_entidad", e.target.value);
+              }}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+        </div>
+
+        {renderRelatedRecursoContactoFields(row, index)}
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Rep. nombres</label>
+            <input
+              value={safeInput(representante.nombres)}
+              onChange={(e) => updateRelatedRecursoDataField(index, "representante", "nombres", e.target.value)}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Rep. apellido paterno</label>
+            <input
+              value={safeInput(representante.apellido_paterno)}
+              onChange={(e) => updateRelatedRecursoDataField(index, "representante", "apellido_paterno", e.target.value)}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Rep. apellido materno</label>
+            <input
+              value={safeInput(representante.apellido_materno)}
+              onChange={(e) => updateRelatedRecursoDataField(index, "representante", "apellido_materno", e.target.value)}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Rep. fecha nac.</label>
+            <input
+              value={safeInput(representante.fecha_nacimiento)}
+              onChange={(e) => updateRelatedRecursoDataField(index, "representante", "fecha_nacimiento", onlyDigits(e.target.value).slice(0, 8))}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Rep. RFC</label>
+            <input
+              value={safeInput(representante.rfc)}
+              onChange={(e) => updateRelatedRecursoDataField(index, "representante", "rfc", e.target.value)}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Rep. CURP</label>
+            <input
+              value={safeInput(representante.curp)}
+              onChange={(e) => updateRelatedRecursoDataField(index, "representante", "curp", e.target.value)}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function onlyDigits(value: string): string {
+    return String(value ?? "").replace(/\D+/g, "");
+  }
+
   function safeInput(value: any): string {
     if (value === null || value === undefined) return "";
     return String(value);
@@ -2478,18 +2939,17 @@ persona: {
                   <input
                     type="checkbox"
                     className="mt-1"
-                    checked={pfManifiestaTerceros}
+                    checked={relatedRecursosAplica}
                     onChange={(e) => {
-                    const v = e.target.checked;
-                    setPfManifiestaTerceros(v);
-                    setRecursosTercerosAplica(v);
+                      const v = e.target.checked;
+                      setRelatedRecursosAplica(v);
 
-                    if (!v) {
-                      setRecursosTerceros([]);
-                    } else if (recursosTerceros.length === 0) {
-                      setRecursosTerceros([createEmptyRecursoTercero()]);
-                    }
-                  }}
+                      if (!v) {
+                        setRelatedRecursos([]);
+                      } else if (relatedRecursos.length === 0) {
+                        setRelatedRecursos([createEmptyRelatedRecurso()]);
+                      }
+                    }}
                   />
                   <span>
                     Manifiesto que tengo conocimiento de la existencia del dueño
@@ -2498,852 +2958,31 @@ persona: {
                   </span>
                 </label>
 
-                  {pfManifiestaTerceros ? (
-                    <div className="rounded border border-gray-200 p-3 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-gray-600">
-                          En caso de responder que sí, captura uno o más registros.
-                        </p>
-                        <button
-                          type="button"
-                          className="rounded border border-gray-300 px-3 py-1 text-sm"
-                          onClick={addRecursoTerceroRow}
-                        >
-                          Agregar
-                        </button>
-                      </div>
-
-                      {recursosTerceros.map((row, index) => (
-                        <div key={index} className="rounded border border-gray-200 p-4 space-y-4">
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm font-medium">
-                              Recurso de tercero #{index + 1}
-                            </p>
-                            <button
-                              type="button"
-                              className="rounded border border-red-300 px-3 py-1 text-sm text-red-700"
-                              onClick={() => removeRecursoTerceroRow(index)}
-                            >
-                              Eliminar
-                            </button>
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-1">
-                              <label className="text-sm font-medium">
-                                Tipo de tercero *
-                              </label>
-                              <select
-                                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                                value={row.tipo_tercero}
-                                onChange={(e) =>
-                                  updateRecursoTerceroRow(index, "tipo_tercero", e.target.value)
-                                }
-                              >
-                                <option value="persona_fisica">Persona Física</option>
-                                <option value="persona_moral">Persona Moral</option>
-                              </select>
-                            </div>
-
-                            <div className="space-y-1">
-                              <label className="text-sm font-medium">
-                                Actividad o giro del negocio del tercero *
-                              </label>
-                              <input
-                                className={`w-full rounded border px-3 py-2 text-sm ${
-                                  index === 0 && errors["persona.terceros.actividad_giro"]
-                                    ? "border-red-500"
-                                    : "border-gray-300"
-                                }`}
-                                value={row.actividad_giro}
-                                onChange={(e) => {
-                                  updateRecursoTerceroRow(index, "actividad_giro", e.target.value);
-                                  if (index === 0) setPfTerceroActividadGiro(e.target.value);
-                                }}
-                                onBlur={() => {
-                                  if (index === 0) {
-                                    validator.validateField("persona.terceros.actividad_giro");
-                                  }
-                                }}
-                              />
-                              {index === 0 && errors["persona.terceros.actividad_giro"] ? (
-                                <p className="text-xs text-red-600">
-                                  {errors["persona.terceros.actividad_giro"]}
-                                </p>
-                              ) : null}
-                            </div>
-
-                            <div className="space-y-1">
-                              <label className="text-sm font-medium">
-                                Relación con el tercero *
-                              </label>
-                              <input
-                                className={`w-full rounded border px-3 py-2 text-sm ${
-                                  index === 0 && errors["persona.terceros.relacion"]
-                                    ? "border-red-500"
-                                    : "border-gray-300"
-                                }`}
-                                value={row.relacion_con_cliente}
-                                onChange={(e) => {
-                                  updateRecursoTerceroRow(index, "relacion_con_cliente", e.target.value);
-                                  if (index === 0) setPfTerceroRelacion(e.target.value);
-                                }}
-                                onBlur={() => {
-                                  if (index === 0) {
-                                    validator.validateField("persona.terceros.relacion");
-                                  }
-                                }}
-                              />
-                              {index === 0 && errors["persona.terceros.relacion"] ? (
-                                <p className="text-xs text-red-600">
-                                  {errors["persona.terceros.relacion"]}
-                                </p>
-                              ) : null}
-                            </div>
-
-                            <div className="space-y-1">
-                              <label className="text-sm font-medium">
-                                Nombre completo / razón social del tercero *
-                              </label>
-                              <input
-                                className={`w-full rounded border px-3 py-2 text-sm ${
-                                  index === 0 && errors["persona.terceros.nombre_completo"]
-                                    ? "border-red-500"
-                                    : "border-gray-300"
-                                }`}
-                                value={row.nombre_razon_social}
-                                onChange={(e) => {
-                                  updateRecursoTerceroRow(index, "nombre_razon_social", e.target.value);
-                                  if (index === 0) setPfTerceroNombreCompleto(e.target.value);
-                                }}
-                                onBlur={() => {
-                                  if (index === 0) {
-                                    setErr("persona.terceros.nombre_completo", undefined);
-                                  }
-                                }}
-                                placeholder="Ej. Juan Pérez López / Empresa SA"
-                              />
-                              {index === 0 && errors["persona.terceros.nombre_completo"] ? (
-                                <p className="text-xs text-red-600">
-                                  {errors["persona.terceros.nombre_completo"]}
-                                </p>
-                              ) : null}
-                            </div>
-
-                            <SearchableSelect
-                              label="Nacionalidad del tercero"
-                              required
-                              value={row.nacionalidad}
-                              items={paises}
-                              error={index === 0 ? errors["persona.terceros.nacionalidad"] : undefined}
-                              onChange={(v) => {
-                                updateRecursoTerceroRow(index, "nacionalidad", v);
-                                if (index === 0) setPfTerceroNacionalidad(v);
-                              }}
-                              onBlur={() => {
-                                if (index === 0) {
-                                  setErr("persona.terceros.nacionalidad", undefined);
-                                }
-                              }}
-                            />
-
-                            <div className="space-y-1">
-                              <label className="text-sm font-medium">RFC del tercero</label>
-                              <input
-                                className={`w-full rounded border px-3 py-2 text-sm ${
-                                  index === 0 && errors["persona.terceros.rfc"]
-                                    ? "border-red-500"
-                                    : "border-gray-300"
-                                }`}
-                                value={row.rfc}
-                                onChange={(e) => {
-                                  updateRecursoTerceroRow(index, "rfc", e.target.value);
-                                  if (index === 0) setPfTerceroRfc(e.target.value);
-                                }}
-                                onBlur={() => {
-                                  if (index === 0) {
-                                    setErr("persona.terceros.rfc", undefined);
-                                  }
-                                }}
-                                placeholder="XAXX010101000"
-                                disabled={row.sin_documentacion}
-                              />
-                              {index === 0 && errors["persona.terceros.rfc"] ? (
-                                <p className="text-xs text-red-600">
-                                  {errors["persona.terceros.rfc"]}
-                                </p>
-                              ) : null}
-                            </div>
-
-                            <div className="space-y-1">
-                              <label className="text-sm font-medium">CURP del tercero</label>
-                              <input
-                                className={`w-full rounded border px-3 py-2 text-sm ${
-                                  index === 0 && errors["persona.terceros.curp"]
-                                    ? "border-red-500"
-                                    : "border-gray-300"
-                                }`}
-                                value={row.curp}
-                                onChange={(e) => {
-                                  updateRecursoTerceroRow(index, "curp", e.target.value);
-                                  if (index === 0) setPfTerceroCurp(e.target.value);
-                                }}
-                                onBlur={() => {
-                                  if (index === 0) {
-                                    setErr("persona.terceros.curp", undefined);
-                                  }
-                                }}
-                                placeholder="PEPJ900101HDFRRN09"
-                                disabled={row.sin_documentacion}
-                              />
-                              {index === 0 && errors["persona.terceros.curp"] ? (
-                                <p className="text-xs text-red-600">
-                                  {errors["persona.terceros.curp"]}
-                                </p>
-                              ) : null}
-                            </div>
-
-                            <div className="space-y-1">
-                              <label className="text-sm font-medium">
-                                Fecha de nacimiento del tercero (AAAAMMDD)
-                              </label>
-                              <input
-                                className={`w-full rounded border px-3 py-2 text-sm ${
-                                  index === 0 && errors["persona.terceros.fecha_nacimiento"]
-                                    ? "border-red-500"
-                                    : "border-gray-300"
-                                }`}
-                                value={row.fecha_nacimiento}
-                                onChange={(e) => {
-                                  updateRecursoTerceroRow(index, "fecha_nacimiento", e.target.value);
-                                  if (index === 0) setPfTerceroFechaNac(e.target.value);
-                                }}
-                                onBlur={() => {
-                                  if (index === 0) {
-                                    setErr("persona.terceros.fecha_nacimiento", undefined);
-                                  }
-                                }}
-                                placeholder="19900101 (o 1990-01-01)"
-                                disabled={row.sin_documentacion}
-                              />
-                              {index === 0 && errors["persona.terceros.fecha_nacimiento"] ? (
-                                <p className="text-xs text-red-600">
-                                  {errors["persona.terceros.fecha_nacimiento"]}
-                                </p>
-                              ) : null}
-                            </div>
-
-                            <div className="space-y-1 md:col-span-2">
-                              <label className="text-sm font-medium">Observaciones</label>
-                              <input
-                                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                                value={row.observaciones}
-                                onChange={(e) =>
-                                  updateRecursoTerceroRow(index, "observaciones", e.target.value)
-                                }
-                              />
-                            </div>
-
-                            <label className="flex items-start gap-2 text-sm md:col-span-2">
-                              <input
-                                type="checkbox"
-                                className="mt-1"
-                                checked={row.sin_documentacion}
-                                onChange={(e) => {
-                                  updateRecursoTerceroRow(index, "sin_documentacion", e.target.checked);
-                                  if (index === 0) setPfNoDocumentacionTercero(e.target.checked);
-                                }}
-                              />
-                              <span>
-                                Manifiesto que no cuento con la documentación requerida
-                                del dueño beneficiario.
-                              </span>
-                            </label>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Persona Moral */}
-        {tipo === "persona_moral" && (
-          <div className="rounded border border-gray-200 p-4 space-y-4">
-            <h2 className="font-medium">Persona Moral</h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-1">
-                <label className="text-sm font-medium">
-                  Subtipo PM <span className="text-red-600">*</span>
-                </label>
-                <select
-                  className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors["empresa.subtipo_pm"] ? "border-red-500" : "border-gray-300"
-                  }`}
-                  value={pmSubtipoPm}
-                  onChange={(e) => setPmSubtipoPm(e.target.value)}
-                  onBlur={() => validator.validateField("empresa.subtipo_pm")}
-                >
-                  <option value="">Selecciona</option>
-                  <option value="pm_derecho_publico_mexicano">Persona Moral Del Derecho Público Mexicano</option>
-                  <option value="pm_extranjera">Persona Moral Extranjera</option>
-                  <option value="pm_mexicana">Persona Moral Mexicana</option>
-                  <option value="pm_embajada_consulado_orgint">Embajada / Consulado / Organismo Internacional</option>
-                  <option value="pm_rsi">Morales del Régimen Simplificado de Identificación</option>
-                  <option value="pm_otro">Otro</option>
-                </select>
-                {errors["empresa.subtipo_pm"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["empresa.subtipo_pm"]}
-                  </p>
-                ) : null}
-              </div>
-
-              {pmSubtipoPm === "pm_rsi" ? (
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">
-                    RSI Subtipo <span className="text-red-600">*</span>
-                  </label>
-                  <select
-                    className={`w-full rounded border px-3 py-2 text-sm ${
-                      errors["empresa.rsi_subtipo"] ? "border-red-500" : "border-gray-300"
-                    }`}
-                    value={pmRsiSubtipo}
-                    onChange={(e) => setPmRsiSubtipo(e.target.value)}
-                    onBlur={() => validator.validateField("empresa.rsi_subtipo")}
-                  >
-                    <option value="">Selecciona</option>
-                    <option value="rsi_sistema_financiero_mexicano">Empresas del Sistema Financiero Mexicano</option>
-                    <option value="rsi_sistema_financiero_extranjero">Empresas del Sistema Financiero Extranjero</option>
-                    <option value="rsi_cotiza_bolsa">Empresas que cotizan en Bolsa</option>
-                    <option value="rsi_publicas">Empresas públicas</option>
-                    <option value="rsi_dependencias_publicas">Dependencias públicas (Fed/Est/Mun)</option>
-                  </select>
-                  {errors["empresa.rsi_subtipo"] ? (
-                    <p className="text-xs text-red-600">
-                      {errors["empresa.rsi_subtipo"]}
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium">
-                  Beneficiario Controlador <span className="text-red-600">*</span>
-                </label>
-                <select
-                  className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors["BeneficiarioControlador"] ? "border-red-500" : "border-gray-300"
-                  }`}
-                  value={pmBeneficiarioControlador}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    const aplica = v === "si";
-
-                    setPmBeneficiarioControlador(v);
-                    setDuenosBeneficiariosAplica(aplica);
-
-                    if (!aplica) {
-                      setPmBcNombres("");
-                      setPmBcApPat("");
-                      setPmBcApMat("");
-                      setErr("beneficiario_controlador.nombres", undefined);
-                      setErr("beneficiario_controlador.apellido_paterno", undefined);
-                      setErr("beneficiario_controlador.apellido_materno", undefined);
-                      setDuenosBeneficiarios([]);
-                    } else if (duenosBeneficiarios.length === 0) {
-                      setDuenosBeneficiarios([createEmptyDuenoBeneficiario()]);
-                    }
-                  }}
-                  onBlur={() => validator.validateField("BeneficiarioControlador")}
-                >
-                  <option value="">Selecciona</option>
-                  <option value="si">Sí</option>
-                  <option value="no">No</option>
-                </select>
-                {errors["BeneficiarioControlador"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["BeneficiarioControlador"]}
-                  </p>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-1">
-                <label className="text-sm font-medium">RFC (empresa) *</label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${errors["empresa.rfc"] ? "border-red-500" : "border-gray-300"}`}
-                  value={pmRfc}
-                  onChange={(e) => setPmRfc(e.target.value)}
-                  onBlur={() => validator.validateField("empresa.rfc")}
-                  placeholder="XAXX010101000"
-                />
-                {errors["empresa.rfc"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["empresa.rfc"]}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium">
-                  Régimen de capital *
-                </label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${errors["empresa.regimen_capital"] ? "border-red-500" : "border-gray-300"}`}
-                  value={pmRegimenCapital}
-                  onChange={(e) => setPmRegimenCapital(e.target.value)}
-                  onBlur={() =>
-                    validator.validateField("empresa.regimen_capital")
-                  }
-                  placeholder="Variable / Fijo / ..."
-                />
-                {errors["empresa.regimen_capital"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["empresa.regimen_capital"]}
-                  </p>
-                ) : null}
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">
-                  Fecha constitución (AAAAMMDD) *
-                </label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors["empresa.fecha_constitucion"]
-                      ? "border-red-500"
-                      : "border-gray-300"
-                  }`}
-                  value={pmFechaConst}
-                  onChange={(e) => setPmFechaConst(e.target.value)}
-                  onBlur={() =>
-                    validator.validateField("empresa.fecha_constitucion")
-                  }
-                  placeholder="20010131 (o 2001-01-31)"
-                />
-                {errors["empresa.fecha_constitucion"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["empresa.fecha_constitucion"]}
-                  </p>
-                ) : (
-                  <p className="text-xs text-gray-500">
-                    Acepta AAAAMMDD o YYYY-MM-DD (se convierte a AAAAMMDD).
-                  </p>
-                )}
-              </div>
-
-              <SearchableSelect
-                label="Giro mercantil"
-                required
-                value={pmGiro}
-                items={giros}
-                error={errors["empresa.giro_mercantil"]}
-                onChange={(v) => setPmGiro(v)}
-                onBlur={() => validator.validateField("empresa.giro_mercantil")}
-              />
-
-              <div className="space-y-1 md:col-span-3">
-                <p className="text-sm font-medium">
-                  INFORMACIÓN DEL REPRESENTANTE LEGAL
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Nombres *</label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.nombres.pm"] ? "border-red-500" : "border-gray-300"}`}
-                  value={pmRepNombres}
-                  onChange={(e) => setPmRepNombres(e.target.value)}
-                  onBlur={() =>
-                    validator.validateField("representante.nombres.pm")
-                  }
-                />
-                {errors["representante.nombres.pm"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["representante.nombres.pm"]}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium">
-                  Apellido paterno *
-                </label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.apellido_paterno.pm"] ? "border-red-500" : "border-gray-300"}`}
-                  value={pmRepApPat}
-                  onChange={(e) => setPmRepApPat(e.target.value)}
-                  onBlur={() =>
-                    validator.validateField("representante.apellido_paterno.pm")
-                  }
-                />
-                {errors["representante.apellido_paterno.pm"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["representante.apellido_paterno.pm"]}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium">
-                  Apellido materno *
-                </label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.apellido_materno.pm"] ? "border-red-500" : "border-gray-300"}`}
-                  value={pmRepApMat}
-                  onChange={(e) => setPmRepApMat(e.target.value)}
-                  onBlur={() =>
-                    validator.validateField("representante.apellido_materno.pm")
-                  }
-                />
-                {errors["representante.apellido_materno.pm"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["representante.apellido_materno.pm"]}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium">
-                  Fecha nacimiento (AAAAMMDD) *
-                </label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.fecha_nacimiento.pm"] ? "border-red-500" : "border-gray-300"}`}
-                  value={pmRepFechaNac}
-                  onChange={(e) => setPmRepFechaNac(e.target.value)}
-                  onBlur={() =>
-                    validator.validateField("representante.fecha_nacimiento.pm")
-                  }
-                  placeholder="19900101 (o 1990-01-01)"
-                />
-                {errors["representante.fecha_nacimiento.pm"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["representante.fecha_nacimiento.pm"]}
-                  </p>
-                ) : null}
-              </div>
-
-              <SearchableSelect
-                label="Nacionalidad (representante)"
-                required
-                value={pmRepNacionalidad}
-                items={paises}
-                error={errors["representante.nacionalidad.pm"]}
-                onChange={(v) => setPmRepNacionalidad(v)}
-                onBlur={() =>
-                  validator.validateField("representante.nacionalidad.pm")
-                }
-              />
-
-              <div className="space-y-1 md:col-span-3">
-                <label className="text-sm font-medium">
-                  Régimen jurídico de legal estancia en México (si aplica)
-                </label>
-                <input
-                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                  value={pmRepRegimenEstancia}
-                  onChange={(e) => setPmRepRegimenEstancia(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium">CURP *</label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.curp.pm"] ? "border-red-500" : "border-gray-300"}`}
-                  value={pmRepCurp}
-                  onChange={(e) => setPmRepCurp(e.target.value)}
-                  onBlur={() =>
-                    validator.validateField("representante.curp.pm")
-                  }
-                />
-                {errors["representante.curp.pm"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["representante.curp.pm"]}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium">RFC *</label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.rfc.pm"] ? "border-red-500" : "border-gray-300"}`}
-                  value={pmRepRfc}
-                  onChange={(e) => setPmRepRfc(e.target.value)}
-                  onBlur={() => validator.validateField("representante.rfc.pm")}
-                />
-                {errors["representante.rfc.pm"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["representante.rfc.pm"]}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium">
-                  Teléfono de casa *
-                </label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.telefono_casa.pm"] ? "border-red-500" : "border-gray-300"}`}
-                  value={pmRepTelCasa}
-                  onChange={(e) => setPmRepTelCasa(e.target.value)}
-                  onBlur={() =>
-                    validator.validateField("representante.telefono_casa.pm")
-                  }
-                  placeholder="+52 3312345678"
-                />
-                {errors["representante.telefono_casa.pm"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["representante.telefono_casa.pm"]}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Celular *</label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.celular.pm"] ? "border-red-500" : "border-gray-300"}`}
-                  value={pmRepCelular}
-                  onChange={(e) => setPmRepCelular(e.target.value)}
-                  onBlur={() =>
-                    validator.validateField("representante.celular.pm")
-                  }
-                  placeholder="+52 5512345678"
-                />
-                {errors["representante.celular.pm"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["representante.celular.pm"]}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="space-y-1 md:col-span-3">
-                <label className="text-sm font-medium">
-                  Nombre completo (compatibilidad API) *
-                </label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.nombre_completo.pm"] ? "border-red-500" : "border-gray-300"}`}
-                  value={pmRepNombreCompleto}
-                  onChange={(e) => setPmRepNombreCompleto(e.target.value)}
-                  onBlur={() =>
-                    validator.validateField("representante.nombre_completo.pm")
-                  }
-                  placeholder="Se puede dejar vacío si llenas nombres y apellidos"
-                />
-                {errors["representante.nombre_completo.pm"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["representante.nombre_completo.pm"]}
-                  </p>
-                ) : (
-                  <p className="text-xs text-gray-500">
-                    El backend actual valida nombre_completo; lo enviamos
-                    generado si lo dejas vacío.
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="rounded border border-gray-200 p-3 space-y-3">
-              <p className="text-sm font-medium">
-                Domicilio del Representante Legal (México)
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Calle *</label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.calle.pm"] ? "border-red-500" : "border-gray-300"}`}
-                    value={pmRepDomCalle}
-                    onChange={(e) => setPmRepDomCalle(e.target.value)}
-                    onBlur={() =>
-                      validator.validateField(
-                        "representante.domicilio.calle.pm",
-                      )
-                    }
-                  />
-                  {errors["representante.domicilio.calle.pm"] ? (
-                    <p className="text-xs text-red-600">
-                      {errors["representante.domicilio.calle.pm"]}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Número *</label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.numero.pm"] ? "border-red-500" : "border-gray-300"}`}
-                    value={pmRepDomNumero}
-                    onChange={(e) => setPmRepDomNumero(e.target.value)}
-                    onBlur={() =>
-                      validator.validateField(
-                        "representante.domicilio.numero.pm",
-                      )
-                    }
-                  />
-                  {errors["representante.domicilio.numero.pm"] ? (
-                    <p className="text-xs text-red-600">
-                      {errors["representante.domicilio.numero.pm"]}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Interior</label>
-                  <input
-                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                    value={pmRepDomInterior}
-                    onChange={(e) => setPmRepDomInterior(e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Colonia *</label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.colonia.pm"] ? "border-red-500" : "border-gray-300"}`}
-                    value={pmRepDomColonia}
-                    onChange={(e) => setPmRepDomColonia(e.target.value)}
-                    onBlur={() =>
-                      validator.validateField(
-                        "representante.domicilio.colonia.pm",
-                      )
-                    }
-                  />
-                  {errors["representante.domicilio.colonia.pm"] ? (
-                    <p className="text-xs text-red-600">
-                      {errors["representante.domicilio.colonia.pm"]}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Municipio *</label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.municipio.pm"] ? "border-red-500" : "border-gray-300"}`}
-                    value={pmRepDomMunicipio}
-                    onChange={(e) => setPmRepDomMunicipio(e.target.value)}
-                    onBlur={() =>
-                      validator.validateField(
-                        "representante.domicilio.municipio.pm",
-                      )
-                    }
-                  />
-                  {errors["representante.domicilio.municipio.pm"] ? (
-                    <p className="text-xs text-red-600">
-                      {errors["representante.domicilio.municipio.pm"]}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">
-                    Ciudad/Delegación *
-                  </label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.ciudad_delegacion.pm"] ? "border-red-500" : "border-gray-300"}`}
-                    value={pmRepDomCiudadDelegacion}
-                    onChange={(e) =>
-                      setPmRepDomCiudadDelegacion(e.target.value)
-                    }
-                    onBlur={() =>
-                      validator.validateField(
-                        "representante.domicilio.ciudad_delegacion.pm",
-                      )
-                    }
-                  />
-                  {errors["representante.domicilio.ciudad_delegacion.pm"] ? (
-                    <p className="text-xs text-red-600">
-                      {errors["representante.domicilio.ciudad_delegacion.pm"]}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Código postal *</label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.codigo_postal.pm"] ? "border-red-500" : "border-gray-300"}`}
-                    value={pmRepDomCP}
-                    onChange={(e) => setPmRepDomCP(e.target.value)}
-                    onBlur={() =>
-                      validator.validateField(
-                        "representante.domicilio.codigo_postal.pm",
-                      )
-                    }
-                    placeholder="44100"
-                  />
-                  {errors["representante.domicilio.codigo_postal.pm"] ? (
-                    <p className="text-xs text-red-600">
-                      {errors["representante.domicilio.codigo_postal.pm"]}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Estado *</label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.estado.pm"] ? "border-red-500" : "border-gray-300"}`}
-                    value={pmRepDomEstado}
-                    onChange={(e) => setPmRepDomEstado(e.target.value)}
-                    onBlur={() =>
-                      validator.validateField(
-                        "representante.domicilio.estado.pm",
-                      )
-                    }
-                  />
-                  {errors["representante.domicilio.estado.pm"] ? (
-                    <p className="text-xs text-red-600">
-                      {errors["representante.domicilio.estado.pm"]}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">País *</label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.pais.pm"] ? "border-red-500" : "border-gray-300"}`}
-                    value={pmRepDomPais}
-                    onChange={(e) => setPmRepDomPais(e.target.value)}
-                    onBlur={() =>
-                      validator.validateField("representante.domicilio.pais.pm")
-                    }
-                    placeholder="México"
-                  />
-                  {errors["representante.domicilio.pais.pm"] ? (
-                    <p className="text-xs text-red-600">
-                      {errors["representante.domicilio.pais.pm"]}
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded border border-gray-200 p-3 space-y-3">
-              <p className="text-sm font-medium">
-                Identificar al Beneficiario Controlador (CFF 32-B Ter)
-              </p>
-                  <div className="rounded border border-gray-200 p-4 space-y-4">
+                {relatedRecursosAplica ? (
+                  <div className="rounded border border-gray-200 p-3 space-y-4">
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium">Dueños beneficiarios</p>
+                      <p className="text-xs text-gray-600">
+                        En caso de responder que sí, captura uno o más registros.
+                      </p>
                       <button
                         type="button"
                         className="rounded border border-gray-300 px-3 py-1 text-sm"
-                        onClick={addDuenoBeneficiarioRow}
+                        onClick={() => addRelatedRecursoRow()}
                       >
                         Agregar
                       </button>
                     </div>
 
-                    {duenosBeneficiarios.map((row, index) => (
+                    {relatedRecursos.map((row, index) => (
                       <div key={index} className="rounded border border-gray-200 p-4 space-y-4">
                         <div className="flex items-center justify-between">
                           <p className="text-sm font-medium">
-                            Dueño beneficiario #{index + 1}
+                            Recurso de tercero #{index + 1}
                           </p>
                           <button
                             type="button"
                             className="rounded border border-red-300 px-3 py-1 text-sm text-red-700"
-                            onClick={() => removeDuenoBeneficiarioRow(index)}
+                            onClick={() => removeRelatedRecursoRow(index)}
                           >
                             Eliminar
                           </button>
@@ -3351,567 +2990,102 @@ persona: {
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           <div className="space-y-1">
-                            <label className="text-sm font-medium">Nombres *</label>
-                            <input
-                              className={`w-full rounded border px-3 py-2 text-sm ${
-                                index === 0 && errors["beneficiario_controlador.nombres"]
-                                  ? "border-red-500"
-                                  : "border-gray-300"
-                              }`}
-                              value={row.nombres}
-                              onChange={(e) => {
-                                updateDuenoBeneficiarioRow(index, "nombres", e.target.value);
-                                if (index === 0) setPmBcNombres(e.target.value);
-                              }}
-                              onBlur={() => {
-                                if (index === 0) {
-                                  setErr("beneficiario_controlador.nombres", undefined);
-                                }
-                              }}
-                            />
-                            {index === 0 && errors["beneficiario_controlador.nombres"] ? (
-                              <p className="text-xs text-red-600">
-                                {errors["beneficiario_controlador.nombres"]}
-                              </p>
-                            ) : null}
+                            <label className="text-sm font-medium">Tipo entidad</label>
+                            <select
+                              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                              value={row.tipo_entidad}
+                              onChange={(e) =>
+                                updateRelatedRecursoSubtype(
+                                  index,
+                                  e.target.value as RelatedTipoEntidad,
+                                )
+                              }
+                            >
+                              <option value="persona_fisica">Persona física</option>
+                              <option value="persona_moral">Persona moral</option>
+                              <option value="fideicomiso">Fideicomiso</option>
+                            </select>
                           </div>
 
                           <div className="space-y-1">
-                            <label className="text-sm font-medium">Apellido paterno *</label>
+                            <label className="text-sm font-medium">Relación con cliente</label>
                             <input
-                              className={`w-full rounded border px-3 py-2 text-sm ${
-                                index === 0 && errors["beneficiario_controlador.apellido_paterno"]
-                                  ? "border-red-500"
-                                  : "border-gray-300"
-                              }`}
-                              value={row.apellido_paterno}
-                              onChange={(e) => {
-                                updateDuenoBeneficiarioRow(index, "apellido_paterno", e.target.value);
-                                if (index === 0) setPmBcApPat(e.target.value);
-                              }}
-                              onBlur={() => {
-                                if (index === 0) {
-                                  setErr("beneficiario_controlador.apellido_paterno", undefined);
-                                }
-                              }}
+                              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                              value={row.relacion_con_cliente}
+                              onChange={(e) =>
+                                updateRelatedRecursoCommonField(
+                                  index,
+                                  "relacion_con_cliente",
+                                  e.target.value,
+                                )
+                              }
                             />
-                            {index === 0 && errors["beneficiario_controlador.apellido_paterno"] ? (
-                              <p className="text-xs text-red-600">
-                                {errors["beneficiario_controlador.apellido_paterno"]}
-                              </p>
-                            ) : null}
                           </div>
 
                           <div className="space-y-1">
-                            <label className="text-sm font-medium">Apellido materno *</label>
+                            <label className="text-sm font-medium">Nacionalidad</label>
                             <input
-                              className={`w-full rounded border px-3 py-2 text-sm ${
-                                index === 0 && errors["beneficiario_controlador.apellido_materno"]
-                                  ? "border-red-500"
-                                  : "border-gray-300"
-                              }`}
-                              value={row.apellido_materno}
-                              onChange={(e) => {
-                                updateDuenoBeneficiarioRow(index, "apellido_materno", e.target.value);
-                                if (index === 0) setPmBcApMat(e.target.value);
-                              }}
-                              onBlur={() => {
-                                if (index === 0) {
-                                  setErr("beneficiario_controlador.apellido_materno", undefined);
-                                }
-                              }}
+                              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                              value={row.nacionalidad}
+                              onChange={(e) =>
+                                updateRelatedRecursoCommonField(
+                                  index,
+                                  "nacionalidad",
+                                  e.target.value,
+                                )
+                              }
                             />
-                            {index === 0 && errors["beneficiario_controlador.apellido_materno"] ? (
-                              <p className="text-xs text-red-600">
-                                {errors["beneficiario_controlador.apellido_materno"]}
-                              </p>
-                            ) : null}
+                          </div>
+
+                          <div className="space-y-1 md:col-span-2">
+                            <label className="text-sm font-medium">Nombre entidad (derivado)</label>
+                            <input
+                              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                              value={row.nombre_entidad}
+                              readOnly
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium">Observaciones</label>
+                            <input
+                              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                              value={row.observaciones}
+                              onChange={(e) =>
+                                updateRelatedRecursoCommonField(
+                                  index,
+                                  "observaciones",
+                                  e.target.value,
+                                )
+                              }
+                            />
                           </div>
                         </div>
+
+                        <label className="flex items-start gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            className="mt-1"
+                            checked={row.sin_documentacion}
+                            onChange={(e) =>
+                              updateRelatedRecursoCommonField(
+                                index,
+                                "sin_documentacion",
+                                e.target.checked,
+                              )
+                            }
+                          />
+                          <span>Sin documentación</span>
+                        </label>
+
+                        {renderRelatedRecursoSubtypeFields(row, index)}
                       </div>
                     ))}
                   </div>
-            </div>
-
-            <div className="rounded border border-gray-200 p-3 space-y-3">
-              <label className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-1"
-                  checked={pmRepEsAccionista}
-                  onChange={(e) => setPmRepEsAccionista(e.target.checked)}
-                />
-                <span>El Representante Legal es Accionista</span>
-              </label>
-
-              {!pmRepEsAccionista ? (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium">Nombres *</label>
-                    <input
-                      className={`w-full rounded border px-3 py-2 text-sm ${errors["accionista.nombres"] ? "border-red-500" : "border-gray-300"}`}
-                      value={pmAccNombres}
-                      onChange={(e) => setPmAccNombres(e.target.value)}
-                      onBlur={() =>
-                        validator.validateField("accionista.nombres")
-                      }
-                    />
-                    {errors["accionista.nombres"] ? (
-                      <p className="text-xs text-red-600">
-                        {errors["accionista.nombres"]}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium">
-                      Apellido paterno *
-                    </label>
-                    <input
-                      className={`w-full rounded border px-3 py-2 text-sm ${errors["accionista.apellido_paterno"] ? "border-red-500" : "border-gray-300"}`}
-                      value={pmAccApPat}
-                      onChange={(e) => setPmAccApPat(e.target.value)}
-                      onBlur={() =>
-                        validator.validateField("accionista.apellido_paterno")
-                      }
-                    />
-                    {errors["accionista.apellido_paterno"] ? (
-                      <p className="text-xs text-red-600">
-                        {errors["accionista.apellido_paterno"]}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium">
-                      Apellido materno *
-                    </label>
-                    <input
-                      className={`w-full rounded border px-3 py-2 text-sm ${errors["accionista.apellido_materno"] ? "border-red-500" : "border-gray-300"}`}
-                      value={pmAccApMat}
-                      onChange={(e) => setPmAccApMat(e.target.value)}
-                      onBlur={() =>
-                        validator.validateField("accionista.apellido_materno")
-                      }
-                    />
-                    {errors["accionista.apellido_materno"] ? (
-                      <p className="text-xs text-red-600">
-                        {errors["accionista.apellido_materno"]}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium">
-                      Fecha de nacimiento (AAAAMMDD) *
-                    </label>
-                    <input
-                      className={`w-full rounded border px-3 py-2 text-sm ${errors["accionista.fecha_nacimiento"] ? "border-red-500" : "border-gray-300"}`}
-                      value={pmAccFechaNac}
-                      onChange={(e) => setPmAccFechaNac(e.target.value)}
-                      onBlur={() =>
-                        validator.validateField("accionista.fecha_nacimiento")
-                      }
-                      placeholder="19900101"
-                    />
-                    {errors["accionista.fecha_nacimiento"] ? (
-                      <p className="text-xs text-red-600">
-                        {errors["accionista.fecha_nacimiento"]}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium">
-                      % Accionario *
-                    </label>
-                    <input
-                      className={`w-full rounded border px-3 py-2 text-sm ${errors["accionista.porcentaje"] ? "border-red-500" : "border-gray-300"}`}
-                      value={pmAccPct}
-                      onChange={(e) => setPmAccPct(e.target.value)}
-                      onBlur={() =>
-                        validator.validateField("accionista.porcentaje")
-                      }
-                      placeholder="25"
-                    />
-                    {errors["accionista.porcentaje"] ? (
-                      <p className="text-xs text-red-600">
-                        {errors["accionista.porcentaje"]}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  <SearchableSelect
-                    label="Nacionalidad (accionista)"
-                    required
-                    value={pmAccNacionalidad}
-                    items={paises}
-                    error={errors["accionista.nacionalidad"]}
-                    onChange={(v) => setPmAccNacionalidad(v)}
-                    onBlur={() =>
-                      validator.validateField("accionista.nacionalidad")
-                    }
-                  />
-
-                  <SearchableSelect
-                    label="Actividad / giro del negocio del tercero"
-                    required
-                    value={pmAccActividadGiro}
-                    items={giros}
-                    error={errors["accionista.actividad_giro"]}
-                    onChange={(v) => setPmAccActividadGiro(v)}
-                    onBlur={() =>
-                      validator.validateField("accionista.actividad_giro")
-                    }
-                  />
-
-                  <div className="space-y-1 md:col-span-3">
-                    <label className="text-sm font-medium">
-                      Relación con el tercero *
-                    </label>
-                    <input
-                      className={`w-full rounded border px-3 py-2 text-sm ${errors["accionista.relacion"] ? "border-red-500" : "border-gray-300"}`}
-                      value={pmAccRelacion}
-                      onChange={(e) => setPmAccRelacion(e.target.value)}
-                      onBlur={() =>
-                        validator.validateField("accionista.relacion")
-                      }
-                    />
-                    {errors["accionista.relacion"] ? (
-                      <p className="text-xs text-red-600">
-                        {errors["accionista.relacion"]}
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-            <hr className="my-2" />
-
-            <h3 className="font-medium">
-              Identificación del Representante Legal
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-1">
-                <label className="text-sm font-medium">
-                  Tipo de documento *
-                </label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors["representante.identificacion.tipo.pm"]
-                      ? "border-red-500"
-                      : "border-gray-300"
-                  }`}
-                  value={pmRepIdTipo}
-                  onChange={(e) => setPmRepIdTipo(e.target.value)}
-                  onBlur={() =>
-                    validator.validateField(
-                      "representante.identificacion.tipo.pm",
-                    )
-                  }
-                  placeholder="INE / Pasaporte / ..."
-                />
-                {errors["representante.identificacion.tipo.pm"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["representante.identificacion.tipo.pm"]}
-                  </p>
                 ) : null}
               </div>
 
-              <div className="space-y-1">
-                <label className="text-sm font-medium">
-                  Autoridad que lo emitió *
-                </label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors["representante.identificacion.autoridad.pm"]
-                      ? "border-red-500"
-                      : "border-gray-300"
-                  }`}
-                  value={pmRepIdAutoridad}
-                  onChange={(e) => setPmRepIdAutoridad(e.target.value)}
-                  onBlur={() =>
-                    validator.validateField(
-                      "representante.identificacion.autoridad.pm",
-                    )
-                  }
-                />
-                {errors["representante.identificacion.autoridad.pm"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["representante.identificacion.autoridad.pm"]}
-                  </p>
-                ) : null}
-              </div>
 
-              <div className="space-y-1">
-                <label className="text-sm font-medium">
-                  Número de identificación *
-                </label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors["representante.identificacion.numero.pm"]
-                      ? "border-red-500"
-                      : "border-gray-300"
-                  }`}
-                  value={pmRepIdNumero}
-                  onChange={(e) => setPmRepIdNumero(e.target.value)}
-                  onBlur={() =>
-                    validator.validateField(
-                      "representante.identificacion.numero.pm",
-                    )
-                  }
-                />
-                {errors["representante.identificacion.numero.pm"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["representante.identificacion.numero.pm"]}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium">
-                  Fecha de expedición (AAAAMMDD) *
-                </label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors["representante.identificacion.expedicion.pm"]
-                      ? "border-red-500"
-                      : "border-gray-300"
-                  }`}
-                  value={pmRepIdExpedicion}
-                  onChange={(e) => setPmRepIdExpedicion(e.target.value)}
-                  onBlur={() =>
-                    validator.validateField(
-                      "representante.identificacion.expedicion.pm",
-                    )
-                  }
-                  placeholder="20240131 (o 2024-01-31)"
-                />
-                {errors["representante.identificacion.expedicion.pm"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["representante.identificacion.expedicion.pm"]}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium">
-                  Fecha de expiración (AAAAMMDD) *
-                </label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors["representante.identificacion.expiracion.pm"]
-                      ? "border-red-500"
-                      : "border-gray-300"
-                  }`}
-                  value={pmRepIdExpiracion}
-                  onChange={(e) => setPmRepIdExpiracion(e.target.value)}
-                  onBlur={() =>
-                    validator.validateField(
-                      "representante.identificacion.expiracion.pm",
-                    )
-                  }
-                  placeholder="20290131 (o 2029-01-31)"
-                />
-                {errors["representante.identificacion.expiracion.pm"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["representante.identificacion.expiracion.pm"]}
-                  </p>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        )}
-
-                {/* Fideicomiso */}
-        {tipo === "fideicomiso" && (
-          <div className="rounded border border-gray-200 p-4 space-y-4">
-            <h2 className="font-medium">Fideicomiso</h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-1 md:col-span-2">
-                <label className="text-sm font-medium">
-                  Denominación o Razón Social del Fiduciario *
-                </label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors["fideicomiso.denominacion_fiduciario"]
-                      ? "border-red-500"
-                      : "border-gray-300"
-                  }`}
-                  value={fidDenominacionFiduciario}
-                  onChange={(e) => setFidDenominacionFiduciario(e.target.value)}
-                  onBlur={() =>
-                    validator.validateField("fideicomiso.denominacion_fiduciario")
-                  }
-                />
-                {errors["fideicomiso.denominacion_fiduciario"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["fideicomiso.denominacion_fiduciario"]}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium">
-                  RFC del Fiduciario *
-                </label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors["fideicomiso.rfc_fiduciario"]
-                      ? "border-red-500"
-                      : "border-gray-300"
-                  }`}
-                  value={fidRfcFiduciario}
-                  onChange={(e) => setFidRfcFiduciario(e.target.value.toUpperCase())}
-                  onBlur={() =>
-                    validator.validateField("fideicomiso.rfc_fiduciario")
-                  }
-                  placeholder="XAXX010101000"
-                />
-                {errors["fideicomiso.rfc_fiduciario"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["fideicomiso.rfc_fiduciario"]}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium">
-                  Identificador del fideicomiso *
-                </label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors["fideicomiso.identificador"]
-                      ? "border-red-500"
-                      : "border-gray-300"
-                  }`}
-                  value={fidIdentificador}
-                  onChange={(e) => setFidIdentificador(e.target.value)}
-                  onBlur={() =>
-                    validator.validateField("fideicomiso.identificador")
-                  }
-                />
-                {errors["fideicomiso.identificador"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["fideicomiso.identificador"]}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="space-y-1 md:col-span-3">
-                <label className="text-sm font-medium">
-                  Nombre del fideicomiso *
-                </label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors["fideicomiso.fideicomiso_nombre"]
-                      ? "border-red-500"
-                      : "border-gray-300"
-                  }`}
-                  value={fidNombre}
-                  onChange={(e) => setFidNombre(e.target.value)}
-                  onBlur={() => setErr("fideicomiso.fideicomiso_nombre", undefined)}
-                  placeholder="Nombre del fideicomiso"
-                />
-                {errors["fideicomiso.fideicomiso_nombre"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["fideicomiso.fideicomiso_nombre"]}
-                  </p>
-                ) : null}
-              </div>
-            </div>
-
-            <hr className="my-2" />
-
-            <h3 className="font-medium">Representante / Apoderado legal</h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1 md:col-span-2">
-                <label className="text-sm font-medium">
-                  Nombre completo del representante *
-                </label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors["representante.nombre_completo"]
-                      ? "border-red-500"
-                      : "border-gray-300"
-                  }`}
-                  value={fidRepNombreCompleto}
-                  onChange={(e) => setFidRepNombreCompleto(e.target.value)}
-                  onBlur={() => setErr("representante.nombre_completo", undefined)}
-                  placeholder="Nombre completo del representante"
-                />
-                {errors["representante.nombre_completo"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["representante.nombre_completo"]}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium">RFC *</label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors["representante.rfc"] ? "border-red-500" : "border-gray-300"
-                  }`}
-                  value={fidRepRfc}
-                  onChange={(e) => setFidRepRfc(e.target.value.toUpperCase())}
-                  onBlur={() => validator.validateField("representante.rfc")}
-                  placeholder="XAXX010101000"
-                />
-                {errors["representante.rfc"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["representante.rfc"]}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium">CURP *</label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors["representante.curp"] ? "border-red-500" : "border-gray-300"
-                  }`}
-                  value={fidRepCurp}
-                  onChange={(e) => setFidRepCurp(e.target.value.toUpperCase())}
-                  onBlur={() => validator.validateField("representante.curp")}
-                  placeholder="PEPJ900101HDFRRN09"
-                />
-                {errors["representante.curp"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["representante.curp"]}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium">
-                  Fecha de nacimiento (AAAAMMDD) *
-                </label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors["representante.fecha_nacimiento"]
-                      ? "border-red-500"
-                      : "border-gray-300"
-                  }`}
-                  value={fidRepFechaNac}
-                  onChange={(e) => setFidRepFechaNac(e.target.value)}
-                  onBlur={() =>
-                    validator.validateField("representante.fecha_nacimiento")
-                  }
-                  placeholder="19900101 (o 1990-01-01)"
-                />
-                {errors["representante.fecha_nacimiento"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["representante.fecha_nacimiento"]}
-                  </p>
-                ) : (
-                  <p className="text-xs text-gray-500">
-                    Acepta AAAAMMDD o YYYY-MM-DD (se convierte a AAAAMMDD).
-                  </p>
-                )}
-              </div>
               <hr className="my-2" />
 
               <div className="space-y-2">
