@@ -14,6 +14,71 @@ export default function ClientPage() {
 
   type Errors = Record<string, string>;
 
+  type RecursoTerceroItem = {
+    tipo_tercero: string;
+    nombre_razon_social: string;
+    relacion_con_cliente: string;
+    actividad_giro: string;
+    nacionalidad: string;
+    sin_documentacion: boolean;
+    rfc: string;
+    curp: string;
+    fecha_nacimiento: string;
+    observaciones: string;
+  };
+
+  type DuenoBeneficiarioItem = {
+    nombres: string;
+    apellido_paterno: string;
+    apellido_materno: string;
+    fecha_nacimiento: string;
+    nacionalidad: string;
+    relacion_con_cliente: string;
+    rfc: string;
+    curp: string;
+    porcentaje_participacion: string;
+    observaciones: string;
+  };
+
+  type RelatedTipoEntidad = "persona_fisica" | "persona_moral" | "fideicomiso";
+
+  type RelatedPFData = {
+    contacto: Record<string, any>;
+    persona: Record<string, any>;
+  };
+
+  type RelatedPMData = {
+    contacto: Record<string, any>;
+    empresa: Record<string, any>;
+    representante: Record<string, any>;
+  };
+
+  type RelatedFIDData = {
+    contacto: Record<string, any>;
+    fideicomiso: Record<string, any>;
+    representante: Record<string, any>;
+  };
+
+  type RelatedRecursoRow = {
+    tipo_entidad: RelatedTipoEntidad;
+    nombre_entidad: string;
+    nacionalidad: string;
+    relacion_con_cliente: string;
+    sin_documentacion: boolean;
+    observaciones: string;
+    datos_completos: RelatedPFData | RelatedPMData | RelatedFIDData;
+  };
+
+  type RelatedDuenoRow = {
+    tipo_entidad: "persona_fisica";
+    nombre_entidad: string;
+    nacionalidad: string;
+    relacion_con_cliente: string;
+    porcentaje_participacion: string;
+    observaciones: string;
+    datos_completos: RelatedPFData;
+  };
+
   function isNonEmpty(v: any) {
     return typeof v === "string" && v.trim().length > 0;
   }
@@ -307,6 +372,9 @@ export default function ClientPage() {
   const [pfTerceroCurp, setPfTerceroCurp] = useState("");
   const [pfTerceroFechaNac, setPfTerceroFechaNac] = useState(""); // AAAAMMDD o YYYY-MM-DD
   const [pfTerceroNacionalidad, setPfTerceroNacionalidad] = useState("MEX");
+
+  const [recursosTercerosAplica, setRecursosTercerosAplica] = useState(false);
+  const [recursosTerceros, setRecursosTerceros] = useState<RecursoTerceroItem[]>([]);
   const [pmRfc, setPmRfc] = useState("");
   const [pmRegimenCapital, setPmRegimenCapital] = useState("");
   const [pmFechaConst, setPmFechaConst] = useState(""); // YYYY-MM-DD o AAAAMMDD
@@ -341,6 +409,14 @@ export default function ClientPage() {
   const [pmBcNombres, setPmBcNombres] = useState("");
   const [pmBcApPat, setPmBcApPat] = useState("");
   const [pmBcApMat, setPmBcApMat] = useState("");
+
+  const [duenosBeneficiariosAplica, setDuenosBeneficiariosAplica] = useState(false);
+  const [duenosBeneficiarios, setDuenosBeneficiarios] = useState<DuenoBeneficiarioItem[]>([]);
+
+  const [relatedRecursosAplica, setRelatedRecursosAplica] = useState(false);
+  const [relatedRecursos, setRelatedRecursos] = useState<RelatedRecursoRow[]>([]);
+  const [relatedDuenosAplica, setRelatedDuenosAplica] = useState(false);
+  const [relatedDuenos, setRelatedDuenos] = useState<RelatedDuenoRow[]>([]);
 
   // PM: Si representante NO es accionista
   const [pmRepEsAccionista, setPmRepEsAccionista] = useState(true);
@@ -417,6 +493,283 @@ export default function ClientPage() {
     });
   }
 
+
+  function createEmptyRelatedPFData(): RelatedPFData {
+    return {
+      contacto: {
+        pais: "MEX",
+        email: "",
+        telefono: "",
+        domicilio: {
+          calle: "",
+          numero: "",
+          colonia: "",
+          municipio: "",
+          ciudad_delegacion: "",
+          codigo_postal: "",
+          estado: "",
+          pais: "MEX",
+        },
+      },
+      persona: {
+        nombres: "",
+        apellido_paterno: "",
+        apellido_materno: "",
+        fecha_nacimiento: "",
+        rfc: "",
+        curp: "",
+        actividad_economica: "",
+      },
+    };
+  }
+
+  function createEmptyRelatedPMData(): RelatedPMData {
+    return {
+      contacto: {
+        pais: "MEX",
+        email: "",
+        telefono: "",
+        domicilio: {
+          calle: "",
+          numero: "",
+          colonia: "",
+          municipio: "",
+          ciudad_delegacion: "",
+          codigo_postal: "",
+          estado: "",
+          pais: "MEX",
+        },
+      },
+      empresa: {
+        rfc: "",
+        fecha_constitucion: "",
+        giro_mercantil: "",
+      },
+      representante: {
+        nombres: "",
+        apellido_paterno: "",
+        apellido_materno: "",
+        fecha_nacimiento: "",
+        rfc: "",
+        curp: "",
+      },
+    };
+  }
+
+  function createEmptyRelatedFIDData(): RelatedFIDData {
+    return {
+      contacto: {
+        pais: "MEX",
+        email: "",
+        telefono: "",
+        domicilio: {
+          calle: "",
+          numero: "",
+          colonia: "",
+          municipio: "",
+          ciudad_delegacion: "",
+          codigo_postal: "",
+          estado: "",
+          pais: "MEX",
+        },
+      },
+      fideicomiso: {},
+      representante: {
+        nombres: "",
+        apellido_paterno: "",
+        apellido_materno: "",
+        fecha_nacimiento: "",
+        rfc: "",
+        curp: "",
+      },
+    };
+  }
+
+  function deriveRelatedNombreEntidad(
+    tipo_entidad: RelatedTipoEntidad,
+    datos_completos: RelatedPFData | RelatedPMData | RelatedFIDData,
+  ): string {
+    if (tipo_entidad === "persona_fisica") {
+      const pf = datos_completos as RelatedPFData;
+      return [
+        pf.persona?.nombres,
+        pf.persona?.apellido_paterno,
+        pf.persona?.apellido_materno,
+      ]
+        .map((v) => safeInput(v).trim())
+        .filter(Boolean)
+        .join(" ");
+    }
+
+    if (tipo_entidad === "persona_moral") {
+      const pm = datos_completos as RelatedPMData;
+      return safeInput(pm.empresa?.razon_social || pm.empresa?.nombre_entidad || "").trim();
+    }
+
+    const fid = datos_completos as RelatedFIDData;
+    return safeInput(
+      fid.fideicomiso?.nombre_entidad ||
+      fid.fideicomiso?.denominacion ||
+      fid.fideicomiso?.nombre_fideicomiso ||
+      "",
+    ).trim();
+  }
+
+  function createEmptyRelatedRecurso(tipo_entidad: RelatedTipoEntidad = "persona_fisica"): RelatedRecursoRow {
+    const datos_completos =
+      tipo_entidad === "persona_fisica"
+        ? createEmptyRelatedPFData()
+        : tipo_entidad === "persona_moral"
+          ? createEmptyRelatedPMData()
+          : createEmptyRelatedFIDData();
+
+    return {
+      tipo_entidad,
+      nombre_entidad: deriveRelatedNombreEntidad(tipo_entidad, datos_completos),
+      nacionalidad: "MEX",
+      relacion_con_cliente: "",
+      sin_documentacion: false,
+      observaciones: "",
+      datos_completos,
+    };
+  }
+
+  function createEmptyRelatedDueno(): RelatedDuenoRow {
+    const datos_completos = createEmptyRelatedPFData();
+    return {
+      tipo_entidad: "persona_fisica",
+      nombre_entidad: deriveRelatedNombreEntidad("persona_fisica", datos_completos),
+      nacionalidad: "MEX",
+      relacion_con_cliente: "",
+      porcentaje_participacion: "",
+      observaciones: "",
+      datos_completos,
+    };
+  }
+
+  function changeRelatedRecursoSubtype(
+    current: RelatedRecursoRow,
+    nextTipo: RelatedTipoEntidad,
+  ): RelatedRecursoRow {
+    const nextDatos =
+      nextTipo === "persona_fisica"
+        ? createEmptyRelatedPFData()
+        : nextTipo === "persona_moral"
+          ? createEmptyRelatedPMData()
+          : createEmptyRelatedFIDData();
+
+    return {
+      ...current,
+      tipo_entidad: nextTipo,
+      nombre_entidad: deriveRelatedNombreEntidad(nextTipo, nextDatos),
+      datos_completos: nextDatos,
+    };
+  }
+
+  function safeInput(value: any): string {
+    if (value === null || value === undefined) return "";
+    return String(value);
+  }
+
+  function safeBool(value: any): boolean {
+    return value === true;
+  }
+
+  function createEmptyRecursoTercero(): RecursoTerceroItem {
+    return {
+      tipo_tercero: "persona_fisica",
+      nombre_razon_social: "",
+      relacion_con_cliente: "",
+      actividad_giro: "",
+      nacionalidad: "MEX",
+      sin_documentacion: false,
+      rfc: "",
+      curp: "",
+      fecha_nacimiento: "",
+      observaciones: "",
+    };
+  }
+
+  function createEmptyDuenoBeneficiario(): DuenoBeneficiarioItem {
+    return {
+      nombres: "",
+      apellido_paterno: "",
+      apellido_materno: "",
+      fecha_nacimiento: "",
+      nacionalidad: "MEX",
+      relacion_con_cliente: "",
+      rfc: "",
+      curp: "",
+      porcentaje_participacion: "",
+      observaciones: "",
+    };
+  }
+
+  function normalizeRecursoTerceroRow(row: any): RecursoTerceroItem {
+    return {
+      tipo_tercero: safeInput(row?.tipo_tercero || "persona_fisica"),
+      nombre_razon_social: safeInput(row?.nombre_razon_social ?? row?.nombre_completo),
+      relacion_con_cliente: safeInput(row?.relacion_con_cliente ?? row?.relacion),
+      actividad_giro: safeInput(row?.actividad_giro),
+      nacionalidad: safeInput(row?.nacionalidad || "MEX"),
+      sin_documentacion: safeBool(row?.sin_documentacion),
+      rfc: safeInput(row?.rfc),
+      curp: safeInput(row?.curp),
+      fecha_nacimiento: safeInput(row?.fecha_nacimiento),
+      observaciones: safeInput(row?.observaciones),
+    };
+  }
+
+  function normalizeDuenoBeneficiarioRow(row: any): DuenoBeneficiarioItem {
+    return {
+      nombres: safeInput(row?.nombres),
+      apellido_paterno: safeInput(row?.apellido_paterno),
+      apellido_materno: safeInput(row?.apellido_materno),
+      fecha_nacimiento: safeInput(row?.fecha_nacimiento),
+      nacionalidad: safeInput(row?.nacionalidad || "MEX"),
+      relacion_con_cliente: safeInput(row?.relacion_con_cliente ?? row?.relacion),
+      rfc: safeInput(row?.rfc),
+      curp: safeInput(row?.curp),
+      porcentaje_participacion: safeInput(row?.porcentaje_participacion),
+      observaciones: safeInput(row?.observaciones),
+    };
+  }
+
+  function addRecursoTerceroRow() {
+    setRecursosTerceros((prev) => [...prev, createEmptyRecursoTercero()]);
+  }
+
+  function updateRecursoTerceroRow<K extends keyof RecursoTerceroItem>(
+    index: number,
+    key: K,
+    value: RecursoTerceroItem[K],
+  ) {
+    setRecursosTerceros((prev) =>
+      prev.map((row, i) => (i === index ? { ...row, [key]: value } : row)),
+    );
+  }
+
+  function removeRecursoTerceroRow(index: number) {
+    setRecursosTerceros((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function addDuenoBeneficiarioRow() {
+    setDuenosBeneficiarios((prev) => [...prev, createEmptyDuenoBeneficiario()]);
+  }
+
+  function updateDuenoBeneficiarioRow<K extends keyof DuenoBeneficiarioItem>(
+    index: number,
+    key: K,
+    value: DuenoBeneficiarioItem[K],
+  ) {
+    setDuenosBeneficiarios((prev) =>
+      prev.map((row, i) => (i === index ? { ...row, [key]: value } : row)),
+    );
+  }
+
+  function removeDuenoBeneficiarioRow(index: number) {
+    setDuenosBeneficiarios((prev) => prev.filter((_, i) => i !== index));
+  }
   function buildContacto() {
     const telefonoStr = buildTelefonoE164Like(telCodigoPais, telNumero, telExt);
 
@@ -529,33 +882,50 @@ persona: {
             previo: pfCargoPublicoPrevio.trim(),
             familiar: pfCargoPublicoFamiliar.trim(),
           },
-          terceros_info: {
-            manifiesta: pfManifiestaTerceros,
-            actividad_giro: pfManifiestaTerceros
-              ? pfTerceroActividadGiro.trim()
-              : null,
-            relacion: pfManifiestaTerceros ? pfTerceroRelacion.trim() : null,
-            sin_documentacion: pfManifiestaTerceros
-              ? pfNoDocumentacionTercero
-              : null,
-          },
-          // Array requerido por contrato cuando BeneficiarioTerceros=true (placeholder mínimo; se reemplaza con captura recurrente)
-          terceros: pfManifiestaTerceros
-            ? [
-                {
-                  nombre_completo: pfTerceroNombreCompleto.trim(),
-                  actividad_giro: pfTerceroActividadGiro.trim(),
-                  relacion: pfTerceroRelacion.trim(),
-                  sin_documentacion: pfNoDocumentacionTercero,
-                  rfc: pfNoDocumentacionTercero ? null : (pfTerceroRfc.trim().toUpperCase() || null),
-                  curp: pfNoDocumentacionTercero ? null : (pfTerceroCurp.trim().toUpperCase() || null),
-                  fecha_nacimiento: pfNoDocumentacionTercero
-                    ? null
-                    : ((normalizeToYYYYMMDD(pfTerceroFechaNac) ?? pfTerceroFechaNac.trim()) || null),
-                  nacionalidad: valueToCatalogKey(pfTerceroNacionalidad) || null,
-                },
-              ]
-            : [],
+            recursos_terceros_aplica:
+              recursosTercerosAplica || pfManifiestaTerceros,
+            recursos_terceros: (
+              recursosTerceros.length > 0
+                ? recursosTerceros
+                : pfManifiestaTerceros
+                  ? [
+                      {
+                        tipo_tercero: "persona_fisica",
+                        nombre_razon_social: pfTerceroNombreCompleto.trim(),
+                        relacion_con_cliente: pfTerceroRelacion.trim(),
+                        actividad_giro: pfTerceroActividadGiro.trim(),
+                        nacionalidad:
+                          valueToCatalogKey(pfTerceroNacionalidad) || "MEX",
+                        sin_documentacion: pfNoDocumentacionTercero,
+                        rfc: pfNoDocumentacionTercero
+                          ? ""
+                          : pfTerceroRfc.trim().toUpperCase(),
+                        curp: pfNoDocumentacionTercero
+                          ? ""
+                          : pfTerceroCurp.trim().toUpperCase(),
+                        fecha_nacimiento: pfNoDocumentacionTercero
+                          ? ""
+                          : (normalizeToYYYYMMDD(pfTerceroFechaNac) ??
+                            pfTerceroFechaNac.trim()),
+                        observaciones: "",
+                      },
+                    ]
+                  : []
+            ).map((row) => ({
+              tipo_tercero: row.tipo_tercero || "persona_fisica",
+              nombre_razon_social: row.nombre_razon_social.trim(),
+              relacion_con_cliente: row.relacion_con_cliente.trim(),
+              actividad_giro: row.actividad_giro.trim(),
+              nacionalidad: valueToCatalogKey(row.nacionalidad) || "MEX",
+              sin_documentacion: !!row.sin_documentacion,
+              rfc: row.sin_documentacion ? "" : row.rfc.trim().toUpperCase(),
+              curp: row.sin_documentacion ? "" : row.curp.trim().toUpperCase(),
+              fecha_nacimiento: row.sin_documentacion
+                ? ""
+                : (normalizeToYYYYMMDD(row.fecha_nacimiento) ??
+                  row.fecha_nacimiento.trim()),
+              observaciones: row.observaciones.trim(),
+            })),
         },
 
       };
@@ -582,17 +952,41 @@ persona: {
         datos_completos: {
           contacto,
 
-          BeneficiarioControlador: pmBeneficiarioControlador === "si",
-          // P1-2 (PM BC): array real (sin placeholders)
-          beneficiarios_controladores: pmBeneficiarioControlador === "si"
-            ? [
-                {
-                  nombres: pmBcNombres.trim(),
-                  apellido_paterno: pmBcApPat.trim(),
-                  apellido_materno: pmBcApMat.trim(),
-                },
-              ]
-            : [],
+          duenos_beneficiarios_aplica:
+            duenosBeneficiariosAplica || pmBeneficiarioControlador === "si",
+          duenos_beneficiarios: (
+            duenosBeneficiarios.length > 0
+              ? duenosBeneficiarios
+              : pmBeneficiarioControlador === "si"
+                ? [
+                    {
+                      nombres: pmBcNombres.trim(),
+                      apellido_paterno: pmBcApPat.trim(),
+                      apellido_materno: pmBcApMat.trim(),
+                      fecha_nacimiento: "",
+                      nacionalidad: "MEX",
+                      relacion_con_cliente: "",
+                      rfc: "",
+                      curp: "",
+                      porcentaje_participacion: "",
+                      observaciones: "",
+                    },
+                  ]
+                : []
+          ).map((row) => ({
+            nombres: row.nombres.trim(),
+            apellido_paterno: row.apellido_paterno.trim(),
+            apellido_materno: row.apellido_materno.trim(),
+            fecha_nacimiento:
+              normalizeToYYYYMMDD(row.fecha_nacimiento) ??
+              row.fecha_nacimiento.trim(),
+            nacionalidad: valueToCatalogKey(row.nacionalidad) || "MEX",
+            relacion_con_cliente: row.relacion_con_cliente.trim(),
+            rfc: row.rfc.trim().toUpperCase(),
+            curp: row.curp.trim().toUpperCase(),
+            porcentaje_participacion: row.porcentaje_participacion.trim(),
+            observaciones: row.observaciones.trim(),
+          })),
           representante_es_accionista: pmRepEsAccionista,
           accionista_tercero: pmRepEsAccionista
             ? null
@@ -658,6 +1052,21 @@ persona: {
           fecha_nacimiento:
             normalizeToYYYYMMDD(fidRepFechaNac) ?? fidRepFechaNac.trim(),
         },
+          duenos_beneficiarios_aplica: duenosBeneficiariosAplica,
+          duenos_beneficiarios: duenosBeneficiarios.map((row) => ({
+            nombres: row.nombres.trim(),
+            apellido_paterno: row.apellido_paterno.trim(),
+            apellido_materno: row.apellido_materno.trim(),
+            fecha_nacimiento:
+              normalizeToYYYYMMDD(row.fecha_nacimiento) ??
+              row.fecha_nacimiento.trim(),
+            nacionalidad: valueToCatalogKey(row.nacionalidad) || "MEX",
+            relacion_con_cliente: row.relacion_con_cliente.trim(),
+            rfc: row.rfc.trim().toUpperCase(),
+            curp: row.curp.trim().toUpperCase(),
+            porcentaje_participacion: row.porcentaje_participacion.trim(),
+            observaciones: row.observaciones.trim(),
+          })),
       },
     };
   }
@@ -1854,7 +2263,17 @@ persona: {
                     type="checkbox"
                     className="mt-1"
                     checked={pfManifiestaTerceros}
-                    onChange={(e) => setPfManifiestaTerceros(e.target.checked)}
+                    onChange={(e) => {
+                    const v = e.target.checked;
+                    setPfManifiestaTerceros(v);
+                    setRecursosTercerosAplica(v);
+
+                    if (!v) {
+                      setRecursosTerceros([]);
+                    } else if (recursosTerceros.length === 0) {
+                      setRecursosTerceros([createEmptyRecursoTercero()]);
+                    }
+                  }}
                   />
                   <span>
                     Manifiesto que tengo conocimiento de la existencia del dueño
@@ -1863,147 +2282,272 @@ persona: {
                   </span>
                 </label>
 
-                {pfManifiestaTerceros ? (
-                  <div className="rounded border border-gray-200 p-3 space-y-3">
-                    <p className="text-xs text-gray-600">
-                      En caso de responder que sí, llena la información
-                      adicional para identificar al dueño beneficiario y/o
-                      tercero.
-                    </p>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <label className="text-sm font-medium">
-                          Actividad o giro del negocio del tercero *
-                        </label>
-                        <input
-                          className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.terceros.actividad_giro"] ? "border-red-500" : "border-gray-300"}`}
-                          value={pfTerceroActividadGiro}
-                          onChange={(e) =>
-                            setPfTerceroActividadGiro(e.target.value)
-                          }
-                          onBlur={() =>
-                            validator.validateField(
-                              "persona.terceros.actividad_giro",
-                            )
-                          }
-                        />
-                        {errors["persona.terceros.actividad_giro"] ? (
-                          <p className="text-xs text-red-600">
-                            {errors["persona.terceros.actividad_giro"]}
-                          </p>
-                        ) : null}
+                  {pfManifiestaTerceros ? (
+                    <div className="rounded border border-gray-200 p-3 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-gray-600">
+                          En caso de responder que sí, captura uno o más registros.
+                        </p>
+                        <button
+                          type="button"
+                          className="rounded border border-gray-300 px-3 py-1 text-sm"
+                          onClick={addRecursoTerceroRow}
+                        >
+                          Agregar
+                        </button>
                       </div>
 
-                      <div className="space-y-1">
-                        <label className="text-sm font-medium">
-                          Relación con el tercero *
-                        </label>
-                        <input
-                          className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.terceros.relacion"] ? "border-red-500" : "border-gray-300"}`}
-                          value={pfTerceroRelacion}
-                          onChange={(e) => setPfTerceroRelacion(e.target.value)}
-                          onBlur={() =>
-                            validator.validateField("persona.terceros.relacion")
-                          }
-                        />
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium">
-                              Nombre completo del tercero <span className="text-red-600">*</span>
+                      {recursosTerceros.map((row, index) => (
+                        <div key={index} className="rounded border border-gray-200 p-4 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium">
+                              Recurso de tercero #{index + 1}
+                            </p>
+                            <button
+                              type="button"
+                              className="rounded border border-red-300 px-3 py-1 text-sm text-red-700"
+                              onClick={() => removeRecursoTerceroRow(index)}
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <label className="text-sm font-medium">
+                                Tipo de tercero *
+                              </label>
+                              <select
+                                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                                value={row.tipo_tercero}
+                                onChange={(e) =>
+                                  updateRecursoTerceroRow(index, "tipo_tercero", e.target.value)
+                                }
+                              >
+                                <option value="persona_fisica">Persona Física</option>
+                                <option value="persona_moral">Persona Moral</option>
+                              </select>
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-sm font-medium">
+                                Actividad o giro del negocio del tercero *
+                              </label>
+                              <input
+                                className={`w-full rounded border px-3 py-2 text-sm ${
+                                  index === 0 && errors["persona.terceros.actividad_giro"]
+                                    ? "border-red-500"
+                                    : "border-gray-300"
+                                }`}
+                                value={row.actividad_giro}
+                                onChange={(e) => {
+                                  updateRecursoTerceroRow(index, "actividad_giro", e.target.value);
+                                  if (index === 0) setPfTerceroActividadGiro(e.target.value);
+                                }}
+                                onBlur={() => {
+                                  if (index === 0) {
+                                    validator.validateField("persona.terceros.actividad_giro");
+                                  }
+                                }}
+                              />
+                              {index === 0 && errors["persona.terceros.actividad_giro"] ? (
+                                <p className="text-xs text-red-600">
+                                  {errors["persona.terceros.actividad_giro"]}
+                                </p>
+                              ) : null}
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-sm font-medium">
+                                Relación con el tercero *
+                              </label>
+                              <input
+                                className={`w-full rounded border px-3 py-2 text-sm ${
+                                  index === 0 && errors["persona.terceros.relacion"]
+                                    ? "border-red-500"
+                                    : "border-gray-300"
+                                }`}
+                                value={row.relacion_con_cliente}
+                                onChange={(e) => {
+                                  updateRecursoTerceroRow(index, "relacion_con_cliente", e.target.value);
+                                  if (index === 0) setPfTerceroRelacion(e.target.value);
+                                }}
+                                onBlur={() => {
+                                  if (index === 0) {
+                                    validator.validateField("persona.terceros.relacion");
+                                  }
+                                }}
+                              />
+                              {index === 0 && errors["persona.terceros.relacion"] ? (
+                                <p className="text-xs text-red-600">
+                                  {errors["persona.terceros.relacion"]}
+                                </p>
+                              ) : null}
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-sm font-medium">
+                                Nombre completo / razón social del tercero *
+                              </label>
+                              <input
+                                className={`w-full rounded border px-3 py-2 text-sm ${
+                                  index === 0 && errors["persona.terceros.nombre_completo"]
+                                    ? "border-red-500"
+                                    : "border-gray-300"
+                                }`}
+                                value={row.nombre_razon_social}
+                                onChange={(e) => {
+                                  updateRecursoTerceroRow(index, "nombre_razon_social", e.target.value);
+                                  if (index === 0) setPfTerceroNombreCompleto(e.target.value);
+                                }}
+                                onBlur={() => {
+                                  if (index === 0) {
+                                    setErr("persona.terceros.nombre_completo", undefined);
+                                  }
+                                }}
+                                placeholder="Ej. Juan Pérez López / Empresa SA"
+                              />
+                              {index === 0 && errors["persona.terceros.nombre_completo"] ? (
+                                <p className="text-xs text-red-600">
+                                  {errors["persona.terceros.nombre_completo"]}
+                                </p>
+                              ) : null}
+                            </div>
+
+                            <SearchableSelect
+                              label="Nacionalidad del tercero"
+                              required
+                              value={row.nacionalidad}
+                              items={paises}
+                              error={index === 0 ? errors["persona.terceros.nacionalidad"] : undefined}
+                              onChange={(v) => {
+                                updateRecursoTerceroRow(index, "nacionalidad", v);
+                                if (index === 0) setPfTerceroNacionalidad(v);
+                              }}
+                              onBlur={() => {
+                                if (index === 0) {
+                                  setErr("persona.terceros.nacionalidad", undefined);
+                                }
+                              }}
+                            />
+
+                            <div className="space-y-1">
+                              <label className="text-sm font-medium">RFC del tercero</label>
+                              <input
+                                className={`w-full rounded border px-3 py-2 text-sm ${
+                                  index === 0 && errors["persona.terceros.rfc"]
+                                    ? "border-red-500"
+                                    : "border-gray-300"
+                                }`}
+                                value={row.rfc}
+                                onChange={(e) => {
+                                  updateRecursoTerceroRow(index, "rfc", e.target.value);
+                                  if (index === 0) setPfTerceroRfc(e.target.value);
+                                }}
+                                onBlur={() => {
+                                  if (index === 0) {
+                                    setErr("persona.terceros.rfc", undefined);
+                                  }
+                                }}
+                                placeholder="XAXX010101000"
+                                disabled={row.sin_documentacion}
+                              />
+                              {index === 0 && errors["persona.terceros.rfc"] ? (
+                                <p className="text-xs text-red-600">
+                                  {errors["persona.terceros.rfc"]}
+                                </p>
+                              ) : null}
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-sm font-medium">CURP del tercero</label>
+                              <input
+                                className={`w-full rounded border px-3 py-2 text-sm ${
+                                  index === 0 && errors["persona.terceros.curp"]
+                                    ? "border-red-500"
+                                    : "border-gray-300"
+                                }`}
+                                value={row.curp}
+                                onChange={(e) => {
+                                  updateRecursoTerceroRow(index, "curp", e.target.value);
+                                  if (index === 0) setPfTerceroCurp(e.target.value);
+                                }}
+                                onBlur={() => {
+                                  if (index === 0) {
+                                    setErr("persona.terceros.curp", undefined);
+                                  }
+                                }}
+                                placeholder="PEPJ900101HDFRRN09"
+                                disabled={row.sin_documentacion}
+                              />
+                              {index === 0 && errors["persona.terceros.curp"] ? (
+                                <p className="text-xs text-red-600">
+                                  {errors["persona.terceros.curp"]}
+                                </p>
+                              ) : null}
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-sm font-medium">
+                                Fecha de nacimiento del tercero (AAAAMMDD)
+                              </label>
+                              <input
+                                className={`w-full rounded border px-3 py-2 text-sm ${
+                                  index === 0 && errors["persona.terceros.fecha_nacimiento"]
+                                    ? "border-red-500"
+                                    : "border-gray-300"
+                                }`}
+                                value={row.fecha_nacimiento}
+                                onChange={(e) => {
+                                  updateRecursoTerceroRow(index, "fecha_nacimiento", e.target.value);
+                                  if (index === 0) setPfTerceroFechaNac(e.target.value);
+                                }}
+                                onBlur={() => {
+                                  if (index === 0) {
+                                    setErr("persona.terceros.fecha_nacimiento", undefined);
+                                  }
+                                }}
+                                placeholder="19900101 (o 1990-01-01)"
+                                disabled={row.sin_documentacion}
+                              />
+                              {index === 0 && errors["persona.terceros.fecha_nacimiento"] ? (
+                                <p className="text-xs text-red-600">
+                                  {errors["persona.terceros.fecha_nacimiento"]}
+                                </p>
+                              ) : null}
+                            </div>
+
+                            <div className="space-y-1 md:col-span-2">
+                              <label className="text-sm font-medium">Observaciones</label>
+                              <input
+                                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                                value={row.observaciones}
+                                onChange={(e) =>
+                                  updateRecursoTerceroRow(index, "observaciones", e.target.value)
+                                }
+                              />
+                            </div>
+
+                            <label className="flex items-start gap-2 text-sm md:col-span-2">
+                              <input
+                                type="checkbox"
+                                className="mt-1"
+                                checked={row.sin_documentacion}
+                                onChange={(e) => {
+                                  updateRecursoTerceroRow(index, "sin_documentacion", e.target.checked);
+                                  if (index === 0) setPfNoDocumentacionTercero(e.target.checked);
+                                }}
+                              />
+                              <span>
+                                Manifiesto que no cuento con la documentación requerida
+                                del dueño beneficiario.
+                              </span>
                             </label>
-                            <input
-                              className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.terceros.nombre_completo"] ? "border-red-500" : "border-gray-300"}`}
-                              value={pfTerceroNombreCompleto}
-                              onChange={(e) => setPfTerceroNombreCompleto(e.target.value)}
-                              onBlur={() => setErr("persona.terceros.nombre_completo", undefined)}
-                              placeholder="Ej. Juan Pérez López"
-                            />
-                            {errors["persona.terceros.nombre_completo"] ? (
-                              <p className="text-xs text-red-600">{errors["persona.terceros.nombre_completo"]}</p>
-                            ) : null}
-                          </div>
-
-                          <SearchableSelect
-                            label="Nacionalidad del tercero"
-                            required
-                            value={pfTerceroNacionalidad}
-                            items={paises}
-                            error={errors["persona.terceros.nacionalidad"]}
-                            onChange={(v) => setPfTerceroNacionalidad(v)}
-                            onBlur={() => setErr("persona.terceros.nacionalidad", undefined)}
-                          />
-
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium">RFC del tercero</label>
-                            <input
-                              className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.terceros.rfc"] ? "border-red-500" : "border-gray-300"}`}
-                              value={pfTerceroRfc}
-                              onChange={(e) => setPfTerceroRfc(e.target.value)}
-                              onBlur={() => setErr("persona.terceros.rfc", undefined)}
-                              placeholder="XAXX010101000"
-                              disabled={pfNoDocumentacionTercero}
-                            />
-                            {errors["persona.terceros.rfc"] ? (
-                              <p className="text-xs text-red-600">{errors["persona.terceros.rfc"]}</p>
-                            ) : null}
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium">CURP del tercero</label>
-                            <input
-                              className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.terceros.curp"] ? "border-red-500" : "border-gray-300"}`}
-                              value={pfTerceroCurp}
-                              onChange={(e) => setPfTerceroCurp(e.target.value)}
-                              onBlur={() => setErr("persona.terceros.curp", undefined)}
-                              placeholder="PEPJ900101HDFRRN09"
-                              disabled={pfNoDocumentacionTercero}
-                            />
-                            {errors["persona.terceros.curp"] ? (
-                              <p className="text-xs text-red-600">{errors["persona.terceros.curp"]}</p>
-                            ) : null}
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium">Fecha de nacimiento del tercero (AAAAMMDD)</label>
-                            <input
-                              className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.terceros.fecha_nacimiento"] ? "border-red-500" : "border-gray-300"}`}
-                              value={pfTerceroFechaNac}
-                              onChange={(e) => setPfTerceroFechaNac(e.target.value)}
-                              onBlur={() => setErr("persona.terceros.fecha_nacimiento", undefined)}
-                              placeholder="19900101 (o 1990-01-01)"
-                              disabled={pfNoDocumentacionTercero}
-                            />
-                            {errors["persona.terceros.fecha_nacimiento"] ? (
-                              <p className="text-xs text-red-600">{errors["persona.terceros.fecha_nacimiento"]}</p>
-                            ) : null}
                           </div>
                         </div>
-
-                        {errors["persona.terceros.relacion"] ? (
-                          <p className="text-xs text-red-600">
-                            {errors["persona.terceros.relacion"]}
-                          </p>
-                        ) : null}
-                      </div>
+                      ))}
                     </div>
-
-                    <label className="flex items-start gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        className="mt-1"
-                        checked={pfNoDocumentacionTercero}
-                        onChange={(e) =>
-                          setPfNoDocumentacionTercero(e.target.checked)
-                        }
-                      />
-                      <span>
-                        Manifiesto que no cuento con la documentación requerida
-                        del dueño beneficiario.
-                      </span>
-                    </label>
-                  </div>
-                ) : null}
+                  ) : null}
               </div>
             </div>
           </div>
@@ -2081,15 +2625,21 @@ persona: {
                   value={pmBeneficiarioControlador}
                   onChange={(e) => {
                     const v = e.target.value;
+                    const aplica = v === "si";
+
                     setPmBeneficiarioControlador(v);
-                    // P1-2: si BC=NO, limpiar captura
-                    if (v !== "si") {
+                    setDuenosBeneficiariosAplica(aplica);
+
+                    if (!aplica) {
                       setPmBcNombres("");
                       setPmBcApPat("");
                       setPmBcApMat("");
                       setErr("beneficiario_controlador.nombres", undefined);
                       setErr("beneficiario_controlador.apellido_paterno", undefined);
                       setErr("beneficiario_controlador.apellido_materno", undefined);
+                      setDuenosBeneficiarios([]);
+                    } else if (duenosBeneficiarios.length === 0) {
+                      setDuenosBeneficiarios([createEmptyDuenoBeneficiario()]);
                     }
                   }}
                   onBlur={() => validator.validateField("BeneficiarioControlador")}
@@ -2556,68 +3106,115 @@ persona: {
               <p className="text-sm font-medium">
                 Identificar al Beneficiario Controlador (CFF 32-B Ter)
               </p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Nombres *</label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${errors["beneficiario_controlador.nombres"] ? "border-red-500" : "border-gray-300"}`}
-                    value={pmBcNombres}
-                    onChange={(e) => setPmBcNombres(e.target.value)}
-                    onBlur={() =>
-                      validator.validateField(
-                        "beneficiario_controlador.nombres",
-                      )
-                    }
-                  />
-                  {errors["beneficiario_controlador.nombres"] ? (
-                    <p className="text-xs text-red-600">
-                      {errors["beneficiario_controlador.nombres"]}
-                    </p>
-                  ) : null}
-                </div>
+                  <div className="rounded border border-gray-200 p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">Dueños beneficiarios</p>
+                      <button
+                        type="button"
+                        className="rounded border border-gray-300 px-3 py-1 text-sm"
+                        onClick={addDuenoBeneficiarioRow}
+                      >
+                        Agregar
+                      </button>
+                    </div>
 
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">
-                    Apellido paterno *
-                  </label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${errors["beneficiario_controlador.apellido_paterno"] ? "border-red-500" : "border-gray-300"}`}
-                    value={pmBcApPat}
-                    onChange={(e) => setPmBcApPat(e.target.value)}
-                    onBlur={() =>
-                      validator.validateField(
-                        "beneficiario_controlador.apellido_paterno",
-                      )
-                    }
-                  />
-                  {errors["beneficiario_controlador.apellido_paterno"] ? (
-                    <p className="text-xs text-red-600">
-                      {errors["beneficiario_controlador.apellido_paterno"]}
-                    </p>
-                  ) : null}
-                </div>
+                    {duenosBeneficiarios.map((row, index) => (
+                      <div key={index} className="rounded border border-gray-200 p-4 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-medium">
+                            Dueño beneficiario #{index + 1}
+                          </p>
+                          <button
+                            type="button"
+                            className="rounded border border-red-300 px-3 py-1 text-sm text-red-700"
+                            onClick={() => removeDuenoBeneficiarioRow(index)}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
 
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">
-                    Apellido materno *
-                  </label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${errors["beneficiario_controlador.apellido_materno"] ? "border-red-500" : "border-gray-300"}`}
-                    value={pmBcApMat}
-                    onChange={(e) => setPmBcApMat(e.target.value)}
-                    onBlur={() =>
-                      validator.validateField(
-                        "beneficiario_controlador.apellido_materno",
-                      )
-                    }
-                  />
-                  {errors["beneficiario_controlador.apellido_materno"] ? (
-                    <p className="text-xs text-red-600">
-                      {errors["beneficiario_controlador.apellido_materno"]}
-                    </p>
-                  ) : null}
-                </div>
-              </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium">Nombres *</label>
+                            <input
+                              className={`w-full rounded border px-3 py-2 text-sm ${
+                                index === 0 && errors["beneficiario_controlador.nombres"]
+                                  ? "border-red-500"
+                                  : "border-gray-300"
+                              }`}
+                              value={row.nombres}
+                              onChange={(e) => {
+                                updateDuenoBeneficiarioRow(index, "nombres", e.target.value);
+                                if (index === 0) setPmBcNombres(e.target.value);
+                              }}
+                              onBlur={() => {
+                                if (index === 0) {
+                                  setErr("beneficiario_controlador.nombres", undefined);
+                                }
+                              }}
+                            />
+                            {index === 0 && errors["beneficiario_controlador.nombres"] ? (
+                              <p className="text-xs text-red-600">
+                                {errors["beneficiario_controlador.nombres"]}
+                              </p>
+                            ) : null}
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium">Apellido paterno *</label>
+                            <input
+                              className={`w-full rounded border px-3 py-2 text-sm ${
+                                index === 0 && errors["beneficiario_controlador.apellido_paterno"]
+                                  ? "border-red-500"
+                                  : "border-gray-300"
+                              }`}
+                              value={row.apellido_paterno}
+                              onChange={(e) => {
+                                updateDuenoBeneficiarioRow(index, "apellido_paterno", e.target.value);
+                                if (index === 0) setPmBcApPat(e.target.value);
+                              }}
+                              onBlur={() => {
+                                if (index === 0) {
+                                  setErr("beneficiario_controlador.apellido_paterno", undefined);
+                                }
+                              }}
+                            />
+                            {index === 0 && errors["beneficiario_controlador.apellido_paterno"] ? (
+                              <p className="text-xs text-red-600">
+                                {errors["beneficiario_controlador.apellido_paterno"]}
+                              </p>
+                            ) : null}
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium">Apellido materno *</label>
+                            <input
+                              className={`w-full rounded border px-3 py-2 text-sm ${
+                                index === 0 && errors["beneficiario_controlador.apellido_materno"]
+                                  ? "border-red-500"
+                                  : "border-gray-300"
+                              }`}
+                              value={row.apellido_materno}
+                              onChange={(e) => {
+                                updateDuenoBeneficiarioRow(index, "apellido_materno", e.target.value);
+                                if (index === 0) setPmBcApMat(e.target.value);
+                              }}
+                              onBlur={() => {
+                                if (index === 0) {
+                                  setErr("beneficiario_controlador.apellido_materno", undefined);
+                                }
+                              }}
+                            />
+                            {index === 0 && errors["beneficiario_controlador.apellido_materno"] ? (
+                              <p className="text-xs text-red-600">
+                                {errors["beneficiario_controlador.apellido_materno"]}
+                              </p>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
             </div>
 
             <div className="rounded border border-gray-200 p-3 space-y-3">
@@ -3098,6 +3695,89 @@ persona: {
                     Acepta AAAAMMDD o YYYY-MM-DD (se convierte a AAAAMMDD).
                   </p>
                 )}
+              </div>
+              <hr className="my-2" />
+
+              <div className="space-y-2">
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={duenosBeneficiariosAplica}
+                    onChange={(e) => {
+                      const v = e.target.checked;
+                      setDuenosBeneficiariosAplica(v);
+
+                      if (!v) {
+                        setDuenosBeneficiarios([]);
+                      } else if (duenosBeneficiarios.length === 0) {
+                        setDuenosBeneficiarios([createEmptyDuenoBeneficiario()]);
+                      }
+                    }}
+                  />
+                  <span>El fideicomiso cuenta con dueños beneficiarios.</span>
+                </label>
+
+                {duenosBeneficiariosAplica ? (
+                  <div className="rounded border border-gray-200 p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">Dueños beneficiarios</p>
+                      <button
+                        type="button"
+                        className="rounded border border-gray-300 px-3 py-1 text-sm"
+                        onClick={addDuenoBeneficiarioRow}
+                      >
+                        Agregar
+                      </button>
+                    </div>
+                    {duenosBeneficiarios.map((row, index) => (
+                      <div key={index} className="rounded border border-gray-200 p-4 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-medium">Dueño beneficiario #{index + 1}</p>
+                          <button
+                            type="button"
+                            className="rounded border border-red-300 px-3 py-1 text-sm text-red-700"
+                            onClick={() => removeDuenoBeneficiarioRow(index)}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium">Nombres</label>
+                            <input
+                              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                              value={row.nombres}
+                              onChange={(e) =>
+                                updateDuenoBeneficiarioRow(index, "nombres", e.target.value)
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium">Apellido paterno</label>
+                            <input
+                              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                              value={row.apellido_paterno}
+                              onChange={(e) =>
+                                updateDuenoBeneficiarioRow(index, "apellido_paterno", e.target.value)
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium">Apellido materno</label>
+                            <input
+                              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                              value={row.apellido_materno}
+                              onChange={(e) =>
+                                updateDuenoBeneficiarioRow(index, "apellido_materno", e.target.value)
+                              }
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
