@@ -3467,81 +3467,22 @@ persona: {
                   <input
                     type="checkbox"
                     className="mt-1"
-                    checked={duenosBeneficiariosAplica}
+                    checked={relatedDuenosAplica}
                     onChange={(e) => {
                       const v = e.target.checked;
-                      setDuenosBeneficiariosAplica(v);
+                      setRelatedDuenosAplica(v);
 
                       if (!v) {
-                        setDuenosBeneficiarios([]);
-                      } else if (duenosBeneficiarios.length === 0) {
-                        setDuenosBeneficiarios([createEmptyDuenoBeneficiario()]);
+                        setRelatedDuenos([]);
+                      } else if (relatedDuenos.length === 0) {
+                        setRelatedDuenos([createEmptyRelatedDueno()]);
                       }
                     }}
                   />
                   <span>El fideicomiso cuenta con dueños beneficiarios.</span>
                 </label>
 
-                {duenosBeneficiariosAplica ? (
-                  <div className="rounded border border-gray-200 p-4 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium">Dueños beneficiarios</p>
-                      <button
-                        type="button"
-                        className="rounded border border-gray-300 px-3 py-1 text-sm"
-                        onClick={addDuenoBeneficiarioRow}
-                      >
-                        Agregar
-                      </button>
-                    </div>
-                    {duenosBeneficiarios.map((row, index) => (
-                      <div key={index} className="rounded border border-gray-200 p-4 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-medium">Dueño beneficiario #{index + 1}</p>
-                          <button
-                            type="button"
-                            className="rounded border border-red-300 px-3 py-1 text-sm text-red-700"
-                            onClick={() => removeDuenoBeneficiarioRow(index)}
-                          >
-                            Eliminar
-                          </button>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium">Nombres</label>
-                            <input
-                              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                              value={row.nombres}
-                              onChange={(e) =>
-                                updateDuenoBeneficiarioRow(index, "nombres", e.target.value)
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium">Apellido paterno</label>
-                            <input
-                              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                              value={row.apellido_paterno}
-                              onChange={(e) =>
-                                updateDuenoBeneficiarioRow(index, "apellido_paterno", e.target.value)
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium">Apellido materno</label>
-                            <input
-                              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                              value={row.apellido_materno}
-                              onChange={(e) =>
-                                updateDuenoBeneficiarioRow(index, "apellido_materno", e.target.value)
-                              }
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
+                {relatedDuenosAplica ? renderRelatedDuenosList() : null}
               </div>
             </div>
           </div>
