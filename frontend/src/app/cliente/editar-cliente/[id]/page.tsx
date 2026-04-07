@@ -472,6 +472,23 @@ function hydrateRelatedCollectionsFromDatos(datos: any) {
   };
 }
 
+function projectRelatedDuenoToLegacy(row: RelatedDuenoRow): DuenoBeneficiarioItem {
+  const persona = (row?.datos_completos as RelatedPFData)?.persona || {};
+
+  return {
+    nombres: safeInput(persona?.nombres),
+    apellido_paterno: safeInput(persona?.apellido_paterno),
+    apellido_materno: safeInput(persona?.apellido_materno),
+    fecha_nacimiento: safeInput(persona?.fecha_nacimiento),
+    nacionalidad: safeInput(row?.nacionalidad || 'MEX') || 'MEX',
+    relacion_con_cliente: safeInput(row?.relacion_con_cliente),
+    rfc: safeInput(persona?.rfc),
+    curp: safeInput(persona?.curp),
+    porcentaje_participacion: safeInput(row?.porcentaje_participacion),
+    observaciones: safeInput(row?.observaciones),
+  };
+}
+
 function safeInput(value: any): string {
   if (value === null || value === undefined) return '';
   return String(value);
@@ -694,6 +711,7 @@ export default function Page() {
         const relatedDuenosHydrated = hydratedRelated.relatedDuenos;
         const relatedRecursosAplicaHydrated = hydratedRelated.relatedRecursosAplica;
         const relatedDuenosAplicaHydrated = hydratedRelated.relatedDuenosAplica;
+        const duenosLegacyHydrated = relatedDuenosHydrated.map(projectRelatedDuenoToLegacy);
         if (!c) {
           setFatal('Respuesta inválida: falta cliente');
           return;
@@ -756,6 +774,12 @@ export default function Page() {
             setRelatedRecursos([]);
             setRelatedDuenosAplica(relatedDuenosAplicaHydrated);
             setRelatedDuenos(relatedDuenosHydrated);
+            setDuenosBeneficiariosAplica(relatedDuenosAplicaHydrated);
+            setDuenosBeneficiarios(
+              relatedDuenosAplicaHydrated
+                ? (duenosLegacyHydrated.length > 0 ? duenosLegacyHydrated : [createEmptyDuenoBeneficiario()])
+                : []
+            );
               setPmGiro('');
             }
 
