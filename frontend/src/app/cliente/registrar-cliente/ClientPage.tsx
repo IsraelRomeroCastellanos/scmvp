@@ -1790,6 +1790,138 @@ export default function ClientPage() {
     );
   }
 
+  function mergeDeepRecord(base: Record<string, any>, incoming: any): Record<string, any> {
+    const src = isPlainObject(incoming) ? incoming : {};
+    const out: Record<string, any> = { ...base };
+
+    for (const [key, value] of Object.entries(src)) {
+      if (isPlainObject(value) && isPlainObject(out[key])) {
+        out[key] = mergeDeepRecord(out[key], value);
+      } else if (value !== undefined && value !== null) {
+        out[key] = value;
+      }
+    }
+
+    return out;
+  }
+
+  function detectRelatedTipoEntidad(row: any): RelatedTipoEntidad {
+    const raw = safeInput(row?.tipo_entidad || row?.tipo_tercero).trim();
+
+    if (raw === "persona_fisica" || raw === "persona_moral" || raw === "fideicomiso") {
+      return raw;
+    }
+
+    const datos = isPlainObject(row?.datos_completos) ? row.datos_completos : {};
+
+    if (isPlainObject(datos?.fideicomiso)) return "fideicomiso";
+    if (isPlainObject(datos?.empresa)) return "persona_moral";
+    return "persona_fisica";
+  }
+
+  function hydrateRelatedPFData(data: any): RelatedPFData {
+    const empty = createEmptyRelatedPFData();
+    return {
+      contacto: mergeDeepRecord(empty.contacto as Record<string, any>, data?.contacto),
+      persona: mergeDeepRecord(empty.persona as Record<string, any>, data?.persona),
+    };
+  }
+
+  function hydrateRelatedPMData(data: any): RelatedPMData {
+    const empty = createEmptyRelatedPMData();
+    return {
+      contacto: mergeDeepRecord(empty.contacto as Record<string, any>, data?.contacto),
+      empresa: mergeDeepRecord(empty.empresa as Record<string, any>, data?.empresa),
+      representante: mergeDeepRecord(empty.representante as Record<string, any>, data?.representante),
+    };
+  }
+
+  function hydrateRelatedFIDData(data: any): RelatedFIDData {
+    const empty = createEmptyRelatedFIDData();
+    return {
+      contacto: mergeDeepRecord(empty.contacto as Record<string, any>, data?.contacto),
+      fideicomiso: mergeDeepRecord(empty.fideicomiso as Record<string, any>, data?.fideicomiso),
+      representante: mergeDeepRecord(empty.representante as Record<string, any>, data?.representante),
+    };
+  }
+
+  function hydrateRelatedRecursoRow(row: any): RelatedRecursoRow {
+    if (!isPlainObject(row)) {
+      return createEmptyRelatedRecurso();
+    }
+
+    if (!isPlainObject(row?.datos_completos) && ("tipo_tercero" in row || "nombre_razon_social" in row)) {
+      return buildCanonicalRecursoRowFromLegacy(normalizeRecursoTerceroRow(row));
+    }
+
+    const tipo_entidad = detectRelatedTipoEntidad(row);
+    const datos_completos =
+      tipo_entidad === "persona_fisica"
+        ? hydrateRelatedPFData(row?.datos_completos)
+        : tipo_entidad === "persona_moral"
+          ? hydrateRelatedPMData(row?.datos_completos)
+          : hydrateRelatedFIDData(row?.datos_completos);
+
+    return {
+      tipo_entidad,
+      nombre_entidad:
+        deriveRelatedNombreEntidad(tipo_entidad, datos_completos) ||
+        safeInput(row?.nombre_entidad).trim(),
+      nacionalidad: safeInput(row?.nacionalidad || "MEX").trim() || "MEX",
+      relacion_con_cliente: safeInput(row?.relacion_con_cliente).trim(),
+      sin_documentacion: !!row?.sin_documentacion,
+      observaciones: safeInput(row?.observaciones).trim(),
+      datos_completos,
+    };
+  }
+
+  function hydrateRelatedDuenoRow(row: any): RelatedDuenoRow {
+    if (!isPlainObject(row)) {
+      return createEmptyRelatedDueno();
+    }
+
+    if (!isPlainObject(row?.datos_completos) && ("nombres" in row || "apellido_paterno" in row || "apellido_materno" in row)) {
+      return buildCanonicalDuenoRowFromLegacy(normalizeDuenoBeneficiarioRow(row));
+    }
+
+    const datos_completos = hydrateRelatedPFData(row?.datos_completos);
+
+    return {
+      tipo_entidad: "persona_fisica",
+      nombre_entidad:
+        deriveRelatedNombreEntidad("persona_fisica", datos_completos) ||
+        safeInput(row?.nombre_entidad).trim(),
+      nacionalidad: safeInput(row?.nacionalidad || "MEX").trim() || "MEX",
+      relacion_con_cliente: safeInput(row?.relacion_con_cliente).trim(),
+      porcentaje_participacion: safeInput(row?.porcentaje_participacion).trim(),
+      observaciones: safeInput(row?.observaciones).trim(),
+      datos_completos,
+    };
+  }
+
+  function hydrateRelatedCollectionsFromDatos(datos: any) {
+    const safeDatos = isPlainObject(datos) ? datos : {};
+
+    const recursosRaw = Array.isArray(safeDatos?.recursos_terceros)
+      ? safeDatos.recursos_terceros
+      : [];
+    const duenosRaw = Array.isArray(safeDatos?.duenos_beneficiarios)
+      ? safeDatos.duenos_beneficiarios
+      : [];
+
+    const relatedRecursos = recursosRaw.map(hydrateRelatedRecursoRow);
+    const relatedDuenos = duenosRaw.map(hydrateRelatedDuenoRow);
+
+    return {
+      relatedRecursosAplica:
+        !!safeDatos?.recursos_terceros_aplica || relatedRecursos.length > 0,
+      relatedRecursos,
+      relatedDuenosAplica:
+        !!safeDatos?.duenos_beneficiarios_aplica || relatedDuenos.length > 0,
+      relatedDuenos,
+    };
+  }
+
   function safeInput(value: any): string {
     if (value === null || value === undefined) return "";
     return String(value);

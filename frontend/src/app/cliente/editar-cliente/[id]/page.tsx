@@ -8,6 +8,71 @@ import { loadCatalogo, type CatalogItem } from '@/lib/catalogos';
 type TipoCliente = 'persona_fisica' | 'persona_moral' | 'fideicomiso';
 type Errors = Record<string, string>;
 
+type RecursoTerceroItem = {
+  tipo_tercero: string;
+  nombre_razon_social: string;
+  relacion_con_cliente: string;
+  actividad_giro: string;
+  nacionalidad: string;
+  sin_documentacion: boolean;
+  rfc: string;
+  curp: string;
+  fecha_nacimiento: string;
+  observaciones: string;
+};
+
+type DuenoBeneficiarioItem = {
+  nombres: string;
+  apellido_paterno: string;
+  apellido_materno: string;
+  fecha_nacimiento: string;
+  nacionalidad: string;
+  relacion_con_cliente: string;
+  rfc: string;
+  curp: string;
+  porcentaje_participacion: string;
+  observaciones: string;
+};
+
+type RelatedTipoEntidad = 'persona_fisica' | 'persona_moral' | 'fideicomiso';
+
+type RelatedPFData = {
+  contacto: Record<string, any>;
+  persona: Record<string, any>;
+};
+
+type RelatedPMData = {
+  contacto: Record<string, any>;
+  empresa: Record<string, any>;
+  representante: Record<string, any>;
+};
+
+type RelatedFIDData = {
+  contacto: Record<string, any>;
+  fideicomiso: Record<string, any>;
+  representante: Record<string, any>;
+};
+
+type RelatedRecursoRow = {
+  tipo_entidad: RelatedTipoEntidad;
+  nombre_entidad: string;
+  nacionalidad: string;
+  relacion_con_cliente: string;
+  sin_documentacion: boolean;
+  observaciones: string;
+  datos_completos: RelatedPFData | RelatedPMData | RelatedFIDData;
+};
+
+type RelatedDuenoRow = {
+  tipo_entidad: 'persona_fisica';
+  nombre_entidad: string;
+  nacionalidad: string;
+  relacion_con_cliente: string;
+  porcentaje_participacion: string;
+  observaciones: string;
+  datos_completos: RelatedPFData;
+};
+
 function onlyDigits(s: string) {
   return (s ?? '').replace(/\D+/g, '');
 }
@@ -93,6 +158,437 @@ function classInput(hasErr: boolean) {
   return `w-full rounded-md border px-3 py-2 text-sm outline-none ${hasErr ? 'border-red-500' : 'border-gray-300'}`;
 }
 
+function isPlainObject(value: any): value is Record<string, any> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function mergeDeepRecord(base: Record<string, any>, incoming: any): Record<string, any> {
+  const src = isPlainObject(incoming) ? incoming : {};
+  const out: Record<string, any> = { ...base };
+
+  for (const [key, value] of Object.entries(src)) {
+    if (isPlainObject(value) && isPlainObject(out[key])) {
+      out[key] = mergeDeepRecord(out[key], value);
+    } else if (value !== undefined && value !== null) {
+      out[key] = value;
+    }
+  }
+
+  return out;
+}
+
+function createEmptyRelatedPFData(): RelatedPFData {
+  return {
+    contacto: {
+      pais: 'MEX',
+      email: '',
+      telefono: '',
+      domicilio: {
+        calle: '',
+        numero: '',
+        colonia: '',
+        municipio: '',
+        ciudad_delegacion: '',
+        codigo_postal: '',
+        estado: '',
+        pais: 'MEX',
+      },
+    },
+    persona: {
+      nombres: '',
+      apellido_paterno: '',
+      apellido_materno: '',
+      fecha_nacimiento: '',
+      rfc: '',
+      curp: '',
+      actividad_economica: '',
+    },
+  };
+}
+
+function createEmptyRelatedPMData(): RelatedPMData {
+  return {
+    contacto: {
+      pais: 'MEX',
+      email: '',
+      telefono: '',
+      domicilio: {
+        calle: '',
+        numero: '',
+        colonia: '',
+        municipio: '',
+        ciudad_delegacion: '',
+        codigo_postal: '',
+        estado: '',
+        pais: 'MEX',
+      },
+    },
+    empresa: {
+      rfc: '',
+      fecha_constitucion: '',
+      giro_mercantil: '',
+      nombre_entidad: '',
+      razon_social: '',
+    },
+    representante: {
+      nombres: '',
+      apellido_paterno: '',
+      apellido_materno: '',
+      fecha_nacimiento: '',
+      rfc: '',
+      curp: '',
+    },
+  };
+}
+
+function createEmptyRelatedFIDData(): RelatedFIDData {
+  return {
+    contacto: {
+      pais: 'MEX',
+      email: '',
+      telefono: '',
+      domicilio: {
+        calle: '',
+        numero: '',
+        colonia: '',
+        municipio: '',
+        ciudad_delegacion: '',
+        codigo_postal: '',
+        estado: '',
+        pais: 'MEX',
+      },
+    },
+    fideicomiso: {
+      nombre_entidad: '',
+      denominacion: '',
+      nombre_fideicomiso: '',
+    },
+    representante: {
+      nombres: '',
+      apellido_paterno: '',
+      apellido_materno: '',
+      fecha_nacimiento: '',
+      rfc: '',
+      curp: '',
+    },
+  };
+}
+
+function deriveRelatedNombreEntidad(
+  tipo_entidad: RelatedTipoEntidad,
+  datos_completos: RelatedPFData | RelatedPMData | RelatedFIDData
+): string {
+  if (tipo_entidad === 'persona_fisica') {
+    const pf = datos_completos as RelatedPFData;
+    return [
+      safeInput(pf.persona?.nombres).trim(),
+      safeInput(pf.persona?.apellido_paterno).trim(),
+      safeInput(pf.persona?.apellido_materno).trim(),
+    ].filter(Boolean).join(' ');
+  }
+
+  if (tipo_entidad === 'persona_moral') {
+    const pm = datos_completos as RelatedPMData;
+    return safeInput(pm.empresa?.razon_social || pm.empresa?.nombre_entidad).trim();
+  }
+
+  const fid = datos_completos as RelatedFIDData;
+  return safeInput(
+    fid.fideicomiso?.nombre_entidad ||
+    fid.fideicomiso?.denominacion ||
+    fid.fideicomiso?.nombre_fideicomiso
+  ).trim();
+}
+
+function detectRelatedTipoEntidad(row: any): RelatedTipoEntidad {
+  const raw = safeInput(row?.tipo_entidad || row?.tipo_tercero).trim();
+  if (raw === 'persona_fisica' || raw === 'persona_moral' || raw === 'fideicomiso') {
+    return raw;
+  }
+
+  const datos = isPlainObject(row?.datos_completos) ? row.datos_completos : {};
+  if (isPlainObject(datos?.fideicomiso)) return 'fideicomiso';
+  if (isPlainObject(datos?.empresa)) return 'persona_moral';
+  return 'persona_fisica';
+}
+
+function hydrateRelatedPFData(data: any): RelatedPFData {
+  const empty = createEmptyRelatedPFData();
+  return {
+    contacto: mergeDeepRecord(empty.contacto as Record<string, any>, data?.contacto),
+    persona: mergeDeepRecord(empty.persona as Record<string, any>, data?.persona),
+  };
+}
+
+function hydrateRelatedPMData(data: any): RelatedPMData {
+  const empty = createEmptyRelatedPMData();
+  return {
+    contacto: mergeDeepRecord(empty.contacto as Record<string, any>, data?.contacto),
+    empresa: mergeDeepRecord(empty.empresa as Record<string, any>, data?.empresa),
+    representante: mergeDeepRecord(empty.representante as Record<string, any>, data?.representante),
+  };
+}
+
+function hydrateRelatedFIDData(data: any): RelatedFIDData {
+  const empty = createEmptyRelatedFIDData();
+  return {
+    contacto: mergeDeepRecord(empty.contacto as Record<string, any>, data?.contacto),
+    fideicomiso: mergeDeepRecord(empty.fideicomiso as Record<string, any>, data?.fideicomiso),
+    representante: mergeDeepRecord(empty.representante as Record<string, any>, data?.representante),
+  };
+}
+
+function hydrateRelatedRecursoRow(row: any): RelatedRecursoRow {
+  if (!isPlainObject(row)) {
+    const datos_completos = createEmptyRelatedPFData();
+    return {
+      tipo_entidad: 'persona_fisica',
+      nombre_entidad: '',
+      nacionalidad: 'MEX',
+      relacion_con_cliente: '',
+      sin_documentacion: false,
+      observaciones: '',
+      datos_completos,
+    };
+  }
+
+  const tipo_entidad = detectRelatedTipoEntidad(row);
+  const legacy = !isPlainObject(row?.datos_completos) && ('tipo_tercero' in row || 'nombre_razon_social' in row);
+
+  let datos_completos: RelatedPFData | RelatedPMData | RelatedFIDData;
+  if (legacy) {
+    if (tipo_entidad === 'persona_moral') {
+      datos_completos = hydrateRelatedPMData({
+        contacto: { pais: row?.nacionalidad || 'MEX', email: '', telefono: '', domicilio: {} },
+        empresa: {
+          nombre_entidad: row?.nombre_razon_social,
+          razon_social: row?.nombre_razon_social,
+          rfc: row?.rfc,
+          fecha_constitucion: '',
+          giro_mercantil: row?.actividad_giro,
+        },
+        representante: {},
+      });
+    } else if (tipo_entidad === 'fideicomiso') {
+      datos_completos = hydrateRelatedFIDData({
+        contacto: { pais: row?.nacionalidad || 'MEX', email: '', telefono: '', domicilio: {} },
+        fideicomiso: {
+          nombre_entidad: row?.nombre_razon_social,
+          denominacion: row?.nombre_razon_social,
+          nombre_fideicomiso: row?.nombre_razon_social,
+        },
+        representante: {},
+      });
+    } else {
+      datos_completos = hydrateRelatedPFData({
+        contacto: { pais: row?.nacionalidad || 'MEX', email: '', telefono: '', domicilio: {} },
+        persona: {
+          nombres: row?.nombre_razon_social,
+          apellido_paterno: '',
+          apellido_materno: '',
+          fecha_nacimiento: row?.fecha_nacimiento,
+          rfc: row?.rfc,
+          curp: row?.curp,
+          actividad_economica: row?.actividad_giro,
+        },
+      });
+    }
+  } else {
+    datos_completos =
+      tipo_entidad === 'persona_fisica'
+        ? hydrateRelatedPFData(row?.datos_completos)
+        : tipo_entidad === 'persona_moral'
+          ? hydrateRelatedPMData(row?.datos_completos)
+          : hydrateRelatedFIDData(row?.datos_completos);
+  }
+
+  return {
+    tipo_entidad,
+    nombre_entidad: deriveRelatedNombreEntidad(tipo_entidad, datos_completos) || safeInput(row?.nombre_entidad).trim(),
+    nacionalidad: safeInput(row?.nacionalidad || 'MEX').trim() || 'MEX',
+    relacion_con_cliente: safeInput(row?.relacion_con_cliente).trim(),
+    sin_documentacion: !!row?.sin_documentacion,
+    observaciones: safeInput(row?.observaciones).trim(),
+    datos_completos,
+  };
+}
+
+function hydrateRelatedDuenoRow(row: any): RelatedDuenoRow {
+  if (!isPlainObject(row)) {
+    const datos_completos = createEmptyRelatedPFData();
+    return {
+      tipo_entidad: 'persona_fisica',
+      nombre_entidad: '',
+      nacionalidad: 'MEX',
+      relacion_con_cliente: '',
+      porcentaje_participacion: '',
+      observaciones: '',
+      datos_completos,
+    };
+  }
+
+  const legacy = !isPlainObject(row?.datos_completos) && ('nombres' in row || 'apellido_paterno' in row || 'apellido_materno' in row);
+
+  const datos_completos = legacy
+    ? hydrateRelatedPFData({
+        contacto: { pais: row?.nacionalidad || 'MEX', email: '', telefono: '', domicilio: {} },
+        persona: {
+          nombres: row?.nombres,
+          apellido_paterno: row?.apellido_paterno,
+          apellido_materno: row?.apellido_materno,
+          fecha_nacimiento: row?.fecha_nacimiento,
+          rfc: row?.rfc,
+          curp: row?.curp,
+          actividad_economica: '',
+        },
+      })
+    : hydrateRelatedPFData(row?.datos_completos);
+
+  return {
+    tipo_entidad: 'persona_fisica',
+    nombre_entidad: deriveRelatedNombreEntidad('persona_fisica', datos_completos) || safeInput(row?.nombre_entidad).trim(),
+    nacionalidad: safeInput(row?.nacionalidad || 'MEX').trim() || 'MEX',
+    relacion_con_cliente: safeInput(row?.relacion_con_cliente).trim(),
+    porcentaje_participacion: safeInput(row?.porcentaje_participacion).trim(),
+    observaciones: safeInput(row?.observaciones).trim(),
+    datos_completos,
+  };
+}
+
+function hydrateRelatedCollectionsFromDatos(datos: any) {
+  const safeDatos = isPlainObject(datos) ? datos : {};
+
+  const recursosRaw = Array.isArray(safeDatos?.recursos_terceros) ? safeDatos.recursos_terceros : [];
+  const duenosRaw = Array.isArray(safeDatos?.duenos_beneficiarios) ? safeDatos.duenos_beneficiarios : [];
+
+  const relatedRecursos = recursosRaw.map(hydrateRelatedRecursoRow);
+  const relatedDuenos = duenosRaw.map(hydrateRelatedDuenoRow);
+
+  return {
+    relatedRecursosAplica: !!safeDatos?.recursos_terceros_aplica || relatedRecursos.length > 0,
+    relatedRecursos,
+    relatedDuenosAplica: !!safeDatos?.duenos_beneficiarios_aplica || relatedDuenos.length > 0,
+    relatedDuenos,
+  };
+}
+
+function safeInput(value: any): string {
+  if (value === null || value === undefined) return '';
+  return String(value);
+}
+
+function safeBool(value: any): boolean {
+  return value === true;
+}
+
+function createEmptyRecursoTercero(): RecursoTerceroItem {
+  return {
+    tipo_tercero: 'persona_fisica',
+    nombre_razon_social: '',
+    relacion_con_cliente: '',
+    actividad_giro: '',
+    nacionalidad: 'MEX',
+    sin_documentacion: false,
+    rfc: '',
+    curp: '',
+    fecha_nacimiento: '',
+    observaciones: ''
+  };
+}
+
+function createEmptyDuenoBeneficiario(): DuenoBeneficiarioItem {
+  return {
+    nombres: '',
+    apellido_paterno: '',
+    apellido_materno: '',
+    fecha_nacimiento: '',
+    nacionalidad: 'MEX',
+    relacion_con_cliente: '',
+    rfc: '',
+    curp: '',
+    porcentaje_participacion: '',
+    observaciones: ''
+  };
+}
+
+function normalizeRecursoTerceroRow(row: any): RecursoTerceroItem {
+  return {
+    tipo_tercero: safeInput(row?.tipo_tercero || 'persona_fisica'),
+    nombre_razon_social: safeInput(row?.nombre_razon_social ?? row?.nombre_completo),
+    relacion_con_cliente: safeInput(row?.relacion_con_cliente ?? row?.relacion),
+    actividad_giro: safeInput(row?.actividad_giro),
+    nacionalidad: safeInput(row?.nacionalidad || 'MEX'),
+    sin_documentacion: safeBool(row?.sin_documentacion),
+    rfc: safeInput(row?.rfc),
+    curp: safeInput(row?.curp),
+    fecha_nacimiento: safeInput(row?.fecha_nacimiento),
+    observaciones: safeInput(row?.observaciones)
+  };
+}
+
+function normalizeDuenoBeneficiarioRow(row: any): DuenoBeneficiarioItem {
+  return {
+    nombres: safeInput(row?.nombres),
+    apellido_paterno: safeInput(row?.apellido_paterno),
+    apellido_materno: safeInput(row?.apellido_materno),
+    fecha_nacimiento: safeInput(row?.fecha_nacimiento),
+    nacionalidad: safeInput(row?.nacionalidad || 'MEX'),
+    relacion_con_cliente: safeInput(row?.relacion_con_cliente ?? row?.relacion),
+    rfc: safeInput(row?.rfc),
+    curp: safeInput(row?.curp),
+    porcentaje_participacion: safeInput(row?.porcentaje_participacion),
+    observaciones: safeInput(row?.observaciones)
+  };
+}
+
+function addRecursoTerceroRow(
+  setRecursosTerceros: React.Dispatch<React.SetStateAction<RecursoTerceroItem[]>>
+) {
+  setRecursosTerceros((prev) => [...prev, createEmptyRecursoTercero()]);
+}
+
+function updateRecursoTerceroRow(
+  setRecursosTerceros: React.Dispatch<React.SetStateAction<RecursoTerceroItem[]>>,
+  index: number,
+  key: keyof RecursoTerceroItem,
+  value: RecursoTerceroItem[keyof RecursoTerceroItem]
+) {
+  setRecursosTerceros((prev) =>
+    prev.map((row, i) => (i === index ? { ...row, [key]: value } : row))
+  );
+}
+
+function removeRecursoTerceroRow(
+  setRecursosTerceros: React.Dispatch<React.SetStateAction<RecursoTerceroItem[]>>,
+  index: number
+) {
+  setRecursosTerceros((prev) => prev.filter((_, i) => i !== index));
+}
+
+function addDuenoBeneficiarioRow(
+  setDuenosBeneficiarios: React.Dispatch<React.SetStateAction<DuenoBeneficiarioItem[]>>
+) {
+  setDuenosBeneficiarios((prev) => [...prev, createEmptyDuenoBeneficiario()]);
+}
+
+function updateDuenoBeneficiarioRow(
+  setDuenosBeneficiarios: React.Dispatch<React.SetStateAction<DuenoBeneficiarioItem[]>>,
+  index: number,
+  key: keyof DuenoBeneficiarioItem,
+  value: DuenoBeneficiarioItem[keyof DuenoBeneficiarioItem]
+) {
+  setDuenosBeneficiarios((prev) =>
+    prev.map((row, i) => (i === index ? { ...row, [key]: value } : row))
+  );
+}
+
+function removeDuenoBeneficiarioRow(
+  setDuenosBeneficiarios: React.Dispatch<React.SetStateAction<DuenoBeneficiarioItem[]>>,
+  index: number
+) {
+  setDuenosBeneficiarios((prev) => prev.filter((_, i) => i !== index));
+}
+
 export default function Page() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -148,6 +644,15 @@ export default function Page() {
   const [repRFC, setRepRFC] = useState('');
   const [repCURP, setRepCURP] = useState('');
 
+  const [recursosTercerosAplica, setRecursosTercerosAplica] = useState(false);
+  const [recursosTerceros, setRecursosTerceros] = useState<RecursoTerceroItem[]>([]);
+  const [duenosBeneficiariosAplica, setDuenosBeneficiariosAplica] = useState(false);
+  const [duenosBeneficiarios, setDuenosBeneficiarios] = useState<DuenoBeneficiarioItem[]>([]);
+  const [relatedRecursosAplica, setRelatedRecursosAplica] = useState(false);
+  const [relatedRecursos, setRelatedRecursos] = useState<RelatedRecursoRow[]>([]);
+  const [relatedDuenosAplica, setRelatedDuenosAplica] = useState(false);
+  const [relatedDuenos, setRelatedDuenos] = useState<RelatedDuenoRow[]>([]);
+
   useEffect(() => {
     (async () => {
       try {
@@ -183,6 +688,12 @@ export default function Page() {
         }
 
         const c = data?.cliente;
+        const dcHydrated = c?.datos_completos ?? {};
+        const hydratedRelated = hydrateRelatedCollectionsFromDatos(dcHydrated);
+        const relatedRecursosHydrated = hydratedRelated.relatedRecursos;
+        const relatedDuenosHydrated = hydratedRelated.relatedDuenos;
+        const relatedRecursosAplicaHydrated = hydratedRelated.relatedRecursosAplica;
+        const relatedDuenosAplicaHydrated = hydratedRelated.relatedDuenosAplica;
         if (!c) {
           setFatal('Respuesta inválida: falta cliente');
           return;
@@ -209,40 +720,97 @@ export default function Page() {
         setDomCP(dom?.codigo_postal || dom?.codigoPostal || '');
         setDomEstado(dom?.estado || '');
 
-        if (c.tipo_cliente === 'persona_fisica') {
-          const ae = c?.datos_completos?.persona?.actividad_economica;
-          if (typeof ae === 'string') setPfActividad(ae);
-          else setPfActividad(ae?.clave || '');
-        }
+          if (c.tipo_cliente === 'persona_fisica') {
+            setRelatedRecursosAplica(relatedRecursosAplicaHydrated);
+            setRelatedRecursos(relatedRecursosHydrated);
+            setRelatedDuenosAplica(false);
+            setRelatedDuenos([]);
+            const ae = c?.datos_completos?.persona?.actividad_economica;
+            if (typeof ae === 'string') setPfActividad(ae);
+            else setPfActividad(ae?.clave || '');
 
-        if (c.tipo_cliente === 'persona_moral') {
-          const giroTxt = c?.datos_completos?.empresa?.giro || c?.datos_completos?.empresa?.giro_mercantil || '';
-          if (typeof giroTxt === 'string' && giroTxt) {
-            const match = giros.find((x) => x.descripcion === giroTxt || x.clave === giroTxt);
-            setPmGiro(match?.clave || '');
-          } else {
-            setPmGiro('');
+            const recursosRaw = Array.isArray(c?.datos_completos?.recursos_terceros)
+              ? c.datos_completos.recursos_terceros
+              : [];
+            const recursos = recursosRaw.map(normalizeRecursoTerceroRow);
+            const recursosAplica =
+              c?.datos_completos?.recursos_terceros_aplica === true || recursos.length > 0;
+
+            setRecursosTercerosAplica(recursosAplica);
+            setRecursosTerceros(
+              recursosAplica
+                ? (recursos.length > 0 ? recursos : [createEmptyRecursoTercero()])
+                : []
+            );
+
+            setDuenosBeneficiariosAplica(false);
+            setDuenosBeneficiarios([]);
           }
+          if (c.tipo_cliente === 'persona_moral') {
+            const giroTxt = c?.datos_completos?.empresa?.giro || c?.datos_completos?.empresa?.giro_mercantil || '';
+            if (typeof giroTxt === 'string' && giroTxt) {
+              const match = giros.find((x) => x.descripcion === giroTxt || x.clave === giroTxt);
+              setPmGiro(match?.clave || '');
+            } else {
+            setRelatedRecursosAplica(false);
+            setRelatedRecursos([]);
+            setRelatedDuenosAplica(relatedDuenosAplicaHydrated);
+            setRelatedDuenos(relatedDuenosHydrated);
+              setPmGiro('');
+            }
 
-          const r = c?.datos_completos?.representante || {};
-          setRepNombre(r.nombres || r.nombre_completo || '');
-          setRepAP(r.apellido_paterno || '');
-          setRepAM(r.apellido_materno || '');
-          setRepFechaNac(r.fecha_nacimiento || '');
-          setRepRFC(r.rfc || '');
-          setRepCURP(r.curp || '');
-        }
+            const r = c?.datos_completos?.representante || {};
+            setRepNombre(r.nombres || r.nombre_completo || '');
+            setRepAP(r.apellido_paterno || '');
+            setRepAM(r.apellido_materno || '');
+            setRepFechaNac(r.fecha_nacimiento || '');
+            setRepRFC(r.rfc || '');
+            setRepCURP(r.curp || '');
 
-        if (c.tipo_cliente === 'fideicomiso') {
-          const r = c?.datos_completos?.representante || {};
-          const nc = (r.nombre_completo || '').split(' ').filter(Boolean);
-          setRepNombre(nc.slice(0, 1).join(' ') || r.nombre_completo || '');
-          setRepAP(nc.slice(1, 2).join(' ') || '');
-          setRepAM(nc.slice(2).join(' ') || '');
-          setRepFechaNac(r.fecha_nacimiento || '');
-          setRepRFC(r.rfc || '');
-          setRepCURP(r.curp || '');
-        }
+            const duenosRaw = Array.isArray(c?.datos_completos?.duenos_beneficiarios)
+              ? c.datos_completos.duenos_beneficiarios
+              : [];
+            const duenos = duenosRaw.map(normalizeDuenoBeneficiarioRow);
+            const duenosAplica =
+              c?.datos_completos?.duenos_beneficiarios_aplica === true || duenos.length > 0;
+
+            setDuenosBeneficiariosAplica(duenosAplica);
+            setDuenosBeneficiarios(
+              duenosAplica
+                ? (duenos.length > 0 ? duenos : [createEmptyDuenoBeneficiario()])
+                : []
+            );
+
+            setRecursosTercerosAplica(false);
+            setRecursosTerceros([]);
+          }
+          if (c.tipo_cliente === 'fideicomiso') {
+            const r = c?.datos_completos?.representante || {};
+            const nc = (r.nombre_completo || '').split(' ').filter(Boolean);
+            setRepNombre(nc.slice(0, 1).join(' ') || r.nombre_completo || '');
+            setRepAP(nc.slice(1, 2).join(' ') || '');
+            setRepAM(nc.slice(2).join(' ') || '');
+            setRepFechaNac(r.fecha_nacimiento || '');
+            setRepRFC(r.rfc || '');
+            setRepCURP(r.curp || '');
+
+            const duenosRaw = Array.isArray(c?.datos_completos?.duenos_beneficiarios)
+              ? c.datos_completos.duenos_beneficiarios
+              : [];
+            const duenos = duenosRaw.map(normalizeDuenoBeneficiarioRow);
+            const duenosAplica =
+              c?.datos_completos?.duenos_beneficiarios_aplica === true || duenos.length > 0;
+
+            setDuenosBeneficiariosAplica(duenosAplica);
+            setDuenosBeneficiarios(
+              duenosAplica
+                ? (duenos.length > 0 ? duenos : [createEmptyDuenoBeneficiario()])
+                : []
+            );
+
+            setRecursosTercerosAplica(false);
+            setRecursosTerceros([]);
+          }
       } catch (e: any) {
         setFatal(e?.message || 'Error inesperado');
       } finally {
@@ -270,18 +838,6 @@ export default function Page() {
     req(e, 'contacto.domicilio.codigo_postal', 'Código postal (domicilio contacto)', domCP);
     req(e, 'contacto.domicilio.estado', 'Estado (domicilio contacto)', domEstado);
 
-    if (tipoCliente === 'persona_fisica') {
-      req(e, 'pf.actividad', 'Actividad económica', pfActividad);
-    }
-    if (tipoCliente === 'persona_moral') {
-      req(e, 'pm.giro', 'Giro mercantil', pmGiro);
-      req(e, 'rep.nombres', 'Nombre(s) representante', repNombre);
-      req(e, 'rep.apellido_paterno', 'Apellido paterno representante', repAP);
-      req(e, 'rep.apellido_materno', 'Apellido materno representante', repAM);
-      reqYYYYMMDD(e, 'rep.fecha_nacimiento', 'Fecha nacimiento representante', repFechaNac);
-      reqRFC(e, 'rep.rfc', 'RFC representante', repRFC);
-      reqCURP(e, 'rep.curp', 'CURP representante', repCURP);
-    }
     if (tipoCliente === 'fideicomiso') {
       req(e, 'rep.nombres', 'Nombre(s) representante', repNombre);
       req(e, 'rep.apellido_paterno', 'Apellido paterno representante', repAP);
@@ -334,37 +890,85 @@ export default function Page() {
         }
       };
 
-      if (tipoCliente === 'persona_fisica') {
-        body.datos_completos.persona = stripEmpty({
-          tipo: 'persona_fisica',
-          actividad_economica: act ? { clave: act.clave, descripcion: act.descripcion } : pfActividad
-        });
-      }
+        if (tipoCliente === 'persona_fisica') {
+          body.datos_completos.persona = stripEmpty({
+            tipo: 'persona_fisica',
+            actividad_economica: act ? { clave: act.clave, descripcion: act.descripcion } : pfActividad
+          });
 
-      if (tipoCliente === 'persona_moral') {
-        body.datos_completos.empresa = stripEmpty({
-          giro: giro ? giro.descripcion : undefined
-        });
+          body.datos_completos.recursos_terceros_aplica = recursosTercerosAplica;
 
-        body.datos_completos.representante = stripEmpty({
-          nombres: repNombre.trim(),
-          apellido_paterno: repAP.trim(),
-          apellido_materno: repAM.trim(),
-          fecha_nacimiento: repFechaNac.trim(),
-          rfc: normalizeUpper(repRFC),
-          curp: normalizeUpper(repCURP)
-        });
-      }
+          body.datos_completos.recursos_terceros = recursosTercerosAplica
+            ? recursosTerceros.map((row) => ({
+                tipo_tercero: row.tipo_tercero || 'persona_fisica',
+                nombre_razon_social: row.nombre_razon_social.trim(),
+                relacion_con_cliente: row.relacion_con_cliente.trim(),
+                actividad_giro: row.actividad_giro.trim(),
+                nacionalidad: row.nacionalidad || 'MEX',
+                sin_documentacion: !!row.sin_documentacion,
+                rfc: row.sin_documentacion ? '' : normalizeUpper(row.rfc),
+                curp: row.sin_documentacion ? '' : normalizeUpper(row.curp),
+                fecha_nacimiento: row.sin_documentacion ? '' : onlyDigits(row.fecha_nacimiento).slice(0, 8),
+                observaciones: row.observaciones.trim()
+              }))
+            : [];
+        }
+        if (tipoCliente === 'persona_moral') {
+          body.datos_completos.empresa = stripEmpty({
+            giro: giro ? giro.descripcion : undefined
+          });
 
-      if (tipoCliente === 'fideicomiso') {
-        body.datos_completos.representante = stripEmpty({
-          nombre_completo: `${repNombre.trim()} ${repAP.trim()} ${repAM.trim()}`.trim(),
-          fecha_nacimiento: repFechaNac.trim(),
-          rfc: normalizeUpper(repRFC),
-          curp: normalizeUpper(repCURP)
-        });
-      }
+          body.datos_completos.representante = stripEmpty({
+            nombres: repNombre.trim(),
+            apellido_paterno: repAP.trim(),
+            apellido_materno: repAM.trim(),
+            fecha_nacimiento: repFechaNac.trim(),
+            rfc: normalizeUpper(repRFC),
+            curp: normalizeUpper(repCURP)
+          });
 
+          body.datos_completos.duenos_beneficiarios_aplica = duenosBeneficiariosAplica;
+
+          body.datos_completos.duenos_beneficiarios = duenosBeneficiariosAplica
+            ? duenosBeneficiarios.map((row) => ({
+                nombres: row.nombres.trim(),
+                apellido_paterno: row.apellido_paterno.trim(),
+                apellido_materno: row.apellido_materno.trim(),
+                fecha_nacimiento: onlyDigits(row.fecha_nacimiento).slice(0, 8),
+                nacionalidad: row.nacionalidad || 'MEX',
+                relacion_con_cliente: row.relacion_con_cliente.trim(),
+                rfc: normalizeUpper(row.rfc),
+                curp: normalizeUpper(row.curp),
+                porcentaje_participacion: row.porcentaje_participacion.trim(),
+                observaciones: row.observaciones.trim()
+              }))
+            : [];
+        }
+        if (tipoCliente === 'fideicomiso') {
+          body.datos_completos.representante = stripEmpty({
+            nombre_completo: `${repNombre.trim()} ${repAP.trim()} ${repAM.trim()}`.trim(),
+            fecha_nacimiento: repFechaNac.trim(),
+            rfc: normalizeUpper(repRFC),
+            curp: normalizeUpper(repCURP)
+          });
+
+          body.datos_completos.duenos_beneficiarios_aplica = duenosBeneficiariosAplica;
+
+          body.datos_completos.duenos_beneficiarios = duenosBeneficiariosAplica
+            ? duenosBeneficiarios.map((row) => ({
+                nombres: row.nombres.trim(),
+                apellido_paterno: row.apellido_paterno.trim(),
+                apellido_materno: row.apellido_materno.trim(),
+                fecha_nacimiento: onlyDigits(row.fecha_nacimiento).slice(0, 8),
+                nacionalidad: row.nacionalidad || 'MEX',
+                relacion_con_cliente: row.relacion_con_cliente.trim(),
+                rfc: normalizeUpper(row.rfc),
+                curp: normalizeUpper(row.curp),
+                porcentaje_participacion: row.porcentaje_participacion.trim(),
+                observaciones: row.observaciones.trim()
+              }))
+            : [];
+        }
       // Limpieza final para evitar mandar vacíos u objetos vacíos
       body.datos_completos = stripEmpty(body.datos_completos);
 
@@ -594,8 +1198,9 @@ export default function Page() {
       </div>
 
       {tipoCliente === 'persona_fisica' ? (
-        <div className="rounded-md border p-4 space-y-3">
+        <div className="rounded-md border p-4 space-y-4">
           <h2 className="font-semibold">Persona física</h2>
+
           <div className="space-y-1">
             <label className="text-sm font-medium">
               Actividad económica <span className="text-red-600">*</span>
@@ -614,17 +1219,169 @@ export default function Page() {
             </select>
             {errText(errors['pf.actividad'])}
           </div>
+
+          <div className="border-t pt-3 space-y-3">
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={recursosTercerosAplica}
+                onChange={(e) => {
+                  const v = e.target.checked;
+                  setRecursosTercerosAplica(v);
+                  if (!v) {
+                    setRecursosTerceros([]);
+                  } else if (recursosTerceros.length === 0) {
+                    setRecursosTerceros([createEmptyRecursoTercero()]);
+                  }
+                }}
+              />
+              <span>¿Aplica recursos de terceros?</span>
+            </label>
+
+            {recursosTercerosAplica ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold">Recursos de terceros</h3>
+                  <button
+                    type="button"
+                    onClick={() => addRecursoTerceroRow(setRecursosTerceros)}
+                    className="rounded border px-3 py-1 text-sm"
+                  >
+                    Agregar
+                  </button>
+                </div>
+
+                {recursosTerceros.map((row, index) => (
+                  <div key={index} className="rounded border p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">Tercero #{index + 1}</p>
+                      <button
+                        type="button"
+                        onClick={() => removeRecursoTerceroRow(setRecursosTerceros, index)}
+                        className="rounded border px-3 py-1 text-sm text-red-700"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">Nombre / razón social</label>
+                        <input
+                          value={row.nombre_razon_social}
+                          onChange={(e) =>
+                            updateRecursoTerceroRow(
+                              setRecursosTerceros,
+                              index,
+                              'nombre_razon_social',
+                              e.target.value
+                            )
+                          }
+                          className={classInput(false)}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">Relación con el cliente</label>
+                        <input
+                          value={row.relacion_con_cliente}
+                          onChange={(e) =>
+                            updateRecursoTerceroRow(
+                              setRecursosTerceros,
+                              index,
+                              'relacion_con_cliente',
+                              e.target.value
+                            )
+                          }
+                          className={classInput(false)}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">Actividad / giro</label>
+                        <input
+                          value={row.actividad_giro}
+                          onChange={(e) =>
+                            updateRecursoTerceroRow(
+                              setRecursosTerceros,
+                              index,
+                              'actividad_giro',
+                              e.target.value
+                            )
+                          }
+                          className={classInput(false)}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">RFC</label>
+                        <input
+                          value={row.rfc}
+                          onChange={(e) =>
+                            updateRecursoTerceroRow(
+                              setRecursosTerceros,
+                              index,
+                              'rfc',
+                              e.target.value
+                            )
+                          }
+                          className={classInput(false)}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">CURP</label>
+                        <input
+                          value={row.curp}
+                          onChange={(e) =>
+                            updateRecursoTerceroRow(
+                              setRecursosTerceros,
+                              index,
+                              'curp',
+                              e.target.value
+                            )
+                          }
+                          className={classInput(false)}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">Fecha nac. (AAAAMMDD)</label>
+                        <input
+                          value={row.fecha_nacimiento}
+                          onChange={(e) =>
+                            updateRecursoTerceroRow(
+                              setRecursosTerceros,
+                              index,
+                              'fecha_nacimiento',
+                              onlyDigits(e.target.value).slice(0, 8)
+                            )
+                          }
+                          className={classInput(false)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : null}
-
       {tipoCliente === 'persona_moral' ? (
-        <div className="rounded-md border p-4 space-y-3">
+        <div className="rounded-md border p-4 space-y-4">
           <h2 className="font-semibold">Persona moral</h2>
+
           <div className="space-y-1">
             <label className="text-sm font-medium">
               Giro mercantil <span className="text-red-600">*</span>
             </label>
-            <select value={pmGiro} onChange={(e) => setPmGiro(e.target.value)} className={classInput(!!errors['pm.giro'])}>
+            <select
+              value={pmGiro}
+              onChange={(e) => setPmGiro(e.target.value)}
+              className={classInput(!!errors['pm.giro'])}
+            >
               <option value="">Selecciona...</option>
               {giros.map((g) => (
                 <option key={g.clave} value={g.clave}>
@@ -650,12 +1407,20 @@ export default function Page() {
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">Apellido paterno *</label>
-                <input value={repAP} onChange={(e) => setRepAP(e.target.value)} className={classInput(!!errors['rep.apellido_paterno'])} />
+                <input
+                  value={repAP}
+                  onChange={(e) => setRepAP(e.target.value)}
+                  className={classInput(!!errors['rep.apellido_paterno'])}
+                />
                 {errText(errors['rep.apellido_paterno'])}
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">Apellido materno *</label>
-                <input value={repAM} onChange={(e) => setRepAM(e.target.value)} className={classInput(!!errors['rep.apellido_materno'])} />
+                <input
+                  value={repAM}
+                  onChange={(e) => setRepAM(e.target.value)}
+                  className={classInput(!!errors['rep.apellido_materno'])}
+                />
                 {errText(errors['rep.apellido_materno'])}
               </div>
             </div>
@@ -672,19 +1437,206 @@ export default function Page() {
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">RFC *</label>
-                <input value={repRFC} onChange={(e) => setRepRFC(e.target.value)} className={classInput(!!errors['rep.rfc'])} />
+                <input
+                  value={repRFC}
+                  onChange={(e) => setRepRFC(e.target.value)}
+                  className={classInput(!!errors['rep.rfc'])}
+                />
                 {errText(errors['rep.rfc'])}
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">CURP *</label>
-                <input value={repCURP} onChange={(e) => setRepCURP(e.target.value)} className={classInput(!!errors['rep.curp'])} />
+                <input
+                  value={repCURP}
+                  onChange={(e) => setRepCURP(e.target.value)}
+                  className={classInput(!!errors['rep.curp'])}
+                />
                 {errText(errors['rep.curp'])}
               </div>
             </div>
           </div>
+
+          <div className="border-t pt-3 space-y-3">
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={duenosBeneficiariosAplica}
+                onChange={(e) => {
+                  const v = e.target.checked;
+                  setDuenosBeneficiariosAplica(v);
+                  if (!v) {
+                    setDuenosBeneficiarios([]);
+                  } else if (duenosBeneficiarios.length === 0) {
+                    setDuenosBeneficiarios([createEmptyDuenoBeneficiario()]);
+                  }
+                }}
+              />
+              <span>¿Aplica dueños beneficiarios?</span>
+            </label>
+
+            {duenosBeneficiariosAplica ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold">Dueños beneficiarios</h3>
+                  <button
+                    type="button"
+                    onClick={() => addDuenoBeneficiarioRow(setDuenosBeneficiarios)}
+                    className="rounded border px-3 py-1 text-sm"
+                  >
+                    Agregar
+                  </button>
+                </div>
+
+                {duenosBeneficiarios.map((row, index) => (
+                  <div key={index} className="rounded border p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">Dueño beneficiario #{index + 1}</p>
+                      <button
+                        type="button"
+                        onClick={() => removeDuenoBeneficiarioRow(setDuenosBeneficiarios, index)}
+                        className="rounded border px-3 py-1 text-sm text-red-700"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">Nombres</label>
+                        <input
+                          value={row.nombres}
+                          onChange={(e) =>
+                            updateDuenoBeneficiarioRow(
+                              setDuenosBeneficiarios,
+                              index,
+                              'nombres',
+                              e.target.value
+                            )
+                          }
+                          className={classInput(false)}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">Apellido paterno</label>
+                        <input
+                          value={row.apellido_paterno}
+                          onChange={(e) =>
+                            updateDuenoBeneficiarioRow(
+                              setDuenosBeneficiarios,
+                              index,
+                              'apellido_paterno',
+                              e.target.value
+                            )
+                          }
+                          className={classInput(false)}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">Apellido materno</label>
+                        <input
+                          value={row.apellido_materno}
+                          onChange={(e) =>
+                            updateDuenoBeneficiarioRow(
+                              setDuenosBeneficiarios,
+                              index,
+                              'apellido_materno',
+                              e.target.value
+                            )
+                          }
+                          className={classInput(false)}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">Fecha nac. (AAAAMMDD)</label>
+                        <input
+                          value={row.fecha_nacimiento}
+                          onChange={(e) =>
+                            updateDuenoBeneficiarioRow(
+                              setDuenosBeneficiarios,
+                              index,
+                              'fecha_nacimiento',
+                              onlyDigits(e.target.value).slice(0, 8)
+                            )
+                          }
+                          className={classInput(false)}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">RFC</label>
+                        <input
+                          value={row.rfc}
+                          onChange={(e) =>
+                            updateDuenoBeneficiarioRow(
+                              setDuenosBeneficiarios,
+                              index,
+                              'rfc',
+                              e.target.value
+                            )
+                          }
+                          className={classInput(false)}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">CURP</label>
+                        <input
+                          value={row.curp}
+                          onChange={(e) =>
+                            updateDuenoBeneficiarioRow(
+                              setDuenosBeneficiarios,
+                              index,
+                              'curp',
+                              e.target.value
+                            )
+                          }
+                          className={classInput(false)}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">Relación con el cliente</label>
+                        <input
+                          value={row.relacion_con_cliente}
+                          onChange={(e) =>
+                            updateDuenoBeneficiarioRow(
+                              setDuenosBeneficiarios,
+                              index,
+                              'relacion_con_cliente',
+                              e.target.value
+                            )
+                          }
+                          className={classInput(false)}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">Porcentaje participación</label>
+                        <input
+                          value={row.porcentaje_participacion}
+                          onChange={(e) =>
+                            updateDuenoBeneficiarioRow(
+                              setDuenosBeneficiarios,
+                              index,
+                              'porcentaje_participacion',
+                              e.target.value
+                            )
+                          }
+                          className={classInput(false)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : null}
-
       {tipoCliente === 'fideicomiso' ? (
         <div className="rounded-md border p-4 space-y-3">
           <h2 className="font-semibold">Fideicomiso</h2>
