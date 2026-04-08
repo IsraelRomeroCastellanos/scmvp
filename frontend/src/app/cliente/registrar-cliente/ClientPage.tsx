@@ -3619,6 +3619,855 @@ persona: {
             </div>
           </div>
         )}
+        {tipo === "persona_moral" && (
+                  <div className="rounded border border-gray-200 p-4 space-y-4">
+                    <h2 className="font-medium">Persona Moral</h2>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">
+                          Subtipo PM <span className="text-red-600">*</span>
+                        </label>
+                        <select
+                          className={`w-full rounded border px-3 py-2 text-sm ${
+                            errors["empresa.subtipo_pm"] ? "border-red-500" : "border-gray-300"
+                          }`}
+                          value={pmSubtipoPm}
+                          onChange={(e) => setPmSubtipoPm(e.target.value)}
+                          onBlur={() => validator.validateField("empresa.subtipo_pm")}
+                        >
+                          <option value="">Selecciona</option>
+                          <option value="pm_derecho_publico_mexicano">Persona Moral Del Derecho Público Mexicano</option>
+                          <option value="pm_extranjera">Persona Moral Extranjera</option>
+                          <option value="pm_mexicana">Persona Moral Mexicana</option>
+                          <option value="pm_embajada_consulado_orgint">Embajada / Consulado / Organismo Internacional</option>
+                          <option value="pm_rsi">Morales del Régimen Simplificado de Identificación</option>
+                          <option value="pm_otro">Otro</option>
+                        </select>
+                        {errors["empresa.subtipo_pm"] ? (
+                          <p className="text-xs text-red-600">
+                            {errors["empresa.subtipo_pm"]}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      {pmSubtipoPm === "pm_rsi" ? (
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium">
+                            RSI Subtipo <span className="text-red-600">*</span>
+                          </label>
+                          <select
+                            className={`w-full rounded border px-3 py-2 text-sm ${
+                              errors["empresa.rsi_subtipo"] ? "border-red-500" : "border-gray-300"
+                            }`}
+                            value={pmRsiSubtipo}
+                            onChange={(e) => setPmRsiSubtipo(e.target.value)}
+                            onBlur={() => validator.validateField("empresa.rsi_subtipo")}
+                          >
+                            <option value="">Selecciona</option>
+                            <option value="rsi_sistema_financiero_mexicano">Empresas del Sistema Financiero Mexicano</option>
+                            <option value="rsi_sistema_financiero_extranjero">Empresas del Sistema Financiero Extranjero</option>
+                            <option value="rsi_cotiza_bolsa">Empresas que cotizan en Bolsa</option>
+                            <option value="rsi_publicas">Empresas públicas</option>
+                            <option value="rsi_dependencias_publicas">Dependencias públicas (Fed/Est/Mun)</option>
+                          </select>
+                          {errors["empresa.rsi_subtipo"] ? (
+                            <p className="text-xs text-red-600">
+                              {errors["empresa.rsi_subtipo"]}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">
+                          Beneficiario Controlador <span className="text-red-600">*</span>
+                        </label>
+                        <select
+                          className={`w-full rounded border px-3 py-2 text-sm ${
+                            errors["BeneficiarioControlador"] ? "border-red-500" : "border-gray-300"
+                          }`}
+                          value={pmBeneficiarioControlador}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            const aplica = v === "si";
+
+                            setPmBeneficiarioControlador(v);
+                            setRelatedDuenosAplica(aplica);
+
+                            if (!aplica) {
+                              setPmBcNombres("");
+                              setPmBcApPat("");
+                              setPmBcApMat("");
+                              setErr("beneficiario_controlador.nombres", undefined);
+                              setErr("beneficiario_controlador.apellido_paterno", undefined);
+                              setErr("beneficiario_controlador.apellido_materno", undefined);
+                              setRelatedDuenos([]);
+                            } else if (relatedDuenos.length === 0) {
+                              setRelatedDuenos([createEmptyRelatedDueno()]);
+                            }
+                          }}
+                          onBlur={() => validator.validateField("BeneficiarioControlador")}
+                        >
+                          <option value="">Selecciona</option>
+                          <option value="si">Sí</option>
+                          <option value="no">No</option>
+                        </select>
+                        {errors["BeneficiarioControlador"] ? (
+                          <p className="text-xs text-red-600">
+                            {errors["BeneficiarioControlador"]}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">RFC (empresa) *</label>
+                        <input
+                          className={`w-full rounded border px-3 py-2 text-sm ${errors["empresa.rfc"] ? "border-red-500" : "border-gray-300"}`}
+                          value={pmRfc}
+                          onChange={(e) => setPmRfc(e.target.value)}
+                          onBlur={() => validator.validateField("empresa.rfc")}
+                          placeholder="XAXX010101000"
+                        />
+                        {errors["empresa.rfc"] ? (
+                          <p className="text-xs text-red-600">
+                            {errors["empresa.rfc"]}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">
+                          Régimen de capital *
+                        </label>
+                        <input
+                          className={`w-full rounded border px-3 py-2 text-sm ${errors["empresa.regimen_capital"] ? "border-red-500" : "border-gray-300"}`}
+                          value={pmRegimenCapital}
+                          onChange={(e) => setPmRegimenCapital(e.target.value)}
+                          onBlur={() =>
+                            validator.validateField("empresa.regimen_capital")
+                          }
+                          placeholder="Variable / Fijo / ..."
+                        />
+                        {errors["empresa.regimen_capital"] ? (
+                          <p className="text-xs text-red-600">
+                            {errors["empresa.regimen_capital"]}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">
+                          Fecha constitución (AAAAMMDD) *
+                        </label>
+                        <input
+                          className={`w-full rounded border px-3 py-2 text-sm ${
+                            errors["empresa.fecha_constitucion"]
+                              ? "border-red-500"
+                              : "border-gray-300"
+                          }`}
+                          value={pmFechaConst}
+                          onChange={(e) => setPmFechaConst(e.target.value)}
+                          onBlur={() =>
+                            validator.validateField("empresa.fecha_constitucion")
+                          }
+                          placeholder="20010131 (o 2001-01-31)"
+                        />
+                        {errors["empresa.fecha_constitucion"] ? (
+                          <p className="text-xs text-red-600">
+                            {errors["empresa.fecha_constitucion"]}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-gray-500">
+                            Acepta AAAAMMDD o YYYY-MM-DD (se convierte a AAAAMMDD).
+                          </p>
+                        )}
+                      </div>
+
+                      <SearchableSelect
+                        label="Giro mercantil"
+                        required
+                        value={pmGiro}
+                        items={giros}
+                        error={errors["empresa.giro_mercantil"]}
+                        onChange={(v) => setPmGiro(v)}
+                        onBlur={() => validator.validateField("empresa.giro_mercantil")}
+                      />
+
+                      <div className="space-y-1 md:col-span-3">
+                        <p className="text-sm font-medium">
+                          INFORMACIÓN DEL REPRESENTANTE LEGAL
+                        </p>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">Nombres *</label>
+                        <input
+                          className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.nombres.pm"] ? "border-red-500" : "border-gray-300"}`}
+                          value={pmRepNombres}
+                          onChange={(e) => setPmRepNombres(e.target.value)}
+                          onBlur={() =>
+                            validator.validateField("representante.nombres.pm")
+                          }
+                        />
+                        {errors["representante.nombres.pm"] ? (
+                          <p className="text-xs text-red-600">
+                            {errors["representante.nombres.pm"]}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">
+                          Apellido paterno *
+                        </label>
+                        <input
+                          className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.apellido_paterno.pm"] ? "border-red-500" : "border-gray-300"}`}
+                          value={pmRepApPat}
+                          onChange={(e) => setPmRepApPat(e.target.value)}
+                          onBlur={() =>
+                            validator.validateField("representante.apellido_paterno.pm")
+                          }
+                        />
+                        {errors["representante.apellido_paterno.pm"] ? (
+                          <p className="text-xs text-red-600">
+                            {errors["representante.apellido_paterno.pm"]}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">
+                          Apellido materno *
+                        </label>
+                        <input
+                          className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.apellido_materno.pm"] ? "border-red-500" : "border-gray-300"}`}
+                          value={pmRepApMat}
+                          onChange={(e) => setPmRepApMat(e.target.value)}
+                          onBlur={() =>
+                            validator.validateField("representante.apellido_materno.pm")
+                          }
+                        />
+                        {errors["representante.apellido_materno.pm"] ? (
+                          <p className="text-xs text-red-600">
+                            {errors["representante.apellido_materno.pm"]}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">
+                          Fecha nacimiento (AAAAMMDD) *
+                        </label>
+                        <input
+                          className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.fecha_nacimiento.pm"] ? "border-red-500" : "border-gray-300"}`}
+                          value={pmRepFechaNac}
+                          onChange={(e) => setPmRepFechaNac(e.target.value)}
+                          onBlur={() =>
+                            validator.validateField("representante.fecha_nacimiento.pm")
+                          }
+                          placeholder="19900101 (o 1990-01-01)"
+                        />
+                        {errors["representante.fecha_nacimiento.pm"] ? (
+                          <p className="text-xs text-red-600">
+                            {errors["representante.fecha_nacimiento.pm"]}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <SearchableSelect
+                        label="Nacionalidad (representante)"
+                        required
+                        value={pmRepNacionalidad}
+                        items={paises}
+                        error={errors["representante.nacionalidad.pm"]}
+                        onChange={(v) => setPmRepNacionalidad(v)}
+                        onBlur={() =>
+                          validator.validateField("representante.nacionalidad.pm")
+                        }
+                      />
+
+                      <div className="space-y-1 md:col-span-3">
+                        <label className="text-sm font-medium">
+                          Régimen jurídico de legal estancia en México (si aplica)
+                        </label>
+                        <input
+                          className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                          value={pmRepRegimenEstancia}
+                          onChange={(e) => setPmRepRegimenEstancia(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">CURP *</label>
+                        <input
+                          className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.curp.pm"] ? "border-red-500" : "border-gray-300"}`}
+                          value={pmRepCurp}
+                          onChange={(e) => setPmRepCurp(e.target.value)}
+                          onBlur={() =>
+                            validator.validateField("representante.curp.pm")
+                          }
+                        />
+                        {errors["representante.curp.pm"] ? (
+                          <p className="text-xs text-red-600">
+                            {errors["representante.curp.pm"]}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">RFC *</label>
+                        <input
+                          className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.rfc.pm"] ? "border-red-500" : "border-gray-300"}`}
+                          value={pmRepRfc}
+                          onChange={(e) => setPmRepRfc(e.target.value)}
+                          onBlur={() => validator.validateField("representante.rfc.pm")}
+                        />
+                        {errors["representante.rfc.pm"] ? (
+                          <p className="text-xs text-red-600">
+                            {errors["representante.rfc.pm"]}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">
+                          Teléfono de casa *
+                        </label>
+                        <input
+                          className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.telefono_casa.pm"] ? "border-red-500" : "border-gray-300"}`}
+                          value={pmRepTelCasa}
+                          onChange={(e) => setPmRepTelCasa(e.target.value)}
+                          onBlur={() =>
+                            validator.validateField("representante.telefono_casa.pm")
+                          }
+                          placeholder="+52 3312345678"
+                        />
+                        {errors["representante.telefono_casa.pm"] ? (
+                          <p className="text-xs text-red-600">
+                            {errors["representante.telefono_casa.pm"]}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">Celular *</label>
+                        <input
+                          className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.celular.pm"] ? "border-red-500" : "border-gray-300"}`}
+                          value={pmRepCelular}
+                          onChange={(e) => setPmRepCelular(e.target.value)}
+                          onBlur={() =>
+                            validator.validateField("representante.celular.pm")
+                          }
+                          placeholder="+52 5512345678"
+                        />
+                        {errors["representante.celular.pm"] ? (
+                          <p className="text-xs text-red-600">
+                            {errors["representante.celular.pm"]}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="space-y-1 md:col-span-3">
+                        <label className="text-sm font-medium">
+                          Nombre completo (compatibilidad API) *
+                        </label>
+                        <input
+                          className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.nombre_completo.pm"] ? "border-red-500" : "border-gray-300"}`}
+                          value={pmRepNombreCompleto}
+                          onChange={(e) => setPmRepNombreCompleto(e.target.value)}
+                          onBlur={() =>
+                            validator.validateField("representante.nombre_completo.pm")
+                          }
+                          placeholder="Se puede dejar vacío si llenas nombres y apellidos"
+                        />
+                        {errors["representante.nombre_completo.pm"] ? (
+                          <p className="text-xs text-red-600">
+                            {errors["representante.nombre_completo.pm"]}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-gray-500">
+                            El backend actual valida nombre_completo; lo enviamos
+                            generado si lo dejas vacío.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded border border-gray-200 p-3 space-y-3">
+                      <p className="text-sm font-medium">
+                        Domicilio del Representante Legal (México)
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium">Calle *</label>
+                          <input
+                            className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.calle.pm"] ? "border-red-500" : "border-gray-300"}`}
+                            value={pmRepDomCalle}
+                            onChange={(e) => setPmRepDomCalle(e.target.value)}
+                            onBlur={() =>
+                              validator.validateField(
+                                "representante.domicilio.calle.pm",
+                              )
+                            }
+                          />
+                          {errors["representante.domicilio.calle.pm"] ? (
+                            <p className="text-xs text-red-600">
+                              {errors["representante.domicilio.calle.pm"]}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium">Número *</label>
+                          <input
+                            className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.numero.pm"] ? "border-red-500" : "border-gray-300"}`}
+                            value={pmRepDomNumero}
+                            onChange={(e) => setPmRepDomNumero(e.target.value)}
+                            onBlur={() =>
+                              validator.validateField(
+                                "representante.domicilio.numero.pm",
+                              )
+                            }
+                          />
+                          {errors["representante.domicilio.numero.pm"] ? (
+                            <p className="text-xs text-red-600">
+                              {errors["representante.domicilio.numero.pm"]}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium">Interior</label>
+                          <input
+                            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                            value={pmRepDomInterior}
+                            onChange={(e) => setPmRepDomInterior(e.target.value)}
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium">Colonia *</label>
+                          <input
+                            className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.colonia.pm"] ? "border-red-500" : "border-gray-300"}`}
+                            value={pmRepDomColonia}
+                            onChange={(e) => setPmRepDomColonia(e.target.value)}
+                            onBlur={() =>
+                              validator.validateField(
+                                "representante.domicilio.colonia.pm",
+                              )
+                            }
+                          />
+                          {errors["representante.domicilio.colonia.pm"] ? (
+                            <p className="text-xs text-red-600">
+                              {errors["representante.domicilio.colonia.pm"]}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium">Municipio *</label>
+                          <input
+                            className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.municipio.pm"] ? "border-red-500" : "border-gray-300"}`}
+                            value={pmRepDomMunicipio}
+                            onChange={(e) => setPmRepDomMunicipio(e.target.value)}
+                            onBlur={() =>
+                              validator.validateField(
+                                "representante.domicilio.municipio.pm",
+                              )
+                            }
+                          />
+                          {errors["representante.domicilio.municipio.pm"] ? (
+                            <p className="text-xs text-red-600">
+                              {errors["representante.domicilio.municipio.pm"]}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium">
+                            Ciudad/Delegación *
+                          </label>
+                          <input
+                            className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.ciudad_delegacion.pm"] ? "border-red-500" : "border-gray-300"}`}
+                            value={pmRepDomCiudadDelegacion}
+                            onChange={(e) =>
+                              setPmRepDomCiudadDelegacion(e.target.value)
+                            }
+                            onBlur={() =>
+                              validator.validateField(
+                                "representante.domicilio.ciudad_delegacion.pm",
+                              )
+                            }
+                          />
+                          {errors["representante.domicilio.ciudad_delegacion.pm"] ? (
+                            <p className="text-xs text-red-600">
+                              {errors["representante.domicilio.ciudad_delegacion.pm"]}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium">Código postal *</label>
+                          <input
+                            className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.codigo_postal.pm"] ? "border-red-500" : "border-gray-300"}`}
+                            value={pmRepDomCP}
+                            onChange={(e) => setPmRepDomCP(e.target.value)}
+                            onBlur={() =>
+                              validator.validateField(
+                                "representante.domicilio.codigo_postal.pm",
+                              )
+                            }
+                            placeholder="44100"
+                          />
+                          {errors["representante.domicilio.codigo_postal.pm"] ? (
+                            <p className="text-xs text-red-600">
+                              {errors["representante.domicilio.codigo_postal.pm"]}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium">Estado *</label>
+                          <input
+                            className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.estado.pm"] ? "border-red-500" : "border-gray-300"}`}
+                            value={pmRepDomEstado}
+                            onChange={(e) => setPmRepDomEstado(e.target.value)}
+                            onBlur={() =>
+                              validator.validateField(
+                                "representante.domicilio.estado.pm",
+                              )
+                            }
+                          />
+                          {errors["representante.domicilio.estado.pm"] ? (
+                            <p className="text-xs text-red-600">
+                              {errors["representante.domicilio.estado.pm"]}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium">País *</label>
+                          <input
+                            className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.pais.pm"] ? "border-red-500" : "border-gray-300"}`}
+                            value={pmRepDomPais}
+                            onChange={(e) => setPmRepDomPais(e.target.value)}
+                            onBlur={() =>
+                              validator.validateField("representante.domicilio.pais.pm")
+                            }
+                            placeholder="México"
+                          />
+                          {errors["representante.domicilio.pais.pm"] ? (
+                            <p className="text-xs text-red-600">
+                              {errors["representante.domicilio.pais.pm"]}
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded border border-gray-200 p-3 space-y-3">
+                      <p className="text-sm font-medium">
+                        Identificar al Beneficiario Controlador (CFF 32-B Ter)
+                      </p>
+
+                      {relatedDuenosAplica ? renderRelatedDuenosList() : null}
+                    </div>
+
+                    <div className="rounded border border-gray-200 p-3 space-y-3">
+                      <label className="flex items-start gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          className="mt-1"
+                          checked={pmRepEsAccionista}
+                          onChange={(e) => setPmRepEsAccionista(e.target.checked)}
+                        />
+                        <span>El Representante Legal es Accionista</span>
+                      </label>
+
+                      {!pmRepEsAccionista ? (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium">Nombres *</label>
+                            <input
+                              className={`w-full rounded border px-3 py-2 text-sm ${errors["accionista.nombres"] ? "border-red-500" : "border-gray-300"}`}
+                              value={pmAccNombres}
+                              onChange={(e) => setPmAccNombres(e.target.value)}
+                              onBlur={() =>
+                                validator.validateField("accionista.nombres")
+                              }
+                            />
+                            {errors["accionista.nombres"] ? (
+                              <p className="text-xs text-red-600">
+                                {errors["accionista.nombres"]}
+                              </p>
+                            ) : null}
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium">
+                              Apellido paterno *
+                            </label>
+                            <input
+                              className={`w-full rounded border px-3 py-2 text-sm ${errors["accionista.apellido_paterno"] ? "border-red-500" : "border-gray-300"}`}
+                              value={pmAccApPat}
+                              onChange={(e) => setPmAccApPat(e.target.value)}
+                              onBlur={() =>
+                                validator.validateField("accionista.apellido_paterno")
+                              }
+                            />
+                            {errors["accionista.apellido_paterno"] ? (
+                              <p className="text-xs text-red-600">
+                                {errors["accionista.apellido_paterno"]}
+                              </p>
+                            ) : null}
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium">
+                              Apellido materno *
+                            </label>
+                            <input
+                              className={`w-full rounded border px-3 py-2 text-sm ${errors["accionista.apellido_materno"] ? "border-red-500" : "border-gray-300"}`}
+                              value={pmAccApMat}
+                              onChange={(e) => setPmAccApMat(e.target.value)}
+                              onBlur={() =>
+                                validator.validateField("accionista.apellido_materno")
+                              }
+                            />
+                            {errors["accionista.apellido_materno"] ? (
+                              <p className="text-xs text-red-600">
+                                {errors["accionista.apellido_materno"]}
+                              </p>
+                            ) : null}
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium">
+                              Fecha de nacimiento (AAAAMMDD) *
+                            </label>
+                            <input
+                              className={`w-full rounded border px-3 py-2 text-sm ${errors["accionista.fecha_nacimiento"] ? "border-red-500" : "border-gray-300"}`}
+                              value={pmAccFechaNac}
+                              onChange={(e) => setPmAccFechaNac(e.target.value)}
+                              onBlur={() =>
+                                validator.validateField("accionista.fecha_nacimiento")
+                              }
+                              placeholder="19900101"
+                            />
+                            {errors["accionista.fecha_nacimiento"] ? (
+                              <p className="text-xs text-red-600">
+                                {errors["accionista.fecha_nacimiento"]}
+                              </p>
+                            ) : null}
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium">
+                              % Accionario *
+                            </label>
+                            <input
+                              className={`w-full rounded border px-3 py-2 text-sm ${errors["accionista.porcentaje"] ? "border-red-500" : "border-gray-300"}`}
+                              value={pmAccPct}
+                              onChange={(e) => setPmAccPct(e.target.value)}
+                              onBlur={() =>
+                                validator.validateField("accionista.porcentaje")
+                              }
+                              placeholder="25"
+                            />
+                            {errors["accionista.porcentaje"] ? (
+                              <p className="text-xs text-red-600">
+                                {errors["accionista.porcentaje"]}
+                              </p>
+                            ) : null}
+                          </div>
+
+                          <SearchableSelect
+                            label="Nacionalidad (accionista)"
+                            required
+                            value={pmAccNacionalidad}
+                            items={paises}
+                            error={errors["accionista.nacionalidad"]}
+                            onChange={(v) => setPmAccNacionalidad(v)}
+                            onBlur={() =>
+                              validator.validateField("accionista.nacionalidad")
+                            }
+                          />
+
+                          <SearchableSelect
+                            label="Actividad / giro del negocio del tercero"
+                            required
+                            value={pmAccActividadGiro}
+                            items={giros}
+                            error={errors["accionista.actividad_giro"]}
+                            onChange={(v) => setPmAccActividadGiro(v)}
+                            onBlur={() =>
+                              validator.validateField("accionista.actividad_giro")
+                            }
+                          />
+
+                          <div className="space-y-1 md:col-span-3">
+                            <label className="text-sm font-medium">
+                              Relación con el tercero *
+                            </label>
+                            <input
+                              className={`w-full rounded border px-3 py-2 text-sm ${errors["accionista.relacion"] ? "border-red-500" : "border-gray-300"}`}
+                              value={pmAccRelacion}
+                              onChange={(e) => setPmAccRelacion(e.target.value)}
+                              onBlur={() =>
+                                validator.validateField("accionista.relacion")
+                              }
+                            />
+                            {errors["accionista.relacion"] ? (
+                              <p className="text-xs text-red-600">
+                                {errors["accionista.relacion"]}
+                              </p>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                    <hr className="my-2" />
+
+                    <h3 className="font-medium">
+                      Identificación del Representante Legal
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">
+                          Tipo de documento *
+                        </label>
+                        <input
+                          className={`w-full rounded border px-3 py-2 text-sm ${
+                            errors["representante.identificacion.tipo.pm"]
+                              ? "border-red-500"
+                              : "border-gray-300"
+                          }`}
+                          value={pmRepIdTipo}
+                          onChange={(e) => setPmRepIdTipo(e.target.value)}
+                          onBlur={() =>
+                            validator.validateField(
+                              "representante.identificacion.tipo.pm",
+                            )
+                          }
+                          placeholder="INE / Pasaporte / ..."
+                        />
+                        {errors["representante.identificacion.tipo.pm"] ? (
+                          <p className="text-xs text-red-600">
+                            {errors["representante.identificacion.tipo.pm"]}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">
+                          Autoridad que lo emitió *
+                        </label>
+                        <input
+                          className={`w-full rounded border px-3 py-2 text-sm ${
+                            errors["representante.identificacion.autoridad.pm"]
+                              ? "border-red-500"
+                              : "border-gray-300"
+                          }`}
+                          value={pmRepIdAutoridad}
+                          onChange={(e) => setPmRepIdAutoridad(e.target.value)}
+                          onBlur={() =>
+                            validator.validateField(
+                              "representante.identificacion.autoridad.pm",
+                            )
+                          }
+                        />
+                        {errors["representante.identificacion.autoridad.pm"] ? (
+                          <p className="text-xs text-red-600">
+                            {errors["representante.identificacion.autoridad.pm"]}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">
+                          Número de identificación *
+                        </label>
+                        <input
+                          className={`w-full rounded border px-3 py-2 text-sm ${
+                            errors["representante.identificacion.numero.pm"]
+                              ? "border-red-500"
+                              : "border-gray-300"
+                          }`}
+                          value={pmRepIdNumero}
+                          onChange={(e) => setPmRepIdNumero(e.target.value)}
+                          onBlur={() =>
+                            validator.validateField(
+                              "representante.identificacion.numero.pm",
+                            )
+                          }
+                        />
+                        {errors["representante.identificacion.numero.pm"] ? (
+                          <p className="text-xs text-red-600">
+                            {errors["representante.identificacion.numero.pm"]}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">
+                          Fecha de expedición (AAAAMMDD) *
+                        </label>
+                        <input
+                          className={`w-full rounded border px-3 py-2 text-sm ${
+                            errors["representante.identificacion.expedicion.pm"]
+                              ? "border-red-500"
+                              : "border-gray-300"
+                          }`}
+                          value={pmRepIdExpedicion}
+                          onChange={(e) => setPmRepIdExpedicion(e.target.value)}
+                          onBlur={() =>
+                            validator.validateField(
+                              "representante.identificacion.expedicion.pm",
+                            )
+                          }
+                          placeholder="20240131 (o 2024-01-31)"
+                        />
+                        {errors["representante.identificacion.expedicion.pm"] ? (
+                          <p className="text-xs text-red-600">
+                            {errors["representante.identificacion.expedicion.pm"]}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">
+                          Fecha de expiración (AAAAMMDD) *
+                        </label>
+                        <input
+                          className={`w-full rounded border px-3 py-2 text-sm ${
+                            errors["representante.identificacion.expiracion.pm"]
+                              ? "border-red-500"
+                              : "border-gray-300"
+                          }`}
+                          value={pmRepIdExpiracion}
+                          onChange={(e) => setPmRepIdExpiracion(e.target.value)}
+                          onBlur={() =>
+                            validator.validateField(
+                              "representante.identificacion.expiracion.pm",
+                            )
+                          }
+                          placeholder="20290131 (o 2029-01-31)"
+                        />
+                        {errors["representante.identificacion.expiracion.pm"] ? (
+                          <p className="text-xs text-red-600">
+                            {errors["representante.identificacion.expiracion.pm"]}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                        {/* Fideicomiso */}
+
+
         <div className="flex items-center gap-3">
           <button
             type="submit"
