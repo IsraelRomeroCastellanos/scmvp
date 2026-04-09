@@ -4468,6 +4468,636 @@ persona: {
                         {/* Fideicomiso */}
 
 
+                {tipo === "fideicomiso" && (
+
+
+                  <div className="rounded border border-gray-200 p-4 space-y-4">
+
+
+                    <h2 className="font-medium">Fideicomiso</h2>
+
+
+
+                      <p className="text-sm text-gray-700">
+
+
+                        DE CONFORMIDAD CON LO DISPUESTO EN LA LEY FEDERAL PARA LA PREVENCIÓN E IDENTIFICACIÓN DE OPERACIONES CON RECURSOS DE PROCEDENCIA ILÍCITA; SOLICITAMOS QUE PROPORCIONE LA SIGUIENTE INFORMACIÓN:
+
+
+                      </p>
+
+
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+
+                      <div className="space-y-1 md:col-span-2">
+
+
+                        <label className="text-sm font-medium">
+
+
+                          Denominación o Razón Social del Fiduciario *
+
+
+                        </label>
+
+
+                        <input
+
+
+                          className={`w-full rounded border px-3 py-2 text-sm ${
+
+
+                            errors["fideicomiso.denominacion_fiduciario"]
+
+
+                              ? "border-red-500"
+
+
+                              : "border-gray-300"
+
+
+                          }`}
+
+
+                          value={fidDenominacionFiduciario}
+
+
+                          onChange={(e) => setFidDenominacionFiduciario(e.target.value)}
+
+
+                          onBlur={() =>
+
+
+                            validator.validateField("fideicomiso.denominacion_fiduciario")
+
+
+                          }
+
+
+                        />
+
+
+                        {errors["fideicomiso.denominacion_fiduciario"] ? (
+
+
+                          <p className="text-xs text-red-600">
+
+
+                            {errors["fideicomiso.denominacion_fiduciario"]}
+
+
+                          </p>
+
+
+                        ) : null}
+
+
+                      </div>
+
+
+
+                      <div className="space-y-1">
+
+
+                        <label className="text-sm font-medium">
+
+
+                          RFC del Fiduciario *
+
+
+                        </label>
+
+
+                        <input
+
+
+                          className={`w-full rounded border px-3 py-2 text-sm ${
+
+
+                            errors["fideicomiso.rfc_fiduciario"]
+
+
+                              ? "border-red-500"
+
+
+                              : "border-gray-300"
+
+
+                          }`}
+
+
+                          value={fidRfcFiduciario}
+
+
+                          onChange={(e) => setFidRfcFiduciario(e.target.value.toUpperCase())}
+
+
+                          onBlur={() =>
+
+
+                            validator.validateField("fideicomiso.rfc_fiduciario")
+
+
+                          }
+
+
+                          placeholder="XAXX010101000"
+
+
+                        />
+
+
+                        {errors["fideicomiso.rfc_fiduciario"] ? (
+
+
+                          <p className="text-xs text-red-600">
+
+
+                            {errors["fideicomiso.rfc_fiduciario"]}
+
+
+                          </p>
+
+
+                        ) : null}
+
+
+                      </div>
+
+
+
+                      <div className="space-y-1">
+
+
+                        <label className="text-sm font-medium">
+
+
+                          Identificador del fideicomiso *
+
+
+                        </label>
+
+
+                        <input
+
+
+                          className={`w-full rounded border px-3 py-2 text-sm ${
+
+
+                            errors["fideicomiso.identificador"]
+
+
+                              ? "border-red-500"
+
+
+                              : "border-gray-300"
+
+
+                          }`}
+
+
+                          value={fidIdentificador}
+
+
+                          onChange={(e) => setFidIdentificador(e.target.value)}
+
+
+                          onBlur={() =>
+
+
+                            validator.validateField("fideicomiso.identificador")
+
+
+                          }
+
+
+                        />
+
+
+                        {errors["fideicomiso.identificador"] ? (
+
+
+                          <p className="text-xs text-red-600">
+
+
+                            {errors["fideicomiso.identificador"]}
+
+
+                          </p>
+
+
+                        ) : null}
+
+
+                      </div>
+
+
+
+                      <div className="space-y-1 md:col-span-3">
+
+
+                        <label className="text-sm font-medium">
+
+
+                          Nombre del fideicomiso *
+
+
+                        </label>
+
+
+                        <input
+
+
+                          className={`w-full rounded border px-3 py-2 text-sm ${
+
+
+                            errors["fideicomiso.fideicomiso_nombre"]
+
+
+                              ? "border-red-500"
+
+
+                              : "border-gray-300"
+
+
+                          }`}
+
+
+                          value={fidNombre}
+
+
+                          onChange={(e) => setFidNombre(e.target.value)}
+
+
+                          onBlur={() => setErr("fideicomiso.fideicomiso_nombre", undefined)}
+
+
+                          placeholder="Nombre del fideicomiso"
+
+
+                        />
+
+
+                        {errors["fideicomiso.fideicomiso_nombre"] ? (
+
+
+                          <p className="text-xs text-red-600">
+
+
+                            {errors["fideicomiso.fideicomiso_nombre"]}
+
+
+                          </p>
+
+
+                        ) : null}
+
+
+                      </div>
+
+
+                    </div>
+
+
+
+                    <hr className="my-2" />
+
+
+
+                    <h3 className="font-medium">Representante / Apoderado legal</h3>
+
+
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+
+                      <div className="space-y-1 md:col-span-2">
+
+
+                        <label className="text-sm font-medium">
+
+
+                          Nombre completo del representante *
+
+
+                        </label>
+
+
+                        <input
+
+
+                          className={`w-full rounded border px-3 py-2 text-sm ${
+
+
+                            errors["representante.nombre_completo"]
+
+
+                              ? "border-red-500"
+
+
+                              : "border-gray-300"
+
+
+                          }`}
+
+
+                          value={fidRepNombreCompleto}
+
+
+                          onChange={(e) => setFidRepNombreCompleto(e.target.value)}
+
+
+                          onBlur={() => setErr("representante.nombre_completo", undefined)}
+
+
+                          placeholder="Nombre completo del representante"
+
+
+                        />
+
+
+                        {errors["representante.nombre_completo"] ? (
+
+
+                          <p className="text-xs text-red-600">
+
+
+                            {errors["representante.nombre_completo"]}
+
+
+                          </p>
+
+
+                        ) : null}
+
+
+                      </div>
+
+
+
+                      <div className="space-y-1">
+
+
+                        <label className="text-sm font-medium">RFC *</label>
+
+
+                        <input
+
+
+                          className={`w-full rounded border px-3 py-2 text-sm ${
+
+
+                            errors["representante.rfc"] ? "border-red-500" : "border-gray-300"
+
+
+                          }`}
+
+
+                          value={fidRepRfc}
+
+
+                          onChange={(e) => setFidRepRfc(e.target.value.toUpperCase())}
+
+
+                          onBlur={() => validator.validateField("representante.rfc")}
+
+
+                          placeholder="XAXX010101000"
+
+
+                        />
+
+
+                        {errors["representante.rfc"] ? (
+
+
+                          <p className="text-xs text-red-600">
+
+
+                            {errors["representante.rfc"]}
+
+
+                          </p>
+
+
+                        ) : null}
+
+
+                      </div>
+
+
+
+                      <div className="space-y-1">
+
+
+                        <label className="text-sm font-medium">CURP *</label>
+
+
+                        <input
+
+
+                          className={`w-full rounded border px-3 py-2 text-sm ${
+
+
+                            errors["representante.curp"] ? "border-red-500" : "border-gray-300"
+
+
+                          }`}
+
+
+                          value={fidRepCurp}
+
+
+                          onChange={(e) => setFidRepCurp(e.target.value.toUpperCase())}
+
+
+                          onBlur={() => validator.validateField("representante.curp")}
+
+
+                          placeholder="PEPJ900101HDFRRN09"
+
+
+                        />
+
+
+                        {errors["representante.curp"] ? (
+
+
+                          <p className="text-xs text-red-600">
+
+
+                            {errors["representante.curp"]}
+
+
+                          </p>
+
+
+                        ) : null}
+
+
+                      </div>
+
+
+
+                      <div className="space-y-1">
+
+
+                        <label className="text-sm font-medium">
+
+
+                          Fecha de nacimiento (AAAAMMDD) *
+
+
+                        </label>
+
+
+                        <input
+
+
+                          className={`w-full rounded border px-3 py-2 text-sm ${
+
+
+                            errors["representante.fecha_nacimiento"]
+
+
+                              ? "border-red-500"
+
+
+                              : "border-gray-300"
+
+
+                          }`}
+
+
+                          value={fidRepFechaNac}
+
+
+                          onChange={(e) => setFidRepFechaNac(e.target.value)}
+
+
+                          onBlur={() =>
+
+
+                            validator.validateField("representante.fecha_nacimiento")
+
+
+                          }
+
+
+                          placeholder="19900101 (o 1990-01-01)"
+
+
+                        />
+
+
+                        {errors["representante.fecha_nacimiento"] ? (
+
+
+                          <p className="text-xs text-red-600">
+
+
+                            {errors["representante.fecha_nacimiento"]}
+
+
+                          </p>
+
+
+                        ) : (
+
+
+                          <p className="text-xs text-gray-500">
+
+
+                            Acepta AAAAMMDD o YYYY-MM-DD (se convierte a AAAAMMDD).
+
+
+                          </p>
+
+
+                        )}
+
+
+                      </div>
+
+
+                      <hr className="my-2" />
+
+
+
+                      <div className="space-y-2">
+
+
+                        <label className="flex items-start gap-2 text-sm">
+
+
+                          <input
+
+
+                            type="checkbox"
+
+
+                            className="mt-1"
+
+
+                            checked={relatedDuenosAplica}
+
+
+                            onChange={(e) => {
+
+
+                              const v = e.target.checked;
+
+
+                              setRelatedDuenosAplica(v);
+
+
+
+                              if (!v) {
+
+
+                                setRelatedDuenos([]);
+
+
+                              } else if (relatedDuenos.length === 0) {
+
+
+                                setRelatedDuenos([createEmptyRelatedDueno()]);
+
+
+                              }
+
+
+                            }}
+
+
+                          />
+
+
+                          <span>El fideicomiso cuenta con dueños beneficiarios.</span>
+
+
+                        </label>
+
+
+
+                      {relatedDuenosAplica ? renderRelatedDuenosList() : null}
+
+
+                      </div>
+
+
+                    </div>
+
+
+                  </div>
+
+
+                )}
+
+
+
         <div className="flex items-center gap-3">
           <button
             type="submit"
