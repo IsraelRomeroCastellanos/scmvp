@@ -2403,7 +2403,7 @@ persona: {
 
 }
 
-  const showAviso = tipo === "persona_fisica" || tipo === "persona_moral";
+  const showAviso = tipo === "persona_fisica" || tipo === "persona_moral" || tipo === "fideicomiso";
 
   // 🔴 GUARD GLOBAL — evita render en build/prerender
   if (!mounted) return <></>;
@@ -4475,20 +4475,7 @@ persona: {
 
 
                     <h2 className="font-medium">Fideicomiso</h2>
-
-
-
-                      <p className="text-sm text-gray-700">
-
-
-                        DE CONFORMIDAD CON LO DISPUESTO EN LA LEY FEDERAL PARA LA PREVENCIÓN E IDENTIFICACIÓN DE OPERACIONES CON RECURSOS DE PROCEDENCIA ILÍCITA; SOLICITAMOS QUE PROPORCIONE LA SIGUIENTE INFORMACIÓN:
-
-
-                      </p>
-
-
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
 
                       <div className="space-y-1 md:col-span-2">
