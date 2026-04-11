@@ -73,3 +73,20 @@
 - Cierre operativo de Fideicomiso con payload final, validación FE y captura UI de campos obligatorios.
 - Incidente de DB para `tipo_cliente='fideicomiso'` diagnosticado y posteriormente resuelto.
 - Alineación final UI vs contrato completada para `fideicomiso_nombre` y representante (`nombre_completo`, `rfc`, `curp`, `fecha_nacimiento`).
+
+### 2026-04-10 — Migración DB Render por expiración de trial
+
+- Se migra PostgreSQL a una nueva instancia en Render para mantener continuidad de pruebas.
+- DB lógica nueva reportada: scmvp.
+- Backend activo reportado: https://scmvp-nxtj.onrender.com.
+- No hubo cambios de código asociados al evento.
+- Se ejecutó:
+  - backup SQL
+  - restore en DB nueva
+  - actualización de DATABASE_URL
+  - validación funcional mínima por login y consulta de empresas
+- Evidencia mínima:
+  - login HTTP 200
+  - empresas HTTP 200 con token
+  - empresas HTTP 401 sin token
+- Queda pendiente actualizar documentación estructural y formalizar mitigación de drift de esquema.

@@ -124,3 +124,25 @@
 - Fideicomiso: completado payload `datos_completos.fideicomiso` + `datos_completos.representante`, validación FE y cierre de captura UI para campos obligatorios.
 - Alineación UI vs contrato completada para `fideicomiso_nombre` y representante (`nombre_completo`, `rfc`, `curp`, `fecha_nacimiento`).
 - Incidente DB de fideicomiso identificado y resuelto; inserción correcta confirmada en validación final.
+
+### 2026-04-10 — Migración de base de datos / continuidad operativa
+
+- Se realizó migración de PostgreSQL en Render por vencimiento del periodo de prueba de la instancia previa.
+- Nueva DB lógica activa: scmvp.
+- Backend/Webservice activo se mantiene en: https://scmvp-nxtj.onrender.com.
+- La migración se resolvió sin cambios de código; se aplicó por backup/restore y actualización de infraestructura.
+- Acciones realizadas:
+  - backup SQL
+  - restore SQL en nueva instancia
+  - actualización de DATABASE_URL en Render
+  - verificación/aseguramiento de columnas de compatibilidad en esquema
+- Evidencia mínima validada:
+  - POST /api/auth/login → HTTP 200
+  - GET /api/admin/empresas con token → HTTP 200
+  - GET /api/admin/empresas sin token → HTTP 401 {"error":"Token no proporcionado"}
+- Verificación funcional adicional reportada por usuario:
+  - frontend/UI carga módulos Usuarios / Empresas / Clientes
+- Riesgos pendientes:
+  - formalizar alineación estable de esquema para evitar drift
+  - documentar procedimiento repetible
+  - revisar rotación de credenciales si hubo exposición accidental

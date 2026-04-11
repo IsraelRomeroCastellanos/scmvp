@@ -79,3 +79,33 @@ Se espera:
 
 📝 Nota: mejora de mensajes específicos de validación queda fuera del bloqueo actual.
 
+
+### Runbook — migración PostgreSQL Render por expiración de trial
+
+*Escenario*
+- La instancia PostgreSQL anterior en Render expira por trial y se requiere continuidad operativa sin cambios de código.
+
+*Pasos de alto nivel*
+1. generar backup SQL de la DB anterior
+2. preparar SQL para restore en nueva instancia
+   - remover \restrict
+   - remover \unrestrict
+   - remover bloques ALTER DEFAULT PRIVILEGES si causan conflicto en restore
+3. restaurar SQL en la nueva instancia
+4. actualizar DATABASE_URL en el webservice Render
+5. verificar esquema/columnas de compatibilidad requeridas
+6. validar backend:
+   - login 200
+   - endpoint protegido 401 sin token
+   - endpoint protegido 200 con token
+7. validar frontend/UI con carga de módulos principales
+
+*Validación mínima esperada*
+- POST /api/auth/login → HTTP 200
+- GET /api/admin/empresas sin token → HTTP 401
+- GET /api/admin/empresas con token → HTTP 200
+
+*Pendientes recomendados*
+- formalizar migración de esquema estable
+- estandarizar parseo robusto de token en scripts
+- evitar exposición de secrets en terminal/historial
