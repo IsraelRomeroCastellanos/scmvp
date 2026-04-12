@@ -3594,28 +3594,6 @@ persona: {
 
               <hr className="my-2" />
 
-              <div className="space-y-2">
-                <label className="flex items-start gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={relatedDuenosAplica}
-                    onChange={(e) => {
-                      const v = e.target.checked;
-                      setRelatedDuenosAplica(v);
-
-                      if (!v) {
-                        setRelatedDuenos([]);
-                      } else if (relatedDuenos.length === 0) {
-                        setRelatedDuenos([createEmptyRelatedDueno()]);
-                      }
-                    }}
-                  />
-                  <span>El fideicomiso cuenta con dueños beneficiarios.</span>
-                </label>
-
-                {relatedDuenosAplica ? renderRelatedDuenosList() : null}
-              </div>
             </div>
           </div>
         )}
