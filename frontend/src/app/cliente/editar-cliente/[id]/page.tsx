@@ -34,6 +34,103 @@ type DuenoBeneficiarioItem = {
   observaciones: string;
 };
 
+
+function createEmptyRelatedDueno(): RelatedDuenoRow {
+  return {
+    tipo_entidad: 'persona_fisica',
+    nombre_entidad: "",
+    nacionalidad: "MEX",
+    relacion_con_cliente: "",
+    porcentaje_participacion: "",
+    observaciones: "",
+    datos_completos: {
+      persona: {
+        nombres: "",
+        apellido_paterno: "",
+        apellido_materno: "",
+        fecha_nacimiento: "",
+        nacionalidad: "MEX",
+        relacion_con_cliente: "",
+        rfc: "",
+        curp: "",
+        porcentaje_participacion: "",
+        observaciones: "",
+      },
+      contacto: {
+        pais: "",
+        email: "",
+        telefono: "",
+        domicilio: {
+          calle: "",
+          numero: "",
+          interior: "",
+          colonia: "",
+          municipio: "",
+          ciudad_delegacion: "",
+          codigo_postal: "",
+          estado: "",
+          pais: "",
+        },
+      },
+    },
+  };
+}
+
+function deriveRelatedDuenoNombre(row: RelatedDuenoRow): string {
+  const p = row.datos_completos?.persona || ({} as any);
+  return [p.nombres, p.apellido_paterno, p.apellido_materno].filter(Boolean).join(" ").trim();
+}
+
+function normalizeRelatedDuenoRow(row: any): RelatedDuenoRow {
+  const p = row?.datos_completos?.persona || row || {};
+  const c = row?.datos_completos?.contacto || {};
+  const d = c?.domicilio || {};
+  const porcentaje = safeInput(p?.porcentaje_participacion ?? row?.porcentaje_participacion);
+  const nacionalidad = safeInput((p?.nacionalidad ?? row?.nacionalidad) || "MEX");
+  const relacion = safeInput(p?.relacion_con_cliente ?? row?.relacion_con_cliente);
+  const observaciones = safeInput(p?.observaciones ?? row?.observaciones);
+
+  return {
+    tipo_entidad: 'persona_fisica',
+    nombre_entidad: safeInput(row?.nombre_entidad) || [p?.nombres, p?.apellido_paterno, p?.apellido_materno].filter(Boolean).join(" ").trim(),
+    nacionalidad,
+    relacion_con_cliente: relacion,
+    porcentaje_participacion: porcentaje,
+    observaciones,
+    datos_completos: {
+      persona: {
+        nombres: safeInput(p?.nombres),
+        apellido_paterno: safeInput(p?.apellido_paterno),
+        apellido_materno: safeInput(p?.apellido_materno),
+        fecha_nacimiento: safeInput(p?.fecha_nacimiento),
+        nacionalidad,
+        relacion_con_cliente: relacion,
+        rfc: safeInput(p?.rfc),
+        curp: safeInput(p?.curp),
+        porcentaje_participacion: porcentaje,
+        observaciones,
+      },
+      contacto: {
+        pais: safeInput(c?.pais),
+        email: safeInput(c?.email),
+        telefono: safeInput(c?.telefono),
+        domicilio: {
+          calle: safeInput(d?.calle),
+          numero: safeInput(d?.numero),
+          interior: safeInput(d?.interior),
+          colonia: safeInput(d?.colonia),
+          municipio: safeInput(d?.municipio),
+          ciudad_delegacion: safeInput(d?.ciudad_delegacion),
+          codigo_postal: safeInput(d?.codigo_postal),
+          estado: safeInput(d?.estado),
+          pais: safeInput(d?.pais),
+        },
+      },
+    },
+  };
+}
+
+
 type RelatedTipoEntidad = 'persona_fisica' | 'persona_moral' | 'fideicomiso';
 
 type RelatedPFData = {
@@ -606,6 +703,143 @@ function removeDuenoBeneficiarioRow(
   setDuenosBeneficiarios((prev) => prev.filter((_, i) => i !== index));
 }
 
+
+function renderRelatedDuenosList({
+  relatedDuenos,
+  setRelatedDuenos,
+  syncLegacyFromRelated,
+}: {
+  relatedDuenos: RelatedDuenoRow[];
+  setRelatedDuenos: React.Dispatch<React.SetStateAction<RelatedDuenoRow[]>>;
+  syncLegacyFromRelated: (next: RelatedDuenoRow[]) => void;
+}) {
+  const updatePersonaField = (
+    index: number,
+    key: keyof RelatedDuenoRow["datos_completos"]["persona"],
+    value: string
+  ) => {
+    setRelatedDuenos((prev) => {
+      const next = prev.map((row, i) =>
+        i === index
+          ? {
+              ...row,
+              porcentaje_participacion:
+                key === "porcentaje_participacion" ? value : row.porcentaje_participacion,
+              nombre_entidad:
+                key === "nombres" || key === "apellido_paterno" || key === "apellido_materno"
+                  ? ""
+                  : row.nombre_entidad,
+              datos_completos: {
+                ...row.datos_completos,
+                persona: {
+                  ...row.datos_completos.persona,
+                  [key]: value,
+                },
+              },
+            }
+          : row
+      ).map((row) => ({
+        ...row,
+        nombre_entidad: deriveRelatedDuenoNombre(row),
+      }));
+      syncLegacyFromRelated(next);
+      return next;
+    });
+  };
+
+  const addRow = () => {
+    setRelatedDuenos((prev) => {
+      const next = [...prev, createEmptyRelatedDueno()];
+      syncLegacyFromRelated(next);
+      return next;
+    });
+  };
+
+  const removeRow = (index: number) => {
+    setRelatedDuenos((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      syncLegacyFromRelated(next);
+      return next;
+    });
+  };
+
+  return (
+    <div className="rounded border border-gray-200 p-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">Dueños beneficiarios</p>
+        <button
+          type="button"
+          className="rounded border border-gray-300 px-3 py-1 text-sm"
+          onClick={addRow}
+        >
+          Agregar
+        </button>
+      </div>
+
+      {relatedDuenos.map((row, index) => {
+        const persona = row.datos_completos.persona;
+        return (
+          <div key={index} className="rounded border border-gray-200 p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium">Dueño beneficiario #{index + 1}</p>
+              <button
+                type="button"
+                className="rounded border border-red-300 px-3 py-1 text-sm text-red-700"
+                onClick={() => removeRow(index)}
+              >
+                Eliminar
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Nombres</label>
+                <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={persona.nombres} onChange={(e) => updatePersonaField(index, "nombres", e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Apellido paterno</label>
+                <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={persona.apellido_paterno} onChange={(e) => updatePersonaField(index, "apellido_paterno", e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Apellido materno</label>
+                <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={persona.apellido_materno} onChange={(e) => updatePersonaField(index, "apellido_materno", e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Fecha nacimiento</label>
+                <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={persona.fecha_nacimiento} onChange={(e) => updatePersonaField(index, "fecha_nacimiento", e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Nacionalidad</label>
+                <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={persona.nacionalidad} onChange={(e) => updatePersonaField(index, "nacionalidad", e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Relación con el cliente</label>
+                <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={persona.relacion_con_cliente} onChange={(e) => updatePersonaField(index, "relacion_con_cliente", e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">RFC</label>
+                <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={persona.rfc} onChange={(e) => updatePersonaField(index, "rfc", e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">CURP</label>
+                <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={persona.curp} onChange={(e) => updatePersonaField(index, "curp", e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Porcentaje participación</label>
+                <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={persona.porcentaje_participacion} onChange={(e) => updatePersonaField(index, "porcentaje_participacion", e.target.value)} />
+              </div>
+              <div className="space-y-1 md:col-span-3">
+                <label className="text-sm font-medium">Observaciones</label>
+                <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={persona.observaciones} onChange={(e) => updatePersonaField(index, "observaciones", e.target.value)} />
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function Page() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -669,6 +903,27 @@ export default function Page() {
   const [relatedRecursos, setRelatedRecursos] = useState<RelatedRecursoRow[]>([]);
   const [relatedDuenosAplica, setRelatedDuenosAplica] = useState(false);
   const [relatedDuenos, setRelatedDuenos] = useState<RelatedDuenoRow[]>([]);
+
+  function syncLegacyFromRelated(next: RelatedDuenoRow[]) {
+    setDuenosBeneficiarios(
+      next.map((row) => {
+        const p = row.datos_completos.persona;
+        return {
+          nombres: p.nombres,
+          apellido_paterno: p.apellido_paterno,
+          apellido_materno: p.apellido_materno,
+          fecha_nacimiento: p.fecha_nacimiento,
+          nacionalidad: p.nacionalidad,
+          relacion_con_cliente: p.relacion_con_cliente,
+          rfc: p.rfc,
+          curp: p.curp,
+          porcentaje_participacion: p.porcentaje_participacion,
+          observaciones: p.observaciones,
+        };
+      })
+    );
+  }
+
 
   useEffect(() => {
     (async () => {
@@ -798,7 +1053,11 @@ export default function Page() {
             const duenosAplica =
               c?.datos_completos?.duenos_beneficiarios_aplica === true || duenos.length > 0;
 
-            setDuenosBeneficiariosAplica(duenosAplica);
+            setDuenosBeneficiariosAplica(relatedDuenosAplicaHydrated);
+            const hydratedDuenos = relatedDuenosHydrated;
+            setRelatedDuenosAplica(relatedDuenosAplicaHydrated);
+            setRelatedDuenos(hydratedDuenos);
+            syncLegacyFromRelated(hydratedDuenos);
             setDuenosBeneficiarios(
               duenosAplica
                 ? (duenos.length > 0 ? duenos : [createEmptyDuenoBeneficiario()])
@@ -1485,179 +1744,30 @@ export default function Page() {
               <input
                 type="checkbox"
                 className="mt-1"
-                checked={duenosBeneficiariosAplica}
-                onChange={(e) => {
-                  const v = e.target.checked;
-                  setDuenosBeneficiariosAplica(v);
-                  if (!v) {
-                    setDuenosBeneficiarios([]);
-                  } else if (duenosBeneficiarios.length === 0) {
-                    setDuenosBeneficiarios([createEmptyDuenoBeneficiario()]);
-                  }
-                }}
+                checked={relatedDuenosAplica}
+                  onChange={(e) => {
+                    const v = e.target.checked;
+                    setRelatedDuenosAplica(v);
+                    setDuenosBeneficiariosAplica(v);
+
+                    if (!v) {
+                      setRelatedDuenos([]);
+                      syncLegacyFromRelated([]);
+                    } else if (relatedDuenos.length === 0) {
+                      const next = [createEmptyRelatedDueno()];
+                      setRelatedDuenos(next);
+                      syncLegacyFromRelated(next);
+                    }
+                  }}
               />
               <span>¿Aplica dueños beneficiarios?</span>
             </label>
 
-            {duenosBeneficiariosAplica ? (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold">Dueños beneficiarios</h3>
-                  <button
-                    type="button"
-                    onClick={() => addDuenoBeneficiarioRow(setDuenosBeneficiarios)}
-                    className="rounded border px-3 py-1 text-sm"
-                  >
-                    Agregar
-                  </button>
-                </div>
-
-                {duenosBeneficiarios.map((row, index) => (
-                  <div key={index} className="rounded border p-3 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium">Dueño beneficiario #{index + 1}</p>
-                      <button
-                        type="button"
-                        onClick={() => removeDuenoBeneficiarioRow(setDuenosBeneficiarios, index)}
-                        className="rounded border px-3 py-1 text-sm text-red-700"
-                      >
-                        Eliminar
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div className="space-y-1">
-                        <label className="text-sm font-medium">Nombres</label>
-                        <input
-                          value={row.nombres}
-                          onChange={(e) =>
-                            updateDuenoBeneficiarioRow(
-                              setDuenosBeneficiarios,
-                              index,
-                              'nombres',
-                              e.target.value
-                            )
-                          }
-                          className={classInput(false)}
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-sm font-medium">Apellido paterno</label>
-                        <input
-                          value={row.apellido_paterno}
-                          onChange={(e) =>
-                            updateDuenoBeneficiarioRow(
-                              setDuenosBeneficiarios,
-                              index,
-                              'apellido_paterno',
-                              e.target.value
-                            )
-                          }
-                          className={classInput(false)}
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-sm font-medium">Apellido materno</label>
-                        <input
-                          value={row.apellido_materno}
-                          onChange={(e) =>
-                            updateDuenoBeneficiarioRow(
-                              setDuenosBeneficiarios,
-                              index,
-                              'apellido_materno',
-                              e.target.value
-                            )
-                          }
-                          className={classInput(false)}
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-sm font-medium">Fecha nac. (AAAAMMDD)</label>
-                        <input
-                          value={row.fecha_nacimiento}
-                          onChange={(e) =>
-                            updateDuenoBeneficiarioRow(
-                              setDuenosBeneficiarios,
-                              index,
-                              'fecha_nacimiento',
-                              onlyDigits(e.target.value).slice(0, 8)
-                            )
-                          }
-                          className={classInput(false)}
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-sm font-medium">RFC</label>
-                        <input
-                          value={row.rfc}
-                          onChange={(e) =>
-                            updateDuenoBeneficiarioRow(
-                              setDuenosBeneficiarios,
-                              index,
-                              'rfc',
-                              e.target.value
-                            )
-                          }
-                          className={classInput(false)}
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-sm font-medium">CURP</label>
-                        <input
-                          value={row.curp}
-                          onChange={(e) =>
-                            updateDuenoBeneficiarioRow(
-                              setDuenosBeneficiarios,
-                              index,
-                              'curp',
-                              e.target.value
-                            )
-                          }
-                          className={classInput(false)}
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-sm font-medium">Relación con el cliente</label>
-                        <input
-                          value={row.relacion_con_cliente}
-                          onChange={(e) =>
-                            updateDuenoBeneficiarioRow(
-                              setDuenosBeneficiarios,
-                              index,
-                              'relacion_con_cliente',
-                              e.target.value
-                            )
-                          }
-                          className={classInput(false)}
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-sm font-medium">Porcentaje participación</label>
-                        <input
-                          value={row.porcentaje_participacion}
-                          onChange={(e) =>
-                            updateDuenoBeneficiarioRow(
-                              setDuenosBeneficiarios,
-                              index,
-                              'porcentaje_participacion',
-                              e.target.value
-                            )
-                          }
-                          className={classInput(false)}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
+            {relatedDuenosAplica ? renderRelatedDuenosList({
+              relatedDuenos,
+              setRelatedDuenos,
+              syncLegacyFromRelated,
+            }) : null}
           </div>
         </div>
       ) : null}
