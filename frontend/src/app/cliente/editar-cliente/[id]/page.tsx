@@ -1084,10 +1084,25 @@ export default function Page() {
             const duenosAplica =
               c?.datos_completos?.duenos_beneficiarios_aplica === true || duenos.length > 0;
 
-            setDuenosBeneficiariosAplica(duenosAplica);
+            const duenosHydratedFromLegacy = duenosRaw.map(normalizeRelatedDuenoRow);
+            const hydratedDuenosBase =
+              relatedDuenosHydrated.length > 0 ? relatedDuenosHydrated : duenosHydratedFromLegacy;
+            const duenosAplicaVisible =
+              duenosAplica || relatedDuenosAplicaHydrated === true || hydratedDuenosBase.length > 0;
+            const hydratedDuenos =
+              duenosAplicaVisible
+                ? (hydratedDuenosBase.length > 0 ? hydratedDuenosBase : [createEmptyRelatedDueno()])
+                : [];
+            const duenosLegacyVisible =
+              duenos.length > 0 ? duenos : hydratedDuenos.map(projectRelatedDuenoToLegacy);
+            
+            setDuenosBeneficiariosAplica(duenosAplicaVisible);
+            setRelatedDuenosAplica(duenosAplicaVisible);
+            setRelatedDuenos(hydratedDuenos);
+            syncLegacyFromRelated(hydratedDuenos);
             setDuenosBeneficiarios(
-              duenosAplica
-                ? (duenos.length > 0 ? duenos : [createEmptyDuenoBeneficiario()])
+              duenosAplicaVisible
+                ? (duenosLegacyVisible.length > 0 ? duenosLegacyVisible : [createEmptyDuenoBeneficiario()])
                 : []
             );
 
