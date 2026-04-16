@@ -1068,14 +1068,23 @@ export default function Page() {
             setRecursosTerceros([]);
           }
           if (c.tipo_cliente === 'fideicomiso') {
-            const r = c?.datos_completos?.representante || {};
-            const nc = (r.nombre_completo || '').split(' ').filter(Boolean);
-            setRepNombre(nc.slice(0, 1).join(' ') || r.nombre_completo || '');
-            setRepAP(nc.slice(1, 2).join(' ') || '');
-            setRepAM(nc.slice(2).join(' ') || '');
-            setRepFechaNac(r.fecha_nacimiento || '');
-            setRepRFC(r.rfc || '');
-            setRepCURP(r.curp || '');
+              const r =
+                c?.datos_completos?.fideicomiso?.representante ||
+                c?.datos_completos?.representante ||
+                {};
+              const nombreCompletoRep =
+                (r.nombre_completo || [
+                  r.nombres,
+                  r.apellido_paterno,
+                  r.apellido_materno,
+                ].filter(Boolean).join(' ')).trim();
+              const nc = nombreCompletoRep.split(' ').filter(Boolean);
+              setRepNombre((r.nombres || nc.slice(0, 1).join(' ') || '').trim());
+              setRepAP((r.apellido_paterno || nc.slice(1, 2).join(' ') || '').trim());
+              setRepAM((r.apellido_materno || nc.slice(2).join(' ') || '').trim());
+              setRepFechaNac(r.fecha_nacimiento || '');
+              setRepRFC(r.rfc || '');
+              setRepCURP(r.curp || '');
 
               const duenosRawCandidates = [
                 c?.datos_completos?.duenos_beneficiarios,
