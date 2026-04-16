@@ -587,7 +587,7 @@ function projectRelatedDuenoToLegacy(row: RelatedDuenoRow): DuenoBeneficiarioIte
     rfc: safeInput(p?.rfc),
     curp: safeInput(p?.curp),
     porcentaje_participacion: safeInput(
-      p?.porcentaje_participacion ||
+      p?.porcentaje_participacion ??
       row?.porcentaje_participacion
     ),
     observaciones: safeInput(p?.observaciones || row?.observaciones),
@@ -834,7 +834,7 @@ function renderRelatedDuenosList({
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">Porcentaje participación</label>
-                <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={persona.porcentaje_participacion} onChange={(e) => updatePersonaField(index, "porcentaje_participacion", e.target.value)} />
+                <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={safeInput(persona.porcentaje_participacion || row.porcentaje_participacion)} onChange={(e) => updatePersonaField(index, "porcentaje_participacion", e.target.value)} />
               </div>
               <div className="space-y-1 md:col-span-3">
                 <label className="text-sm font-medium">Observaciones</label>
