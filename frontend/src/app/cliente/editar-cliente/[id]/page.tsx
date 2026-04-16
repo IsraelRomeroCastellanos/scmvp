@@ -85,14 +85,20 @@ function normalizeRelatedDuenoRow(row: any): RelatedDuenoRow {
   const p = row?.datos_completos?.persona || row || {};
   const c = row?.datos_completos?.contacto || {};
   const d = c?.domicilio || {};
-  const porcentaje = safeInput(p?.porcentaje_participacion ?? row?.porcentaje_participacion);
+  const porcentaje = safeInput(
+    p?.porcentaje_participacion ??
+    row?.porcentaje_participacion ??
+    row?.porcentajeParticipacion
+  );
   const nacionalidad = safeInput((p?.nacionalidad ?? row?.nacionalidad) || "MEX");
   const relacion = safeInput(p?.relacion_con_cliente ?? row?.relacion_con_cliente);
   const observaciones = safeInput(p?.observaciones ?? row?.observaciones);
 
   return {
     tipo_entidad: 'persona_fisica',
-    nombre_entidad: safeInput(row?.nombre_entidad) || [p?.nombres, p?.apellido_paterno, p?.apellido_materno].filter(Boolean).join(" ").trim(),
+    nombre_entidad:
+      safeInput(row?.nombre_entidad) ||
+      [p?.nombres, p?.apellido_paterno, p?.apellido_materno].filter(Boolean).join(" ").trim(),
     nacionalidad,
     relacion_con_cliente: relacion,
     porcentaje_participacion: porcentaje,
@@ -570,19 +576,21 @@ function hydrateRelatedCollectionsFromDatos(datos: any) {
 }
 
 function projectRelatedDuenoToLegacy(row: RelatedDuenoRow): DuenoBeneficiarioItem {
-  const persona = (row?.datos_completos as RelatedPFData)?.persona || {};
-
+  const p = row?.datos_completos?.persona || ({} as any);
   return {
-    nombres: safeInput(persona?.nombres),
-    apellido_paterno: safeInput(persona?.apellido_paterno),
-    apellido_materno: safeInput(persona?.apellido_materno),
-    fecha_nacimiento: safeInput(persona?.fecha_nacimiento),
-    nacionalidad: safeInput(row?.nacionalidad || 'MEX') || 'MEX',
-    relacion_con_cliente: safeInput(row?.relacion_con_cliente),
-    rfc: safeInput(persona?.rfc),
-    curp: safeInput(persona?.curp),
-    porcentaje_participacion: safeInput(row?.porcentaje_participacion),
-    observaciones: safeInput(row?.observaciones),
+    nombres: safeInput(p?.nombres),
+    apellido_paterno: safeInput(p?.apellido_paterno),
+    apellido_materno: safeInput(p?.apellido_materno),
+    fecha_nacimiento: safeInput(p?.fecha_nacimiento),
+    nacionalidad: safeInput(p?.nacionalidad || row?.nacionalidad || "MEX"),
+    relacion_con_cliente: safeInput(p?.relacion_con_cliente || row?.relacion_con_cliente),
+    rfc: safeInput(p?.rfc),
+    curp: safeInput(p?.curp),
+    porcentaje_participacion: safeInput(
+      p?.porcentaje_participacion ||
+      row?.porcentaje_participacion
+    ),
+    observaciones: safeInput(p?.observaciones || row?.observaciones),
   };
 }
 
@@ -905,23 +913,7 @@ export default function Page() {
   const [relatedDuenos, setRelatedDuenos] = useState<RelatedDuenoRow[]>([]);
 
   function syncLegacyFromRelated(next: RelatedDuenoRow[]) {
-    setDuenosBeneficiarios(
-      next.map((row) => {
-        const p = row.datos_completos.persona;
-        return {
-          nombres: p.nombres,
-          apellido_paterno: p.apellido_paterno,
-          apellido_materno: p.apellido_materno,
-          fecha_nacimiento: p.fecha_nacimiento,
-          nacionalidad: p.nacionalidad,
-          relacion_con_cliente: p.relacion_con_cliente,
-          rfc: p.rfc,
-          curp: p.curp,
-          porcentaje_participacion: p.porcentaje_participacion,
-          observaciones: p.observaciones,
-        };
-      })
-    );
+    setDuenosBeneficiarios(next.map(projectRelatedDuenoToLegacy));
   }
 
 
@@ -1068,10 +1060,16 @@ export default function Page() {
             setRecursosTerceros([]);
           }
           if (c.tipo_cliente === 'fideicomiso') {
-              const r =
+              const rBase =
                 c?.datos_completos?.fideicomiso?.representante ||
                 c?.datos_completos?.representante ||
                 {};
+              const rLooksLikeDueno =
+                Array.isArray(c?.datos_completos?.duenos_beneficiarios) &&
+                c.datos_completos.duenos_beneficiarios.length > 0 &&
+                safeInput(rBase?.nombre_completo) === '' &&
+                safeInput(rBase?.nombres) !== '';
+              const r = rLooksLikeDueno ? {} : rBase;
               const nombreCompletoRep =
                 (r.nombre_completo || [
                   r.nombres,
@@ -1082,9 +1080,9 @@ export default function Page() {
               setRepNombre((r.nombres || nc.slice(0, 1).join(' ') || '').trim());
               setRepAP((r.apellido_paterno || nc.slice(1, 2).join(' ') || '').trim());
               setRepAM((r.apellido_materno || nc.slice(2).join(' ') || '').trim());
-              setRepFechaNac(r.fecha_nacimiento || '');
-              setRepRFC(r.rfc || '');
-              setRepCURP(r.curp || '');
+              setRepFechaNac(safeInput(r.fecha_nacimiento));
+              setRepRFC(safeInput(r.rfc));
+              setRepCURP(safeInput(r.curp));
 
               const duenosRawCandidates = [
                 c?.datos_completos?.duenos_beneficiarios,
