@@ -1077,34 +1077,36 @@ export default function Page() {
             setRepRFC(r.rfc || '');
             setRepCURP(r.curp || '');
 
-            const duenosRaw = Array.isArray(c?.datos_completos?.duenos_beneficiarios)
-              ? c.datos_completos.duenos_beneficiarios
-              : [];
-            const duenos = duenosRaw.map(normalizeDuenoBeneficiarioRow);
-            const duenosAplica =
-              c?.datos_completos?.duenos_beneficiarios_aplica === true || duenos.length > 0;
+              const duenosRawCandidates = [
+                c?.datos_completos?.duenos_beneficiarios,
+                c?.datos_completos?.fideicomiso?.duenos_beneficiarios,
+              ];
+              const duenosRaw = ((duenosRawCandidates.find((v) => Array.isArray(v)) ?? []) as any[]);
+              const duenos = duenosRaw.map(normalizeDuenoBeneficiarioRow);
+              const duenosHydratedFromRaw = duenosRaw.map(normalizeRelatedDuenoRow);
+              const hydratedDuenosBase =
+                relatedDuenosHydrated.length > 0 ? relatedDuenosHydrated : duenosHydratedFromRaw;
+              const duenosAplicaVisible =
+                c?.datos_completos?.duenos_beneficiarios_aplica === true ||
+                c?.datos_completos?.fideicomiso?.duenos_beneficiarios_aplica === true ||
+                relatedDuenosAplicaHydrated === true ||
+                hydratedDuenosBase.length > 0;
+              const hydratedDuenos =
+                duenosAplicaVisible
+                  ? (hydratedDuenosBase.length > 0 ? hydratedDuenosBase : [createEmptyRelatedDueno()])
+                  : [];
+              const duenosLegacyVisible =
+                duenos.length > 0 ? duenos : hydratedDuenos.map(projectRelatedDuenoToLegacy);
 
-            const duenosHydratedFromLegacy = duenosRaw.map(normalizeRelatedDuenoRow);
-            const hydratedDuenosBase =
-              relatedDuenosHydrated.length > 0 ? relatedDuenosHydrated : duenosHydratedFromLegacy;
-            const duenosAplicaVisible =
-              duenosAplica || relatedDuenosAplicaHydrated === true || hydratedDuenosBase.length > 0;
-            const hydratedDuenos =
-              duenosAplicaVisible
-                ? (hydratedDuenosBase.length > 0 ? hydratedDuenosBase : [createEmptyRelatedDueno()])
-                : [];
-            const duenosLegacyVisible =
-              duenos.length > 0 ? duenos : hydratedDuenos.map(projectRelatedDuenoToLegacy);
-            
-            setDuenosBeneficiariosAplica(duenosAplicaVisible);
-            setRelatedDuenosAplica(duenosAplicaVisible);
-            setRelatedDuenos(hydratedDuenos);
-            syncLegacyFromRelated(hydratedDuenos);
-            setDuenosBeneficiarios(
-              duenosAplicaVisible
-                ? (duenosLegacyVisible.length > 0 ? duenosLegacyVisible : [createEmptyDuenoBeneficiario()])
-                : []
-            );
+              setDuenosBeneficiariosAplica(duenosAplicaVisible);
+              setRelatedDuenosAplica(duenosAplicaVisible);
+              setRelatedDuenos(hydratedDuenos);
+              syncLegacyFromRelated(hydratedDuenos);
+              setDuenosBeneficiarios(
+                duenosAplicaVisible
+                  ? (duenosLegacyVisible.length > 0 ? duenosLegacyVisible : [createEmptyDuenoBeneficiario()])
+                  : []
+              );
 
             setRecursosTercerosAplica(false);
             setRecursosTerceros([]);
