@@ -1816,6 +1816,37 @@ export default function Page() {
                 {errText(errors['rep.curp'])}
               </div>
             </div>
+
+            <div className="border-t pt-3 space-y-3">
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={relatedDuenosAplica}
+                  onChange={(e) => {
+                    const v = e.target.checked;
+                    setRelatedDuenosAplica(v);
+                    setDuenosBeneficiariosAplica(v);
+
+                    if (!v) {
+                      setRelatedDuenos([]);
+                      syncLegacyFromRelated([]);
+                    } else if (relatedDuenos.length === 0) {
+                      const next = [createEmptyRelatedDueno()];
+                      setRelatedDuenos(next);
+                      syncLegacyFromRelated(next);
+                    }
+                  }}
+                />
+                <span>¿Aplica dueños beneficiarios?</span>
+              </label>
+
+              {relatedDuenosAplica ? renderRelatedDuenosList({
+                relatedDuenos,
+                setRelatedDuenos,
+                syncLegacyFromRelated,
+              }) : null}
+            </div>
           </div>
         </div>
       ) : null}
