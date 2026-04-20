@@ -1688,7 +1688,7 @@ export default function ClientPage() {
     return (
       <div className="rounded border border-gray-200 p-4 space-y-4">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-medium">Dueños beneficiarios</p>
+          <p className="text-sm font-medium">Beneficiario Controlador</p>
           <button
             type="button"
             className="rounded border border-gray-300 px-3 py-1 text-sm"
@@ -1702,7 +1702,7 @@ export default function ClientPage() {
           <div key={index} className="rounded border border-gray-200 p-4 space-y-4">
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium">
-                Dueño beneficiario #{index + 1}
+                Beneficiario Controlador #{index + 1}
               </p>
               <button
                 type="button"
@@ -5089,7 +5089,7 @@ persona: {
                           />
 
 
-                          <span>El fideicomiso cuenta con dueños beneficiarios.</span>
+                          <span>El fideicomiso cuenta con Beneficiario Controlador.</span>
 
 
                         </label>

@@ -774,7 +774,7 @@ function renderRelatedDuenosList({
   return (
     <div className="rounded border border-gray-200 p-4 space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium">Dueños beneficiarios</p>
+        <p className="text-sm font-medium">Beneficiario Controlador</p>
         <button
           type="button"
           className="rounded border border-gray-300 px-3 py-1 text-sm"
@@ -789,7 +789,7 @@ function renderRelatedDuenosList({
         return (
           <div key={index} className="rounded border border-gray-200 p-4 space-y-4">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">Dueño beneficiario #{index + 1}</p>
+              <p className="text-sm font-medium">Beneficiario Controlador #{index + 1}</p>
               <button
                 type="button"
                 className="rounded border border-red-300 px-3 py-1 text-sm text-red-700"
@@ -1589,7 +1589,7 @@ export default function Page() {
                     }
                   }}
               />
-              <span>¿Aplica dueños beneficiarios?</span>
+              <span>¿Aplica Beneficiario Controlador?</span>
             </label>
 
             {relatedDuenosAplica ? renderRelatedDuenosList({
@@ -1677,7 +1677,7 @@ export default function Page() {
                     }
                   }}
                 />
-                <span>¿Aplica dueños beneficiarios?</span>
+                <span>¿Aplica Beneficiario Controlador?</span>
               </label>
 
               {relatedDuenosAplica ? renderRelatedDuenosList({
