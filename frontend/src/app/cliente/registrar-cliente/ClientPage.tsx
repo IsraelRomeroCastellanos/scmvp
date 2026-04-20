@@ -295,6 +295,7 @@ export default function ClientPage() {
   // form base
   const [empresaId, setEmpresaId] = useState("");
   const [nombreEntidad, setNombreEntidad] = useState("");
+  const [pmRazonSocial, setPmRazonSocial] = useState("");
   const [nacionalidad, setNacionalidad] = useState(""); // clave catálogo
   const [contactoPais, setContactoPais] = useState("MEX"); // clave catálogo
 
@@ -2359,7 +2360,36 @@ persona: {
     }
 
     console.log("TIPO_ANTES_DE_ENVIAR", tipo);
-    const payload = buildPayload();
+          const payload = buildPayload();
+
+      if (tipo === "persona_fisica") {
+        payload.nombre_entidad = [pfNombres, pfApPat, pfApMat]
+          .map((v) => safeInput(v).trim())
+          .filter(Boolean)
+          .join(" ");
+      }
+
+      if (tipo === "persona_moral") {
+        payload.nombre_entidad = safeInput(pmRazonSocial).trim();
+        const datosCompletosPm = (payload.datos_completos || {}) as Record<string, any>;
+        datosCompletosPm.empresa = {
+          ...(datosCompletosPm.empresa || {}),
+          razon_social: safeInput(pmRazonSocial).trim(),
+          nombre_entidad: safeInput(pmRazonSocial).trim(),
+        };
+        (payload as any).datos_completos = datosCompletosPm;
+      }
+
+      if (tipo === "fideicomiso") {
+        payload.nombre_entidad = safeInput(fidNombre).trim();
+        const datosCompletosFid = (payload.datos_completos || {}) as Record<string, any>;
+        datosCompletosFid.fideicomiso = {
+          ...(datosCompletosFid.fideicomiso || {}),
+          nombre_fideicomiso: safeInput(fidNombre).trim(),
+          nombre_entidad: safeInput(fidNombre).trim(),
+        };
+        (payload as any).datos_completos = datosCompletosFid;
+      }
 
       console.log('[P1-1 payload]', payload);
 
@@ -2402,6 +2432,21 @@ persona: {
     }
 
 }
+
+    useEffect(() => {
+    if (tipo === "persona_fisica") {
+      setNombreEntidad(
+        [pfNombres, pfApPat, pfApMat]
+          .map((v) => safeInput(v).trim())
+          .filter(Boolean)
+          .join(" ")
+      );
+    } else if (tipo === "persona_moral") {
+      setNombreEntidad(safeInput(pmRazonSocial).trim());
+    } else if (tipo === "fideicomiso") {
+      setNombreEntidad(safeInput(fidNombre).trim());
+    }
+  }, [tipo, pfNombres, pfApPat, pfApMat, pmRazonSocial, fidNombre]);
 
   const showAviso = tipo === "persona_fisica" || tipo === "persona_moral" || tipo === "fideicomiso";
 
@@ -2461,20 +2506,6 @@ persona: {
             ) : null}
           </div>
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Razón social / Nombre <span className="text-red-600">*</span>
-            </label>
-            <input
-              className={`w-full rounded border px-3 py-2 text-sm ${errors["nombre_entidad"] ? "border-red-500" : "border-gray-300"}`}
-              value={nombreEntidad}
-              onChange={(e) => setNombreEntidad(e.target.value)}
-              onBlur={() => validator.validateField("nombre_entidad")}
-              placeholder="Ej. Alicia Pruebas / Servicios SA / Fideicomiso X"
-            />
-            {errors["nombre_entidad"] ? (
-              <p className="text-xs text-red-600">{errors["nombre_entidad"]}</p>
-            ) : null}
-          </div>
 
           <SearchableSelect
             label="Nacionalidad"
@@ -3600,6 +3631,24 @@ persona: {
         {tipo === "persona_moral" && (
                   <div className="rounded border border-gray-200 p-4 space-y-4">
                     <h2 className="font-medium">Persona Moral</h2>
+
+                      <div className="space-y-1 md:col-span-3">
+                        <label className="text-sm font-medium">
+                          Razón social <span className="text-red-600">*</span>
+                        </label>
+                        <input
+                          className={`w-full rounded border px-3 py-2 text-sm ${
+                            errors["nombre_entidad"] ? "border-red-500" : "border-gray-300"
+                          }`}
+                          value={pmRazonSocial}
+                          onChange={(e) => setPmRazonSocial(e.target.value)}
+                          onBlur={() => validator.validateField("nombre_entidad")}
+                          placeholder="Ej. Servicios SA de CV"
+                        />
+                        {errors["nombre_entidad"] ? (
+                          <p className="text-xs text-red-600">{errors["nombre_entidad"]}</p>
+                        ) : null}
+                      </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="space-y-1">

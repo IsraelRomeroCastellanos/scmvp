@@ -832,10 +832,6 @@ function renderRelatedDuenosList({
                 <label className="text-sm font-medium">CURP</label>
                 <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={persona.curp} onChange={(e) => updatePersonaField(index, "curp", e.target.value)} />
               </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Porcentaje participación</label>
-                <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={safeInput(persona.porcentaje_participacion || row.porcentaje_participacion)} onChange={(e) => updatePersonaField(index, "porcentaje_participacion", e.target.value)} />
-              </div>
               <div className="space-y-1 md:col-span-3">
                 <label className="text-sm font-medium">Observaciones</label>
                 <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={persona.observaciones} onChange={(e) => updatePersonaField(index, "observaciones", e.target.value)} />
@@ -873,6 +869,8 @@ export default function Page() {
   const [tipoCliente, setTipoCliente] = useState<TipoCliente>('persona_fisica');
 
   const [nombreEntidad, setNombreEntidad] = useState('');
+  const [pmRazonSocial, setPmRazonSocial] = useState('');
+  const [fidNombre, setFidNombre] = useState('');
   const [nacionalidad, setNacionalidad] = useState('');
 
   // contacto básico (catálogo + obligatorios)
@@ -918,213 +916,12 @@ export default function Page() {
 
 
   useEffect(() => {
-    (async () => {
-      try {
-        const [p, a, g] = await Promise.all([
-          loadCatalogo('sat/c_pais'),
-          loadCatalogo('sat/c_actividad_economica'),
-          loadCatalogo('internos/giro_mercantil')
-        ]);
-        setPaises(p);
-        setActividades(a);
-        setGiros(g);
-      } catch (e: any) {
-        setFatal(e?.message || 'No se pudieron cargar catálogos');
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
-    if (!id) return;
-    if (!token) return;
-
-    (async () => {
-      setLoading(true);
-      setFatal('');
-      try {
-        const res = await fetch(`${apiBase}/api/cliente/clientes/${id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          setFatal(data?.error || `Error al cargar (${res.status})`);
-          return;
-        }
-
-        const c = data?.cliente;
-        const dcHydrated = c?.datos_completos ?? {};
-        const hydratedRelated = hydrateRelatedCollectionsFromDatos(dcHydrated);
-        const relatedRecursosHydrated = hydratedRelated.relatedRecursos;
-        const relatedDuenosHydrated = hydratedRelated.relatedDuenos;
-        const relatedRecursosAplicaHydrated = hydratedRelated.relatedRecursosAplica;
-        const relatedDuenosAplicaHydrated = hydratedRelated.relatedDuenosAplica;
-        const duenosLegacyHydrated = relatedDuenosHydrated.map(projectRelatedDuenoToLegacy);
-        if (!c) {
-          setFatal('Respuesta inválida: falta cliente');
-          return;
-        }
-
-        setTipoCliente(c.tipo_cliente);
-        setNombreEntidad(c.nombre_entidad || '');
-        setNacionalidad(c.nacionalidad || '');
-
-        const contacto = c?.datos_completos?.contacto || {};
-        setContactoPais(contacto.pais || '');
-        setEmail(contacto.email || '');
-        setTelefono(contacto.telefono || '');
-
-        // ✅ Precarga domicilio contacto (manual)
-        const dom = contacto?.domicilio_mexico || contacto?.domicilio || {};
-        setDomPais(dom?.pais || '');
-        setDomCalle(dom?.calle || '');
-        setDomNumero(dom?.numero || '');
-        setDomInterior(dom?.interior || '');
-        setDomColonia(dom?.colonia || '');
-        setDomMunicipio(dom?.municipio || '');
-        setDomCiudad(dom?.ciudad_delegacion || dom?.ciudadDelegacion || dom?.ciudad || '');
-        setDomCP(dom?.codigo_postal || dom?.codigoPostal || '');
-        setDomEstado(dom?.estado || '');
-
-          if (c.tipo_cliente === 'persona_fisica') {
-            setRelatedRecursosAplica(relatedRecursosAplicaHydrated);
-            setRelatedRecursos(relatedRecursosHydrated);
-            setRelatedDuenosAplica(false);
-            setRelatedDuenos([]);
-            const ae = c?.datos_completos?.persona?.actividad_economica;
-            if (typeof ae === 'string') setPfActividad(ae);
-            else setPfActividad(ae?.clave || '');
-
-            const recursosRaw = Array.isArray(c?.datos_completos?.recursos_terceros)
-              ? c.datos_completos.recursos_terceros
-              : [];
-            const recursos = recursosRaw.map(normalizeRecursoTerceroRow);
-            const recursosAplica =
-              c?.datos_completos?.recursos_terceros_aplica === true || recursos.length > 0;
-
-            setRecursosTercerosAplica(recursosAplica);
-            setRecursosTerceros(
-              recursosAplica
-                ? (recursos.length > 0 ? recursos : [createEmptyRecursoTercero()])
-                : []
-            );
-
-            setDuenosBeneficiariosAplica(false);
-            setDuenosBeneficiarios([]);
-          }
-          if (c.tipo_cliente === 'persona_moral') {
-            const giroTxt = c?.datos_completos?.empresa?.giro || c?.datos_completos?.empresa?.giro_mercantil || '';
-            if (typeof giroTxt === 'string' && giroTxt) {
-              const match = giros.find((x) => x.descripcion === giroTxt || x.clave === giroTxt);
-              setPmGiro(match?.clave || '');
-            } else {
-            setRelatedRecursosAplica(false);
-            setRelatedRecursos([]);
-            setRelatedDuenosAplica(relatedDuenosAplicaHydrated);
-            setRelatedDuenos(relatedDuenosHydrated);
-            setDuenosBeneficiariosAplica(relatedDuenosAplicaHydrated);
-            setDuenosBeneficiarios(
-              relatedDuenosAplicaHydrated
-                ? (duenosLegacyHydrated.length > 0 ? duenosLegacyHydrated : [createEmptyDuenoBeneficiario()])
-                : []
-            );
-              setPmGiro('');
-            }
-
-            const r = c?.datos_completos?.representante || {};
-            setRepNombre(r.nombres || r.nombre_completo || '');
-            setRepAP(r.apellido_paterno || '');
-            setRepAM(r.apellido_materno || '');
-            setRepFechaNac(r.fecha_nacimiento || '');
-            setRepRFC(r.rfc || '');
-            setRepCURP(r.curp || '');
-
-            const duenosRaw = Array.isArray(c?.datos_completos?.duenos_beneficiarios)
-              ? c.datos_completos.duenos_beneficiarios
-              : [];
-            const duenos = duenosRaw.map(normalizeDuenoBeneficiarioRow);
-            const duenosAplica =
-              c?.datos_completos?.duenos_beneficiarios_aplica === true || duenos.length > 0;
-
-            setDuenosBeneficiariosAplica(relatedDuenosAplicaHydrated);
-            const hydratedDuenos = relatedDuenosHydrated;
-            setRelatedDuenosAplica(relatedDuenosAplicaHydrated);
-            setRelatedDuenos(hydratedDuenos);
-            syncLegacyFromRelated(hydratedDuenos);
-            setDuenosBeneficiarios(
-              duenosAplica
-                ? (duenos.length > 0 ? duenos : [createEmptyDuenoBeneficiario()])
-                : []
-            );
-
-            setRecursosTercerosAplica(false);
-            setRecursosTerceros([]);
-          }
-          if (c.tipo_cliente === 'fideicomiso') {
-              const rBase =
-                c?.datos_completos?.fideicomiso?.representante ||
-                c?.datos_completos?.representante ||
-                {};
-              const rLooksLikeDueno =
-                Array.isArray(c?.datos_completos?.duenos_beneficiarios) &&
-                c.datos_completos.duenos_beneficiarios.length > 0 &&
-                safeInput(rBase?.nombre_completo) === '' &&
-                safeInput(rBase?.nombres) !== '';
-              const r = rLooksLikeDueno ? {} : rBase;
-              const nombreCompletoRep =
-                (r.nombre_completo || [
-                  r.nombres,
-                  r.apellido_paterno,
-                  r.apellido_materno,
-                ].filter(Boolean).join(' ')).trim();
-              const nc = nombreCompletoRep.split(' ').filter(Boolean);
-              setRepNombre((r.nombres || nc.slice(0, 1).join(' ') || '').trim());
-              setRepAP((r.apellido_paterno || nc.slice(1, 2).join(' ') || '').trim());
-              setRepAM((r.apellido_materno || nc.slice(2).join(' ') || '').trim());
-              setRepFechaNac(safeInput(r.fecha_nacimiento));
-              setRepRFC(safeInput(r.rfc));
-              setRepCURP(safeInput(r.curp));
-
-              const duenosRawCandidates = [
-                c?.datos_completos?.duenos_beneficiarios,
-                c?.datos_completos?.fideicomiso?.duenos_beneficiarios,
-              ];
-              const duenosRaw = ((duenosRawCandidates.find((v) => Array.isArray(v)) ?? []) as any[]);
-              const duenos = duenosRaw.map(normalizeDuenoBeneficiarioRow);
-              const duenosHydratedFromRaw = duenosRaw.map(normalizeRelatedDuenoRow);
-              const hydratedDuenosBase =
-                relatedDuenosHydrated.length > 0 ? relatedDuenosHydrated : duenosHydratedFromRaw;
-              const duenosAplicaVisible =
-                c?.datos_completos?.duenos_beneficiarios_aplica === true ||
-                c?.datos_completos?.fideicomiso?.duenos_beneficiarios_aplica === true ||
-                relatedDuenosAplicaHydrated === true ||
-                hydratedDuenosBase.length > 0;
-              const hydratedDuenos =
-                duenosAplicaVisible
-                  ? (hydratedDuenosBase.length > 0 ? hydratedDuenosBase : [createEmptyRelatedDueno()])
-                  : [];
-              const duenosLegacyVisible =
-                duenos.length > 0 ? duenos : hydratedDuenos.map(projectRelatedDuenoToLegacy);
-
-              setDuenosBeneficiariosAplica(duenosAplicaVisible);
-              setRelatedDuenosAplica(duenosAplicaVisible);
-              setRelatedDuenos(hydratedDuenos);
-              syncLegacyFromRelated(hydratedDuenos);
-              setDuenosBeneficiarios(
-                duenosAplicaVisible
-                  ? (duenosLegacyVisible.length > 0 ? duenosLegacyVisible : [createEmptyDuenoBeneficiario()])
-                  : []
-              );
-
-            setRecursosTercerosAplica(false);
-            setRecursosTerceros([]);
-          }
-      } catch (e: any) {
-        setFatal(e?.message || 'Error inesperado');
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [id, token, apiBase, giros]);
+    if (tipoCliente === 'persona_moral') {
+      setNombreEntidad(safeInput(pmRazonSocial).trim());
+    } else if (tipoCliente === 'fideicomiso') {
+      setNombreEntidad(safeInput(fidNombre).trim());
+    }
+  }, [tipoCliente, pmRazonSocial, fidNombre]);
 
   function validate(): Errors {
     const e: Errors = {};
@@ -1221,10 +1018,19 @@ export default function Page() {
             : [];
         }
         if (tipoCliente === 'persona_moral') {
-          body.datos_completos.empresa = stripEmpty({
-            giro: giro ? giro.descripcion : undefined
-          });
+            body.nombre_entidad = safeInput(pmRazonSocial).trim();
+            body.datos_completos.empresa = stripEmpty({
+              giro: giro ? giro.descripcion : undefined,
+              razon_social: safeInput(pmRazonSocial).trim(),
+              nombre_entidad: safeInput(pmRazonSocial).trim()
+            });
 
+            body.nombre_entidad = safeInput(fidNombre).trim();
+            body.datos_completos.fideicomiso = stripEmpty({
+              ...(body.datos_completos.fideicomiso || {}),
+              nombre_fideicomiso: safeInput(fidNombre).trim(),
+              nombre_entidad: safeInput(fidNombre).trim()
+            });
           body.datos_completos.representante = stripEmpty({
             nombres: repNombre.trim(),
             apellido_paterno: repAP.trim(),
@@ -1312,17 +1118,6 @@ export default function Page() {
 
       {loading ? <div className="text-sm text-gray-600">Cargando...</div> : null}
 
-      <div className="space-y-1">
-        <label className="text-sm font-medium">
-          Nombre / Razón social <span className="text-red-600">*</span>
-        </label>
-        <input
-          value={nombreEntidad}
-          onChange={(e) => setNombreEntidad(e.target.value)}
-          className={classInput(!!errors.nombre_entidad)}
-        />
-        {errText(errors.nombre_entidad)}
-      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1">
@@ -1680,6 +1475,16 @@ export default function Page() {
         <div className="rounded-md border p-4 space-y-4">
           <h2 className="font-semibold">Persona moral</h2>
 
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Razón social <span className="text-red-600">*</span></label>
+              <input
+                value={pmRazonSocial}
+                onChange={(e) => setPmRazonSocial(e.target.value)}
+                className={classInput(!!errors.nombre_entidad)}
+              />
+              {errText(errors.nombre_entidad)}
+            </div>
+
           <div className="space-y-1">
             <label className="text-sm font-medium">
               Giro mercantil <span className="text-red-600">*</span>
@@ -1798,6 +1603,16 @@ export default function Page() {
       {tipoCliente === 'fideicomiso' ? (
         <div className="rounded-md border p-4 space-y-3">
           <h2 className="font-semibold">Fideicomiso</h2>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Nombre del fideicomiso <span className="text-red-600">*</span></label>
+              <input
+                value={fidNombre}
+                onChange={(e) => setFidNombre(e.target.value)}
+                className={classInput(!!errors.nombre_entidad)}
+              />
+              {errText(errors.nombre_entidad)}
+            </div>
           <div className="border-t pt-3 space-y-3">
             <h3 className="font-semibold">Representante</h3>
 
