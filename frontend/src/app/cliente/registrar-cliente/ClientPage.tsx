@@ -421,6 +421,7 @@ export default function ClientPage() {
 
   // PM: Si representante NO es accionista
   const [pmRepEsAccionista, setPmRepEsAccionista] = useState(true);
+  const pmBcDefaultAppliedRef = useRef(false);
   const [pmAccNombres, setPmAccNombres] = useState("");
   const [pmAccApPat, setPmAccApPat] = useState("");
   const [pmAccApMat, setPmAccApMat] = useState("");
@@ -2447,6 +2448,22 @@ persona: {
       setNombreEntidad(safeInput(fidNombre).trim());
     }
   }, [tipo, pfNombres, pfApPat, pfApMat, pmRazonSocial, fidNombre]);
+
+    useEffect(() => {
+    if (tipo === "persona_moral") {
+      if (!pmBcDefaultAppliedRef.current) {
+        setPmBeneficiarioControlador("si");
+        setRelatedDuenosAplica(true);
+        if (relatedDuenos.length === 0) {
+          setRelatedDuenos([createEmptyRelatedDueno()]);
+        }
+        pmBcDefaultAppliedRef.current = true;
+      }
+    } else {
+      pmBcDefaultAppliedRef.current = false;
+      setRelatedDuenosAplica(false);
+    }
+  }, [tipo]);
 
   const showAviso = tipo === "persona_fisica" || tipo === "persona_moral" || tipo === "fideicomiso";
 
