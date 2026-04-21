@@ -391,7 +391,7 @@ export default function ClientPage() {
   const [pmRepRfc, setPmRepRfc] = useState("");
   const [pmSubtipoPm, setPmSubtipoPm] = useState(""); // key
   const [pmRsiSubtipo, setPmRsiSubtipo] = useState(""); // key
-  const [pmBeneficiarioControlador, setPmBeneficiarioControlador] = useState(""); // "si" | "no"
+  const [pmBeneficiarioControlador, setPmBeneficiarioControlador] = useState("si"); // "si" fijo en PM
   const [pmRepTelCasa, setPmRepTelCasa] = useState("");
   const [pmRepCelular, setPmRepCelular] = useState("");
 
@@ -3723,46 +3723,6 @@ persona: {
                         </div>
                       ) : null}
 
-                      <div className="space-y-1">
-                        <label className="text-sm font-medium">
-                          Beneficiario Controlador <span className="text-red-600">*</span>
-                        </label>
-                        <select
-                          className={`w-full rounded border px-3 py-2 text-sm ${
-                            errors["BeneficiarioControlador"] ? "border-red-500" : "border-gray-300"
-                          }`}
-                          value={pmBeneficiarioControlador}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            const aplica = v === "si";
-
-                            setPmBeneficiarioControlador(v);
-                            setRelatedDuenosAplica(aplica);
-
-                            if (!aplica) {
-                              setPmBcNombres("");
-                              setPmBcApPat("");
-                              setPmBcApMat("");
-                              setErr("beneficiario_controlador.nombres", undefined);
-                              setErr("beneficiario_controlador.apellido_paterno", undefined);
-                              setErr("beneficiario_controlador.apellido_materno", undefined);
-                              setRelatedDuenos([]);
-                            } else if (relatedDuenos.length === 0) {
-                              setRelatedDuenos([createEmptyRelatedDueno()]);
-                            }
-                          }}
-                          onBlur={() => validator.validateField("BeneficiarioControlador")}
-                        >
-                          <option value="">Selecciona</option>
-                          <option value="si">Sí</option>
-                          <option value="no">No</option>
-                        </select>
-                        {errors["BeneficiarioControlador"] ? (
-                          <p className="text-xs text-red-600">
-                            {errors["BeneficiarioControlador"]}
-                          </p>
-                        ) : null}
-                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
