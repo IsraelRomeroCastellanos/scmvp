@@ -923,6 +923,19 @@ export default function Page() {
     }
   }, [tipoCliente, pmRazonSocial, fidNombre]);
 
+  // P4: PM editar fijo en sí, visible y abierto
+  useEffect(() => {
+    if (tipoCliente === 'persona_moral') {
+      if (!relatedDuenosAplica) setRelatedDuenosAplica(true);
+      if (!duenosBeneficiariosAplica) setDuenosBeneficiariosAplica(true);
+      if (relatedDuenos.length === 0) {
+        const next = [createEmptyRelatedDueno()];
+        setRelatedDuenos(next);
+        syncLegacyFromRelated(next);
+      }
+    }
+  }, [tipoCliente, relatedDuenosAplica, duenosBeneficiariosAplica, relatedDuenos.length]);
+
   function validate(): Errors {
     const e: Errors = {};
     req(e, 'nombre_entidad', 'Nombre / Razón social', nombreEntidad);
@@ -1567,37 +1580,13 @@ export default function Page() {
               </div>
             </div>
           </div>
-
-          <div className="border-t pt-3 space-y-3">
-            <label className="flex items-start gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="mt-1"
-                checked={relatedDuenosAplica}
-                  onChange={(e) => {
-                    const v = e.target.checked;
-                    setRelatedDuenosAplica(v);
-                    setDuenosBeneficiariosAplica(v);
-
-                    if (!v) {
-                      setRelatedDuenos([]);
-                      syncLegacyFromRelated([]);
-                    } else if (relatedDuenos.length === 0) {
-                      const next = [createEmptyRelatedDueno()];
-                      setRelatedDuenos(next);
-                      syncLegacyFromRelated(next);
-                    }
-                  }}
-              />
-              <span>¿Aplica Beneficiario Controlador?</span>
-            </label>
-
-            {relatedDuenosAplica ? renderRelatedDuenosList({
-              relatedDuenos,
-              setRelatedDuenos,
-              syncLegacyFromRelated,
-            }) : null}
-          </div>
+            <div className="border-t pt-3 space-y-3">
+              {renderRelatedDuenosList({
+                relatedDuenos,
+                setRelatedDuenos,
+                syncLegacyFromRelated,
+              })}
+            </div>
         </div>
       ) : null}
       {tipoCliente === 'fideicomiso' ? (
