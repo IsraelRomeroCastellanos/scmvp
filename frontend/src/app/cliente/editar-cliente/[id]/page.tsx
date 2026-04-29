@@ -261,6 +261,123 @@ function classInput(hasErr: boolean) {
   return `w-full rounded-md border px-3 py-2 text-sm outline-none ${hasErr ? 'border-red-500' : 'border-gray-300'}`;
 }
 
+function fmtItem(i: CatalogItem) {
+  return `${i.descripcion} (${i.clave})`;
+}
+
+function displayCatalogValue(value: string, items: CatalogItem[]) {
+  const v = (value ?? '').trim();
+  if (!v) return '';
+
+  const found = items.find((x) => x.clave === v);
+  if (found) return fmtItem(found);
+
+  return `${v} (valor legacy)`;
+}
+
+
+const MEXICO_CATALOGO_KEY = 'mexico-mx';
+
+type TipoNacionalidad = '' | 'nacional' | 'extranjero';
+
+function isMexicoKey(value: string) {
+  const v = (value ?? '').trim().toLowerCase();
+  return v === MEXICO_CATALOGO_KEY || v === 'mex';
+}
+
+function inferNacionalExtranjero(value: string): TipoNacionalidad {
+  const v = (value ?? '').trim();
+  if (!v) return '';
+  return isMexicoKey(v) ? 'nacional' : 'extranjero';
+}
+
+function valueToCatalogKey(v: string) {
+  return v;
+}
+
+function SearchableSelect({
+  label,
+  required,
+  value,
+  items,
+  placeholder,
+  error,
+  onChange,
+}: {
+  label: string;
+  required?: boolean;
+  value: string;
+  items: CatalogItem[];
+  placeholder?: string;
+  error?: string;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+
+  const needle = q.trim().toLowerCase();
+  const filtered = (needle
+    ? items.filter((it) => {
+        const a = it.descripcion.toLowerCase();
+        const b = it.clave.toLowerCase();
+        return a.includes(needle) || b.includes(needle);
+      })
+    : items
+  ).slice(0, 50);
+
+  return (
+    <div className="space-y-1">
+      <label className="text-sm font-medium">
+        {label} {required ? '*' : null}
+      </label>
+
+      <input
+        className={`w-full rounded-md border px-3 py-2 text-sm outline-none ${
+          error ? 'border-red-500' : 'border-gray-300'
+        }`}
+        value={open ? q : displayCatalogValue(value, items)}
+        placeholder={placeholder}
+        onFocus={() => {
+          setOpen(true);
+          setQ('');
+        }}
+        onChange={(e) => {
+          setOpen(true);
+          setQ(e.target.value);
+        }}
+        onBlur={() => setTimeout(() => setOpen(false), 120)}
+      />
+
+      {open ? (
+        <div className="max-h-56 overflow-auto rounded-md border bg-white shadow">
+          {filtered.map((it) => (
+            <button
+              key={it.clave}
+              type="button"
+              className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onChange(it.clave);
+                setOpen(false);
+                setQ('');
+              }}
+            >
+              {fmtItem(it)}
+            </button>
+          ))}
+
+          {filtered.length === 0 ? (
+            <div className="px-3 py-2 text-sm text-gray-500">Sin resultados</div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {error ? <p className="text-xs text-red-600">{error}</p> : null}
+    </div>
+  );
+}
+
+
 function isPlainObject(value: any): value is Record<string, any> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -875,6 +992,39 @@ export default function Page() {
 
   // contacto básico (catálogo + obligatorios)
   const [contactoPais, setContactoPais] = useState(''); // clave catálogo (ej MEX)
+
+  const [tipoNacionalidad, setTipoNacionalidad] = useState<TipoNacionalidad>('');
+
+  function handleTipoNacionalidadChange(next: TipoNacionalidad) {
+    setTipoNacionalidad(next);
+
+    if (next === 'nacional') {
+      setNacionalidad(MEXICO_CATALOGO_KEY);
+      setContactoPais(MEXICO_CATALOGO_KEY);
+    }
+  }
+
+  useEffect(() => {
+    if (!tipoNacionalidad && nacionalidad) {
+      setTipoNacionalidad(inferNacionalExtranjero(nacionalidad));
+    }
+  }, [nacionalidad, tipoNacionalidad]);
+
+  useEffect(() => {
+    let alive = true;
+
+    loadCatalogo('sat/c_pais')
+      .then((items) => {
+        if (alive) setPaises(items);
+      })
+      .catch((e) => {
+        if (alive) setFatal(e?.message || 'No se pudo cargar catálogo de países');
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [email, setEmail] = useState(''); // ✅ obligatorio (según decisión)
   const [telefono, setTelefono] = useState('');
 
@@ -942,6 +1092,30 @@ export default function Page() {
     req(e, 'nacionalidad', 'Nacionalidad', nacionalidad);
 
     req(e, 'contacto.pais', 'País (contacto)', contactoPais);
+
+    req(e, 'tipoNacionalidad', 'Tipo de nacionalidad', tipoNacionalidad);
+
+    if (tipoNacionalidad === 'nacional') {
+      if (!isMexicoKey(nacionalidad)) {
+        e.nacionalidad = 'Para nacional, la nacionalidad debe ser México';
+      }
+
+      if (!isMexicoKey(contactoPais)) {
+        e['contacto.pais'] = 'Para nacional, el país de contacto debe ser México';
+      }
+    }
+
+    if (tipoNacionalidad === 'extranjero') {
+      if (!nacionalidad.trim()) {
+        e.nacionalidad = 'Nacionalidad es obligatoria';
+      } else if (isMexicoKey(nacionalidad)) {
+        e.nacionalidad = 'Para extranjero, la nacionalidad no puede ser México';
+      }
+
+      if (!contactoPais.trim()) {
+        e['contacto.pais'] = 'País (contacto) es obligatorio';
+      }
+    }
     reqEmail(e, 'contacto.email', 'Email', email);
     reqPhone(e, 'contacto.telefono', 'Teléfono', telefono);
 
@@ -986,10 +1160,10 @@ export default function Page() {
       // ✅ Base: comunes + contacto (incluye email + domicilio contacto)
       const body: any = {
         nombre_entidad: nombreEntidad.trim(),
-        nacionalidad,
+        nacionalidad: valueToCatalogKey(nacionalidad),
         datos_completos: {
           contacto: {
-            pais: contactoPais,
+            pais: valueToCatalogKey(contactoPais),
             email: email.trim(),
             telefono: onlyDigits(telefono),
             domicilio_mexico: {
@@ -1133,43 +1307,67 @@ export default function Page() {
 
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="space-y-1">
+        <div className="space-y-2 rounded-md border border-gray-200 p-3">
           <label className="text-sm font-medium">
-            Nacionalidad <span className="text-red-600">*</span>
+            Tipo de nacionalidad <span className="text-red-600">*</span>
           </label>
-          <select
-            value={nacionalidad}
-            onChange={(e) => setNacionalidad(e.target.value)}
-            className={classInput(!!errors.nacionalidad)}
-          >
-            <option value="">Selecciona...</option>
-            {paises.map((p) => (
-              <option key={p.clave} value={p.clave}>
-                {p.descripcion} ({p.clave})
-              </option>
-            ))}
-          </select>
-          {errText(errors.nacionalidad)}
+
+          <div className="flex flex-wrap gap-3 text-sm">
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="radio"
+                name="tipoNacionalidad"
+                value="nacional"
+                checked={tipoNacionalidad === 'nacional'}
+                onChange={() => handleTipoNacionalidadChange('nacional')}
+              />
+              Nacional
+            </label>
+
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="radio"
+                name="tipoNacionalidad"
+                value="extranjero"
+                checked={tipoNacionalidad === 'extranjero'}
+                onChange={() => handleTipoNacionalidadChange('extranjero')}
+              />
+              Extranjero
+            </label>
+          </div>
+
+          {errors.tipoNacionalidad ? (
+            <p className="text-xs text-red-600">{errors.tipoNacionalidad}</p>
+          ) : null}
+
+          <p className="text-xs text-gray-500">
+            Nacional fija México en nacionalidad y país. Extranjero habilita selección manual.
+          </p>
         </div>
 
-        <div className="space-y-1">
-          <label className="text-sm font-medium">
-            País (contacto) <span className="text-red-600">*</span>
-          </label>
-          <select
-            value={contactoPais}
-            onChange={(e) => setContactoPais(e.target.value)}
-            className={classInput(!!errors['contacto.pais'])}
-          >
-            <option value="">Selecciona...</option>
-            {paises.map((p) => (
-              <option key={p.clave} value={p.clave}>
-                {p.descripcion} ({p.clave})
-              </option>
-            ))}
-          </select>
-          {errText(errors['contacto.pais'])}
-        </div>
+        <SearchableSelect
+          label="Nacionalidad"
+          required
+          value={nacionalidad}
+          items={paises}
+          placeholder="Busca país o clave..."
+          error={errors.nacionalidad}
+          onChange={(v) => {
+            if (tipoNacionalidad !== 'nacional') setNacionalidad(v);
+          }}
+        />
+
+        <SearchableSelect
+          label="País (contacto)"
+          required
+          value={contactoPais}
+          items={paises}
+          placeholder="Busca país o clave..."
+          error={errors['contacto.pais']}
+          onChange={(v) => {
+            if (tipoNacionalidad !== 'nacional') setContactoPais(v);
+          }}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
