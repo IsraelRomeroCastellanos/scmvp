@@ -967,7 +967,7 @@ export default function Page() {
   const id = params?.id;
 
   // ✅ default prod actual si env no está
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://scmvp-1jhq.onrender.com';
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://scmvp-nxtj.onrender.com';
 
   const token = useMemo(() => {
     if (typeof window === 'undefined') return '';
@@ -1063,6 +1063,113 @@ export default function Page() {
   function syncLegacyFromRelated(next: RelatedDuenoRow[]) {
     setDuenosBeneficiarios(next.map(projectRelatedDuenoToLegacy));
   }
+
+  // A2 hydrate editar cliente: carga datos existentes al abrir edición
+  useEffect(() => {
+    if (!id || !token) return;
+
+    let alive = true;
+
+    async function loadCliente() {
+      setLoading(true);
+      setFatal('');
+
+      try {
+        const res = await fetch(`${apiBase}/api/cliente/clientes/${id}`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!alive) return;
+
+        if (!res.ok) {
+          setFatal(data?.error || `Error al cargar cliente (${res.status})`);
+          return;
+        }
+
+        const cliente = data?.cliente || {};
+        const datos = cliente?.datos_completos || {};
+        const contacto = datos?.contacto || {};
+        const domicilio = contacto?.domicilio || contacto?.domicilio_mexico || {};
+
+        const nextTipo = (cliente?.tipo_cliente || 'persona_fisica') as TipoCliente;
+        const nextNacionalidad = safeInput(cliente?.nacionalidad);
+        const nextContactoPais = safeInput(contacto?.pais);
+
+        setTipoCliente(nextTipo);
+        setNombreEntidad(safeInput(cliente?.nombre_entidad));
+        setNacionalidad(nextNacionalidad);
+        setContactoPais(nextContactoPais);
+        setTipoNacionalidad(inferNacionalExtranjero(nextNacionalidad));
+
+        setEmail(safeInput(contacto?.email));
+        setTelefono(safeInput(contacto?.telefono));
+
+        setDomPais(safeInput(domicilio?.pais));
+        setDomCalle(safeInput(domicilio?.calle));
+        setDomNumero(safeInput(domicilio?.numero));
+        setDomInterior(safeInput(domicilio?.interior));
+        setDomColonia(safeInput(domicilio?.colonia));
+        setDomMunicipio(safeInput(domicilio?.municipio));
+        setDomCiudad(safeInput(domicilio?.ciudad_delegacion));
+        setDomCP(safeInput(domicilio?.codigo_postal));
+        setDomEstado(safeInput(domicilio?.estado));
+
+        if (nextTipo === 'persona_moral') {
+          const empresa = datos?.empresa || {};
+          setPmRazonSocial(safeInput(empresa?.razon_social || cliente?.nombre_entidad));
+        }
+
+        if (nextTipo === 'fideicomiso') {
+          const fideicomiso = datos?.fideicomiso || {};
+          const representante = datos?.representante || {};
+
+          setFidNombre(safeInput(
+            fideicomiso?.nombre_fideicomiso ||
+            fideicomiso?.fideicomiso_nombre ||
+            cliente?.nombre_entidad
+          ));
+
+          const nombreCompleto = safeInput(representante?.nombre_completo);
+          if (nombreCompleto) {
+            setRepNombre(nombreCompleto);
+          }
+
+          setRepFechaNac(safeInput(representante?.fecha_nacimiento));
+          setRepRFC(safeInput(representante?.rfc));
+          setRepCURP(safeInput(representante?.curp));
+        }
+
+        const hydrated = hydrateRelatedCollectionsFromDatos(datos);
+        const recursosLegacy = Array.isArray(datos?.recursos_terceros)
+          ? datos.recursos_terceros.map(normalizeRecursoTerceroRow)
+          : [];
+        const duenosLegacy = hydrated.relatedDuenos.map(projectRelatedDuenoToLegacy);
+
+        setRelatedRecursosAplica(hydrated.relatedRecursosAplica);
+        setRelatedRecursos(hydrated.relatedRecursos);
+        setRelatedDuenosAplica(hydrated.relatedDuenosAplica);
+        setRelatedDuenos(hydrated.relatedDuenos);
+        setRecursosTerceros(recursosLegacy);
+        setRecursosTercerosAplica(recursosLegacy.length > 0);
+        setDuenosBeneficiarios(duenosLegacy);
+        setDuenosBeneficiariosAplica(duenosLegacy.length > 0);
+      } catch (e: any) {
+        if (alive) setFatal(e?.message || 'Error al cargar cliente');
+      } finally {
+        if (alive) setLoading(false);
+      }
+    }
+
+    loadCliente();
+
+    return () => {
+      alive = false;
+    };
+  }, [apiBase, id, token]);
 
 
   useEffect(() => {
