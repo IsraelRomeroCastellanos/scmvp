@@ -275,6 +275,22 @@ function displayCatalogValue(value: string, items: CatalogItem[]) {
   return `${v} (valor legacy)`;
 }
 
+
+const MEXICO_CATALOGO_KEY = 'mexico-mx';
+
+type TipoNacionalidad = '' | 'nacional' | 'extranjero';
+
+function isMexicoKey(value: string) {
+  const v = (value ?? '').trim().toLowerCase();
+  return v === MEXICO_CATALOGO_KEY || v === 'mex';
+}
+
+function inferNacionalExtranjero(value: string): TipoNacionalidad {
+  const v = (value ?? '').trim();
+  if (!v) return '';
+  return isMexicoKey(v) ? 'nacional' : 'extranjero';
+}
+
 function valueToCatalogKey(v: string) {
   return v;
 }
@@ -977,6 +993,23 @@ export default function Page() {
   // contacto básico (catálogo + obligatorios)
   const [contactoPais, setContactoPais] = useState(''); // clave catálogo (ej MEX)
 
+  const [tipoNacionalidad, setTipoNacionalidad] = useState<TipoNacionalidad>('');
+
+  function handleTipoNacionalidadChange(next: TipoNacionalidad) {
+    setTipoNacionalidad(next);
+
+    if (next === 'nacional') {
+      setNacionalidad(MEXICO_CATALOGO_KEY);
+      setContactoPais(MEXICO_CATALOGO_KEY);
+    }
+  }
+
+  useEffect(() => {
+    if (!tipoNacionalidad && nacionalidad) {
+      setTipoNacionalidad(inferNacionalExtranjero(nacionalidad));
+    }
+  }, [nacionalidad, tipoNacionalidad]);
+
   useEffect(() => {
     let alive = true;
 
@@ -1059,6 +1092,30 @@ export default function Page() {
     req(e, 'nacionalidad', 'Nacionalidad', nacionalidad);
 
     req(e, 'contacto.pais', 'País (contacto)', contactoPais);
+
+    req(e, 'tipoNacionalidad', 'Tipo de nacionalidad', tipoNacionalidad);
+
+    if (tipoNacionalidad === 'nacional') {
+      if (!isMexicoKey(nacionalidad)) {
+        e.nacionalidad = 'Para nacional, la nacionalidad debe ser México';
+      }
+
+      if (!isMexicoKey(contactoPais)) {
+        e['contacto.pais'] = 'Para nacional, el país de contacto debe ser México';
+      }
+    }
+
+    if (tipoNacionalidad === 'extranjero') {
+      if (!nacionalidad.trim()) {
+        e.nacionalidad = 'Nacionalidad es obligatoria';
+      } else if (isMexicoKey(nacionalidad)) {
+        e.nacionalidad = 'Para extranjero, la nacionalidad no puede ser México';
+      }
+
+      if (!contactoPais.trim()) {
+        e['contacto.pais'] = 'País (contacto) es obligatorio';
+      }
+    }
     reqEmail(e, 'contacto.email', 'Email', email);
     reqPhone(e, 'contacto.telefono', 'Teléfono', telefono);
 
@@ -1250,6 +1307,44 @@ export default function Page() {
 
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-2 rounded-md border border-gray-200 p-3">
+          <label className="text-sm font-medium">
+            Tipo de nacionalidad <span className="text-red-600">*</span>
+          </label>
+
+          <div className="flex flex-wrap gap-3 text-sm">
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="radio"
+                name="tipoNacionalidad"
+                value="nacional"
+                checked={tipoNacionalidad === 'nacional'}
+                onChange={() => handleTipoNacionalidadChange('nacional')}
+              />
+              Nacional
+            </label>
+
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="radio"
+                name="tipoNacionalidad"
+                value="extranjero"
+                checked={tipoNacionalidad === 'extranjero'}
+                onChange={() => handleTipoNacionalidadChange('extranjero')}
+              />
+              Extranjero
+            </label>
+          </div>
+
+          {errors.tipoNacionalidad ? (
+            <p className="text-xs text-red-600">{errors.tipoNacionalidad}</p>
+          ) : null}
+
+          <p className="text-xs text-gray-500">
+            Nacional fija México en nacionalidad y país. Extranjero habilita selección manual.
+          </p>
+        </div>
+
         <SearchableSelect
           label="Nacionalidad"
           required
@@ -1257,7 +1352,9 @@ export default function Page() {
           items={paises}
           placeholder="Busca país o clave..."
           error={errors.nacionalidad}
-          onChange={setNacionalidad}
+          onChange={(v) => {
+            if (tipoNacionalidad !== 'nacional') setNacionalidad(v);
+          }}
         />
 
         <SearchableSelect
@@ -1267,7 +1364,9 @@ export default function Page() {
           items={paises}
           placeholder="Busca país o clave..."
           error={errors['contacto.pais']}
-          onChange={setContactoPais}
+          onChange={(v) => {
+            if (tipoNacionalidad !== 'nacional') setContactoPais(v);
+          }}
         />
       </div>
 

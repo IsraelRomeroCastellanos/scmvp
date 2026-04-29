@@ -158,7 +158,23 @@ export default function ClientPage() {
     return `${i.descripcion} (${i.clave})`;
   }
 
-  function valueToCatalogKey(v: string) {
+  
+const MEXICO_CATALOGO_KEY = 'mexico-mx';
+
+type TipoNacionalidad = '' | 'nacional' | 'extranjero';
+
+function isMexicoKey(value: string) {
+  const v = (value ?? '').trim().toLowerCase();
+  return v === MEXICO_CATALOGO_KEY || v === 'mex';
+}
+
+function inferNacionalExtranjero(value: string): TipoNacionalidad {
+  const v = (value ?? '').trim();
+  if (!v) return '';
+  return isMexicoKey(v) ? 'nacional' : 'extranjero';
+}
+
+function valueToCatalogKey(v: string) {
     // En este UI guardamos "clave" en el state (ej. "MEX"), así que regresamos tal cual.
     return v;
   }
@@ -298,6 +314,52 @@ export default function ClientPage() {
   const [pmRazonSocial, setPmRazonSocial] = useState("");
   const [nacionalidad, setNacionalidad] = useState(""); // clave catálogo
   const [contactoPais, setContactoPais] = useState(""); // clave catálogo
+
+  const [tipoNacionalidad, setTipoNacionalidad] = useState<TipoNacionalidad>("");
+  const [a2Errors, setA2Errors] = useState<Record<string, string>>({});
+
+  function handleTipoNacionalidadChange(next: TipoNacionalidad) {
+    setTipoNacionalidad(next);
+    setA2Errors({});
+
+    if (next === "nacional") {
+      setNacionalidad(MEXICO_CATALOGO_KEY);
+      setContactoPais(MEXICO_CATALOGO_KEY);
+    }
+  }
+
+  function validateA2Nacionalidad() {
+    const next: Record<string, string> = {};
+
+    if (!tipoNacionalidad) {
+      next.tipoNacionalidad = "Tipo de nacionalidad es obligatorio";
+    }
+
+    if (tipoNacionalidad === "nacional") {
+      if (!isMexicoKey(nacionalidad)) {
+        next.nacionalidad = "Para nacional, la nacionalidad debe ser México";
+      }
+
+      if (!isMexicoKey(contactoPais)) {
+        next["contacto.pais"] = "Para nacional, el país de contacto debe ser México";
+      }
+    }
+
+    if (tipoNacionalidad === "extranjero") {
+      if (!nacionalidad.trim()) {
+        next.nacionalidad = "Nacionalidad es obligatoria";
+      } else if (isMexicoKey(nacionalidad)) {
+        next.nacionalidad = "Para extranjero, la nacionalidad no puede ser México";
+      }
+
+      if (!contactoPais.trim()) {
+        next["contacto.pais"] = "País (contacto) es obligatorio";
+      }
+    }
+
+    setA2Errors(next);
+    return Object.keys(next).length === 0;
+  }
 
   // contacto (iteración 1)
   const [email, setEmail] = useState("");
@@ -2264,6 +2326,7 @@ persona: {
     });
     setFatal(null);
 
+    if (!validateA2Nacionalidad()) return;
     if (!validator.validateAll()) {
       setFatal("Corrige los campos marcados en rojo.");
       return;
@@ -2524,13 +2587,53 @@ persona: {
           </div>
 
 
+          <div className="space-y-2 rounded-md border border-gray-200 p-3">
+            <label className="text-sm font-medium">
+              Tipo de nacionalidad <span className="text-red-600">*</span>
+            </label>
+
+            <div className="flex flex-wrap gap-3 text-sm">
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="tipoNacionalidad"
+                  value="nacional"
+                  checked={tipoNacionalidad === "nacional"}
+                  onChange={() => handleTipoNacionalidadChange("nacional")}
+                />
+                Nacional
+              </label>
+
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="tipoNacionalidad"
+                  value="extranjero"
+                  checked={tipoNacionalidad === "extranjero"}
+                  onChange={() => handleTipoNacionalidadChange("extranjero")}
+                />
+                Extranjero
+              </label>
+            </div>
+
+            {a2Errors.tipoNacionalidad ? (
+              <p className="text-xs text-red-600">{a2Errors.tipoNacionalidad}</p>
+            ) : null}
+
+            <p className="text-xs text-gray-500">
+              Nacional fija México en nacionalidad y país. Extranjero habilita selección manual.
+            </p>
+          </div>
+
           <SearchableSelect
             label="Nacionalidad"
             required
             value={nacionalidad}
             items={paises}
-            error={errors["nacionalidad"]}
-            onChange={(v) => setNacionalidad(v)}
+            error={a2Errors.nacionalidad || errors["nacionalidad"]}
+            onChange={(v) => {
+              if (tipoNacionalidad !== "nacional") setNacionalidad(v);
+            }}
             onBlur={() => validator.validateField("nacionalidad")}
           />
 
@@ -2539,8 +2642,10 @@ persona: {
             required
             value={contactoPais}
             items={paises}
-            error={errors["contacto.pais"]}
-            onChange={(v) => setContactoPais(v)}
+            error={a2Errors["contacto.pais"] || errors["contacto.pais"]}
+            onChange={(v) => {
+              if (tipoNacionalidad !== "nacional") setContactoPais(v);
+            }}
             onBlur={() => validator.validateField("contacto.pais")}
           />
 
