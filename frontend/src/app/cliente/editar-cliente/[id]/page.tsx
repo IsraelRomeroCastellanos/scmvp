@@ -261,6 +261,107 @@ function classInput(hasErr: boolean) {
   return `w-full rounded-md border px-3 py-2 text-sm outline-none ${hasErr ? 'border-red-500' : 'border-gray-300'}`;
 }
 
+function fmtItem(i: CatalogItem) {
+  return `${i.descripcion} (${i.clave})`;
+}
+
+function displayCatalogValue(value: string, items: CatalogItem[]) {
+  const v = (value ?? '').trim();
+  if (!v) return '';
+
+  const found = items.find((x) => x.clave === v);
+  if (found) return fmtItem(found);
+
+  return `${v} (valor legacy)`;
+}
+
+function valueToCatalogKey(v: string) {
+  return v;
+}
+
+function SearchableSelect({
+  label,
+  required,
+  value,
+  items,
+  placeholder,
+  error,
+  onChange,
+}: {
+  label: string;
+  required?: boolean;
+  value: string;
+  items: CatalogItem[];
+  placeholder?: string;
+  error?: string;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+
+  const needle = q.trim().toLowerCase();
+  const filtered = (needle
+    ? items.filter((it) => {
+        const a = it.descripcion.toLowerCase();
+        const b = it.clave.toLowerCase();
+        return a.includes(needle) || b.includes(needle);
+      })
+    : items
+  ).slice(0, 50);
+
+  return (
+    <div className="space-y-1">
+      <label className="text-sm font-medium">
+        {label} {required ? '*' : null}
+      </label>
+
+      <input
+        className={`w-full rounded-md border px-3 py-2 text-sm outline-none ${
+          error ? 'border-red-500' : 'border-gray-300'
+        }`}
+        value={open ? q : displayCatalogValue(value, items)}
+        placeholder={placeholder}
+        onFocus={() => {
+          setOpen(true);
+          setQ('');
+        }}
+        onChange={(e) => {
+          setOpen(true);
+          setQ(e.target.value);
+        }}
+        onBlur={() => setTimeout(() => setOpen(false), 120)}
+      />
+
+      {open ? (
+        <div className="max-h-56 overflow-auto rounded-md border bg-white shadow">
+          {filtered.map((it) => (
+            <button
+              key={it.clave}
+              type="button"
+              className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onChange(it.clave);
+                setOpen(false);
+                setQ('');
+              }}
+            >
+              {fmtItem(it)}
+            </button>
+          ))}
+
+          {filtered.length === 0 ? (
+            <div className="px-3 py-2 text-sm text-gray-500">Sin resultados</div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {error ? <p className="text-xs text-red-600">{error}</p> : null}
+    </div>
+  );
+}
+
+
 function isPlainObject(value: any): value is Record<string, any> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -875,6 +976,22 @@ export default function Page() {
 
   // contacto básico (catálogo + obligatorios)
   const [contactoPais, setContactoPais] = useState(''); // clave catálogo (ej MEX)
+
+  useEffect(() => {
+    let alive = true;
+
+    loadCatalogo('sat/c_pais')
+      .then((items) => {
+        if (alive) setPaises(items);
+      })
+      .catch((e) => {
+        if (alive) setFatal(e?.message || 'No se pudo cargar catálogo de países');
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [email, setEmail] = useState(''); // ✅ obligatorio (según decisión)
   const [telefono, setTelefono] = useState('');
 
@@ -986,10 +1103,10 @@ export default function Page() {
       // ✅ Base: comunes + contacto (incluye email + domicilio contacto)
       const body: any = {
         nombre_entidad: nombreEntidad.trim(),
-        nacionalidad,
+        nacionalidad: valueToCatalogKey(nacionalidad),
         datos_completos: {
           contacto: {
-            pais: contactoPais,
+            pais: valueToCatalogKey(contactoPais),
             email: email.trim(),
             telefono: onlyDigits(telefono),
             domicilio_mexico: {
@@ -1133,43 +1250,25 @@ export default function Page() {
 
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="space-y-1">
-          <label className="text-sm font-medium">
-            Nacionalidad <span className="text-red-600">*</span>
-          </label>
-          <select
-            value={nacionalidad}
-            onChange={(e) => setNacionalidad(e.target.value)}
-            className={classInput(!!errors.nacionalidad)}
-          >
-            <option value="">Selecciona...</option>
-            {paises.map((p) => (
-              <option key={p.clave} value={p.clave}>
-                {p.descripcion} ({p.clave})
-              </option>
-            ))}
-          </select>
-          {errText(errors.nacionalidad)}
-        </div>
+        <SearchableSelect
+          label="Nacionalidad"
+          required
+          value={nacionalidad}
+          items={paises}
+          placeholder="Busca país o clave..."
+          error={errors.nacionalidad}
+          onChange={setNacionalidad}
+        />
 
-        <div className="space-y-1">
-          <label className="text-sm font-medium">
-            País (contacto) <span className="text-red-600">*</span>
-          </label>
-          <select
-            value={contactoPais}
-            onChange={(e) => setContactoPais(e.target.value)}
-            className={classInput(!!errors['contacto.pais'])}
-          >
-            <option value="">Selecciona...</option>
-            {paises.map((p) => (
-              <option key={p.clave} value={p.clave}>
-                {p.descripcion} ({p.clave})
-              </option>
-            ))}
-          </select>
-          {errText(errors['contacto.pais'])}
-        </div>
+        <SearchableSelect
+          label="País (contacto)"
+          required
+          value={contactoPais}
+          items={paises}
+          placeholder="Busca país o clave..."
+          error={errors['contacto.pais']}
+          onChange={setContactoPais}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

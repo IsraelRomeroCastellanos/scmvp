@@ -297,7 +297,7 @@ export default function ClientPage() {
   const [nombreEntidad, setNombreEntidad] = useState("");
   const [pmRazonSocial, setPmRazonSocial] = useState("");
   const [nacionalidad, setNacionalidad] = useState(""); // clave catálogo
-  const [contactoPais, setContactoPais] = useState("MEX"); // clave catálogo
+  const [contactoPais, setContactoPais] = useState(""); // clave catálogo
 
   // contacto (iteración 1)
   const [email, setEmail] = useState("");
