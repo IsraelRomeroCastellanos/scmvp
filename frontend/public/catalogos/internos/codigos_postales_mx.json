@@ -1,0 +1,16 @@
+[
+  {
+    "codigo_postal": "44600",
+    "estado": "JALISCO",
+    "municipio": "GUADALAJARA",
+    "ciudad_delegacion": "GUADALAJARA",
+    "colonias": ["LADRON DE GUEVARA"]
+  },
+  {
+    "codigo_postal": "44100",
+    "estado": "JALISCO",
+    "municipio": "GUADALAJARA",
+    "ciudad_delegacion": "GUADALAJARA",
+    "colonias": ["CENTRO", "GUADALAJARA CENTRO"]
+  }
+]

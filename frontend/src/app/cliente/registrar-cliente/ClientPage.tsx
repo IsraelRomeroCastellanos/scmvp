@@ -6,6 +6,12 @@ export const dynamic = "force-dynamic";
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { loadCatalogo, type CatalogItem } from "@/lib/catalogos";
+import {
+  findCodigoPostalMx,
+  loadCodigosPostalesMx,
+  normalizeCodigoPostalMx,
+  type CodigoPostalMx,
+} from "@/lib/codigosPostalesMx";
 
 import { createRegistrarClienteValidator } from "./validate";
 
@@ -377,6 +383,100 @@ function valueToCatalogKey(v: string) {
   const [domCP, setDomCP] = useState("");
   const [domEstado, setDomEstado] = useState("");
   const [domPais, setDomPais] = useState("MEX"); // manual (no catálogo)
+
+  const [codigosPostalesMx, setCodigosPostalesMx] = useState<CodigoPostalMx[]>([]);
+  const [domColoniasOpciones, setDomColoniasOpciones] = useState<string[]>([]);
+  const [domCpAviso, setDomCpAviso] = useState("");
+  const [b1Errors, setB1Errors] = useState<Record<string, string>>({});
+
+  const isContactoMexico = isMexicoKey(contactoPais);
+
+  useEffect(() => {
+    let alive = true;
+
+    loadCodigosPostalesMx()
+      .then((items) => {
+        if (alive) setCodigosPostalesMx(items);
+      })
+      .catch((e) => {
+        if (alive) setDomCpAviso(e?.message || "No se pudo cargar catálogo de códigos postales MX");
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    setB1Errors({});
+
+    if (!isContactoMexico) {
+      setDomColoniasOpciones([]);
+      setDomCpAviso("");
+      return;
+    }
+
+    const cp = normalizeCodigoPostalMx(domCP);
+
+    if (!cp) {
+      setDomColoniasOpciones([]);
+      setDomCpAviso("");
+      return;
+    }
+
+    if (cp.length !== 5) {
+      setDomColoniasOpciones([]);
+      setDomCpAviso("Para México, el código postal debe tener 5 dígitos.");
+      return;
+    }
+
+    const found = findCodigoPostalMx(codigosPostalesMx, cp);
+
+    if (!found) {
+      setDomColoniasOpciones([]);
+      setDomCpAviso("Código postal no encontrado en catálogo local; captura manual habilitada.");
+      return;
+    }
+
+    setDomCpAviso("");
+    setDomEstado(found.estado);
+    setDomMunicipio(found.municipio);
+    setDomCiudadDelegacion(found.ciudad_delegacion);
+
+    const colonias = found.colonias || [];
+    setDomColoniasOpciones(colonias);
+
+    if (colonias.length === 1) {
+      setDomColonia(colonias[0]);
+    } else if (colonias.length > 1) {
+      setDomColonia((prev) => (colonias.includes(prev) ? prev : ""));
+    }
+  }, [codigosPostalesMx, domCP, isContactoMexico]);
+
+  function handleDomCPChange(value: string) {
+    const next = isMexicoKey(contactoPais) ? normalizeCodigoPostalMx(value) : value;
+    setDomCP(next);
+  }
+
+  function validateB1Domicilio() {
+    const next: Record<string, string> = {};
+
+    if (isMexicoKey(contactoPais)) {
+      const cp = normalizeCodigoPostalMx(domCP);
+
+      if (cp.length !== 5) {
+        next["contacto.domicilio.codigo_postal"] = "Para México, el código postal debe tener 5 dígitos";
+      }
+
+      if (domColoniasOpciones.length > 1 && !domColonia.trim()) {
+        next["contacto.domicilio.colonia"] = "Selecciona una colonia";
+      }
+    }
+
+    setB1Errors(next);
+    return Object.keys(next).length === 0;
+  }
+
 
   // PF
   const [pfNombres, setPfNombres] = useState("");
@@ -2327,6 +2427,7 @@ persona: {
     setFatal(null);
 
     if (!validateA2Nacionalidad()) return;
+    if (!validateB1Domicilio()) return;
     if (!validator.validateAll()) {
       setFatal("Corrige los campos marcados en rojo.");
       return;
@@ -2736,8 +2837,8 @@ persona: {
         <div className="rounded border border-gray-200 p-4 space-y-4">
           <h2 className="font-medium">Domicilio (contacto)</h2>
           <p className="text-xs text-gray-500">
-            Captura manual por ahora (no catálogo). En iteraciones posteriores
-            lo alineamos a catálogos.
+            Para México, el código postal busca un catálogo local mínimo. Para extranjero,
+            la captura permanece manual.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -2788,24 +2889,62 @@ persona: {
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="text-sm font-medium">
-                Colonia <span className="text-red-600">*</span>
-              </label>
-              <input
-                className={`w-full rounded border px-3 py-2 text-sm ${errors["contacto.domicilio.colonia"] ? "border-red-500" : "border-gray-300"}`}
-                value={domColonia}
-                onChange={(e) => setDomColonia(e.target.value)}
-                onBlur={() =>
-                  validator.validateField("contacto.domicilio.colonia")
-                }
-              />
-              {errors["contacto.domicilio.colonia"] ? (
-                <p className="text-xs text-red-600">
-                  {errors["contacto.domicilio.colonia"]}
-                </p>
-              ) : null}
-            </div>
+            {isContactoMexico && domColoniasOpciones.length > 1 ? (
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Colonia <span className="text-red-600">*</span>
+                </label>
+                <select
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    (b1Errors["contacto.domicilio.colonia"] || errors["contacto.domicilio.colonia"]) ? "border-red-500" : "border-gray-300"
+                  }`}
+                  value={domColonia}
+                  onChange={(e) => {
+                    setDomColonia(e.target.value);
+                    setB1Errors({});
+                  }}
+                  onBlur={() =>
+                    validator.validateField("contacto.domicilio.colonia")
+                  }
+                >
+                  <option value="">Selecciona colonia</option>
+                  {domColoniasOpciones.map((colonia) => (
+                    <option key={colonia} value={colonia}>
+                      {colonia}
+                    </option>
+                  ))}
+                </select>
+                {(b1Errors["contacto.domicilio.colonia"] || errors["contacto.domicilio.colonia"]) ? (
+                  <p className="text-xs text-red-600">
+                    {b1Errors["contacto.domicilio.colonia"] || errors["contacto.domicilio.colonia"]}
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <label className="text-sm font-medium">
+                  Colonia <span className="text-red-600">*</span>
+                </label>
+                <input
+                  className={`w-full rounded border px-3 py-2 text-sm ${
+                    (b1Errors["contacto.domicilio.colonia"] || errors["contacto.domicilio.colonia"]) ? "border-red-500" : "border-gray-300"
+                  }`}
+                  value={domColonia}
+                  onChange={(e) => {
+                    setDomColonia(e.target.value);
+                    setB1Errors({});
+                  }}
+                  onBlur={() =>
+                    validator.validateField("contacto.domicilio.colonia")
+                  }
+                />
+                {(b1Errors["contacto.domicilio.colonia"] || errors["contacto.domicilio.colonia"]) ? (
+                  <p className="text-xs text-red-600">
+                    {b1Errors["contacto.domicilio.colonia"] || errors["contacto.domicilio.colonia"]}
+                  </p>
+                ) : null}
+              </div>
+            )}
 
             <div className="space-y-1">
               <label className="text-sm font-medium">
@@ -2852,18 +2991,23 @@ persona: {
                 Código Postal <span className="text-red-600">*</span>
               </label>
               <input
-                className={`w-full rounded border px-3 py-2 text-sm ${errors["contacto.domicilio.codigo_postal"] ? "border-red-500" : "border-gray-300"}`}
+                className={`w-full rounded border px-3 py-2 text-sm ${
+                  (b1Errors["contacto.domicilio.codigo_postal"] || errors["contacto.domicilio.codigo_postal"]) ? "border-red-500" : "border-gray-300"
+                }`}
                 value={domCP}
-                onChange={(e) => setDomCP(e.target.value)}
+                onChange={(e) => handleDomCPChange(e.target.value)}
                 onBlur={() =>
                   validator.validateField("contacto.domicilio.codigo_postal")
                 }
-                placeholder="Ej. 44100"
+                placeholder={isContactoMexico ? "Ej. 44100" : "Código postal"}
               />
-              {errors["contacto.domicilio.codigo_postal"] ? (
+              {(b1Errors["contacto.domicilio.codigo_postal"] || errors["contacto.domicilio.codigo_postal"]) ? (
                 <p className="text-xs text-red-600">
-                  {errors["contacto.domicilio.codigo_postal"]}
+                  {b1Errors["contacto.domicilio.codigo_postal"] || errors["contacto.domicilio.codigo_postal"]}
                 </p>
+              ) : null}
+              {domCpAviso ? (
+                <p className="text-xs text-amber-700">{domCpAviso}</p>
               ) : null}
             </div>
 
