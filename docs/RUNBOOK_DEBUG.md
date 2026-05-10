@@ -93,12 +93,13 @@ Se espera:
    - remover bloques ALTER DEFAULT PRIVILEGES si causan conflicto en restore
 3. restaurar SQL en la nueva instancia
 4. actualizar DATABASE_URL en el webservice Render
-5. verificar esquema/columnas de compatibilidad requeridas
-6. validar backend:
+5. actualizar NEXT_PUBLIC_API_BASE_URL en Vercel si cambia el backend operativo consumido por frontend
+6. verificar esquema/columnas de compatibilidad requeridas
+7. validar backend:
    - login 200
    - endpoint protegido 401 sin token
    - endpoint protegido 200 con token
-7. validar frontend/UI con carga de módulos principales
+8. validar frontend/UI con carga de módulos principales
 
 *Validación mínima esperada*
 - POST /api/auth/login → HTTP 200
@@ -109,3 +110,10 @@ Se espera:
 - formalizar migración de esquema estable
 - estandarizar parseo robusto de token en scripts
 - evitar exposición de secrets en terminal/historial
+
+### Nota operativa — migración 2026-05-10
+
+- Backend operativo vigente después de la migración: https://scmvp-1jhq.onrender.com
+- DB lógica vigente después de la migración: scmvp_xeu1
+- En esta iteración también se actualizó NEXT_PUBLIC_API_BASE_URL en Vercel.
+- La migración no requirió cambios de código.

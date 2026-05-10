@@ -90,3 +90,23 @@
   - empresas HTTP 200 con token
   - empresas HTTP 401 sin token
 - Queda pendiente actualizar documentación estructural y formalizar mitigación de drift de esquema.
+
+### 2026-05-10 — Migración DB Render por expiración de trial
+
+- Se migra PostgreSQL a una nueva instancia en Render para mantener continuidad de pruebas y desarrollo.
+- DB lógica nueva vigente: scmvp_xeu1.
+- Backend activo vigente después de la migración: https://scmvp-1jhq.onrender.com.
+- No hubo cambios de código asociados al evento.
+- Se ejecutó:
+  - backup SQL
+  - restore en DB nueva
+  - actualización de DATABASE_URL en Render
+  - actualización de NEXT_PUBLIC_API_BASE_URL en Vercel
+  - validación funcional por login y consulta de empresas
+- Evidencia mínima:
+  - empresas HTTP 401 sin token
+  - login HTTP 200
+  - empresas HTTP 200 con token
+- Verificación adicional reportada:
+  - módulos Usuarios / Empresas / Clientes cargan correctamente en UI.
+- Runbook repetible actualizado para futuras expiraciones de trial.

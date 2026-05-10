@@ -39,6 +39,7 @@
 ## URLs
 
 - Backend prod actual: https://scmvp-1jhq.onrender.com
+- DB lógica actual: scmvp_xeu1
 - Backend viejo: https://scmvp.onrender.com (suspendido intencionalmente)
 
 
@@ -145,4 +146,26 @@
 - Riesgos pendientes:
   - formalizar alineación estable de esquema para evitar drift
   - documentar procedimiento repetible
+  - revisar rotación de credenciales si hubo exposición accidental
+
+### 2026-05-10 — Migración de base de datos / continuidad operativa
+
+- Se realizó nueva migración de PostgreSQL en Render por expiración del periodo trial de la instancia previa.
+- Nueva DB lógica activa: scmvp_xeu1.
+- Backend/Webservice activo vigente después de la migración: https://scmvp-1jhq.onrender.com.
+- La migración se resolvió sin cambios de código; se aplicó por backup/restore y actualización de infraestructura.
+- Acciones realizadas:
+  - backup SQL
+  - restore SQL en nueva instancia
+  - actualización de DATABASE_URL en Render
+  - actualización de NEXT_PUBLIC_API_BASE_URL en Vercel
+  - validación de autenticación y endpoints protegidos
+- Evidencia mínima validada:
+  - GET /api/admin/empresas sin token → HTTP 401 {"error":"Token no proporcionado"}
+  - POST /api/auth/login → HTTP 200
+  - GET /api/admin/empresas con token → HTTP 200
+- Verificación funcional adicional reportada por usuario:
+  - frontend/UI carga módulos Usuarios / Empresas / Clientes
+- Riesgos pendientes:
+  - mantener actualizado el procedimiento repetible para futuras expiraciones de trial
   - revisar rotación de credenciales si hubo exposición accidental
