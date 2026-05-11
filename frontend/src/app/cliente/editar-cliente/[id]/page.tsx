@@ -4,6 +4,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { loadCatalogo, type CatalogItem } from '@/lib/catalogos';
+import {
+  findCodigoPostalMx,
+  loadCodigosPostalesMx,
+  normalizeCodigoPostalMx,
+  type CodigoPostalMx,
+} from '@/lib/codigosPostalesMx';
 
 type TipoCliente = 'persona_fisica' | 'persona_moral' | 'fideicomiso';
 type Errors = Record<string, string>;
@@ -1039,6 +1045,123 @@ export default function Page() {
   const [domCP, setDomCP] = useState('');
   const [domEstado, setDomEstado] = useState('');
 
+  const [codigosPostalesMx, setCodigosPostalesMx] = useState<CodigoPostalMx[]>([]);
+  const [domColoniasOpciones, setDomColoniasOpciones] = useState<string[]>([]);
+  const [domCpAviso, setDomCpAviso] = useState('');
+  const [domInicialHidratado, setDomInicialHidratado] = useState(false);
+  const [domCpFueEditado, setDomCpFueEditado] = useState(false);
+
+  const isContactoMexico = isMexicoKey(contactoPais);
+
+  useEffect(() => {
+    let alive = true;
+
+    loadCodigosPostalesMx()
+      .then((items) => {
+        if (alive) setCodigosPostalesMx(items);
+      })
+      .catch((e) => {
+        if (alive) setDomCpAviso(e?.message || 'No se pudo cargar catálogo de códigos postales MX');
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!domInicialHidratado) return;
+
+    if (!isContactoMexico) {
+      setDomColoniasOpciones([]);
+      setDomCpAviso('');
+      return;
+    }
+
+    const cp = normalizeCodigoPostalMx(domCP);
+
+    if (!cp) {
+      setDomColoniasOpciones([]);
+      setDomCpAviso('');
+      return;
+    }
+
+    // Hidratación inicial: solo preparar opciones, sin sobrescribir domicilio persistido.
+    if (!domCpFueEditado) {
+      if (cp.length !== 5) {
+        setDomColoniasOpciones([]);
+        setDomCpAviso('');
+        return;
+      }
+
+      const foundInicial = findCodigoPostalMx(codigosPostalesMx, cp);
+
+      if (!foundInicial) {
+        setDomColoniasOpciones([]);
+        setDomCpAviso('');
+        return;
+      }
+
+      const coloniasIniciales = foundInicial.colonias || [];
+
+      if (coloniasIniciales.length > 1) {
+        setDomColoniasOpciones(
+          domColonia.trim() && !coloniasIniciales.includes(domColonia)
+            ? [domColonia, ...coloniasIniciales]
+            : coloniasIniciales
+        );
+      } else {
+        setDomColoniasOpciones([]);
+      }
+
+      setDomCpAviso('');
+      return;
+    }
+
+    // Cambio manual posterior de CP: aquí sí se activa la lógica inteligente.
+    if (cp.length !== 5) {
+      setDomColoniasOpciones([]);
+      setDomCpAviso('Para México, el código postal debe tener 5 dígitos.');
+      return;
+    }
+
+    const found = findCodigoPostalMx(codigosPostalesMx, cp);
+
+    if (!found) {
+      setDomColoniasOpciones([]);
+      setDomCpAviso('Código postal no encontrado en catálogo local; captura manual habilitada.');
+      return;
+    }
+
+    setDomCpAviso('');
+    setDomEstado(found.estado);
+    setDomMunicipio(found.municipio);
+    setDomCiudad(found.ciudad_delegacion);
+
+    const colonias = found.colonias || [];
+    setDomColoniasOpciones(colonias);
+
+    if (colonias.length === 1) {
+      setDomColonia(colonias[0]);
+    } else if (colonias.length > 1) {
+      setDomColonia((prev) => (colonias.includes(prev) ? prev : ''));
+    }
+  }, [
+    codigosPostalesMx,
+    domCP,
+    domColonia,
+    domInicialHidratado,
+    domCpFueEditado,
+    isContactoMexico,
+  ]);
+
+  function handleDomCPChange(value: string) {
+    setDomCpFueEditado(true);
+    const next = isMexicoKey(contactoPais) ? normalizeCodigoPostalMx(value) : value;
+    setDomCP(next);
+  }
+
+
   // PF
   const [pfActividad, setPfActividad] = useState('');
   // PM
@@ -1117,6 +1240,8 @@ export default function Page() {
         setDomCiudad(safeInput(domicilio?.ciudad_delegacion));
         setDomCP(safeInput(domicilio?.codigo_postal));
         setDomEstado(safeInput(domicilio?.estado));
+        setDomCpFueEditado(false);
+        setDomInicialHidratado(true);
 
         if (nextTipo === 'persona_moral') {
           const empresa = datos?.empresa || {};
@@ -1235,6 +1360,18 @@ export default function Page() {
     req(e, 'contacto.domicilio.ciudad_delegacion', 'Ciudad/Delegación (domicilio contacto)', domCiudad);
     req(e, 'contacto.domicilio.codigo_postal', 'Código postal (domicilio contacto)', domCP);
     req(e, 'contacto.domicilio.estado', 'Estado (domicilio contacto)', domEstado);
+
+    if (isContactoMexico && domCpFueEditado) {
+      const cp = normalizeCodigoPostalMx(domCP);
+
+      if (cp.length !== 5) {
+        e['contacto.domicilio.codigo_postal'] = 'Para México, el código postal debe tener 5 dígitos';
+      }
+
+      if (domColoniasOpciones.length > 1 && !domColonia.trim()) {
+        e['contacto.domicilio.colonia'] = 'Selecciona una colonia';
+      }
+    }
 
     if (tipoCliente === 'fideicomiso') {
       req(e, 'rep.nombres', 'Nombre(s) representante', repNombre);
@@ -1507,7 +1644,7 @@ export default function Page() {
 
       {/* ✅ Domicilio contacto (manual) */}
       <div className="rounded-md border p-4 space-y-3">
-        <h2 className="font-semibold">Domicilio de contacto (México)</h2>
+        <h2 className="font-semibold">Domicilio de contacto</h2>
 
         <div className="space-y-1">
           <label className="text-sm font-medium">
@@ -1555,17 +1692,38 @@ export default function Page() {
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="space-y-1">
-            <label className="text-sm font-medium">
-              Colonia <span className="text-red-600">*</span>
-            </label>
-            <input
-              value={domColonia}
-              onChange={(e) => setDomColonia(e.target.value)}
-              className={classInput(!!errors['contacto.domicilio.colonia'])}
-            />
-            {errText(errors['contacto.domicilio.colonia'])}
-          </div>
+          {isContactoMexico && domColoniasOpciones.length > 1 ? (
+            <div className="space-y-1">
+              <label className="text-sm font-medium">
+                Colonia <span className="text-red-600">*</span>
+              </label>
+              <select
+                value={domColonia}
+                onChange={(e) => setDomColonia(e.target.value)}
+                className={classInput(!!errors['contacto.domicilio.colonia'])}
+              >
+                <option value="">Selecciona colonia</option>
+                {domColoniasOpciones.map((colonia) => (
+                  <option key={colonia} value={colonia}>
+                    {colonia}
+                  </option>
+                ))}
+              </select>
+              {errText(errors['contacto.domicilio.colonia'])}
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <label className="text-sm font-medium">
+                Colonia <span className="text-red-600">*</span>
+              </label>
+              <input
+                value={domColonia}
+                onChange={(e) => setDomColonia(e.target.value)}
+                className={classInput(!!errors['contacto.domicilio.colonia'])}
+              />
+              {errText(errors['contacto.domicilio.colonia'])}
+            </div>
+          )}
           <div className="space-y-1">
             <label className="text-sm font-medium">
               Municipio <span className="text-red-600">*</span>
@@ -1597,10 +1755,14 @@ export default function Page() {
             </label>
             <input
               value={domCP}
-              onChange={(e) => setDomCP(e.target.value)}
+              onChange={(e) => handleDomCPChange(e.target.value)}
               className={classInput(!!errors['contacto.domicilio.codigo_postal'])}
+              placeholder={isContactoMexico ? 'Ej. 44100' : 'Código postal'}
             />
             {errText(errors['contacto.domicilio.codigo_postal'])}
+            {domCpAviso ? (
+              <p className="text-xs text-amber-700">{domCpAviso}</p>
+            ) : null}
           </div>
         </div>
 
