@@ -1166,6 +1166,25 @@ export default function Page() {
   const [pfActividad, setPfActividad] = useState('');
   // PM
   const [pmGiro, setPmGiro] = useState('');
+
+  function catalogStateValue(value: any): string {
+    if (isPlainObject(value)) {
+      return safeInput(value?.clave).trim() || safeInput(value?.descripcion).trim();
+    }
+    return safeInput(value).trim();
+  }
+
+  function catalogPayloadValue(items: CatalogItem[], value: string) {
+    const key = safeInput(value).trim();
+    const found = items.find((item) => item.clave === key);
+    return found ? { clave: found.clave, descripcion: found.descripcion } : key;
+  }
+
+  function catalogHasKey(items: CatalogItem[], value: string) {
+    const key = safeInput(value).trim();
+    return !!key && items.some((item) => item.clave === key);
+  }
+
   // Rep (PM/FID)
   const [repNombre, setRepNombre] = useState('');
   const [repAP, setRepAP] = useState('');
@@ -1215,6 +1234,10 @@ export default function Page() {
 
         const cliente = data?.cliente || {};
         const datos = cliente?.datos_completos || {};
+        const personaPrincipal = datos?.persona || {};
+        const empresaPrincipal = datos?.empresa || {};
+        setPfActividad(catalogStateValue(personaPrincipal?.actividad_economica));
+        setPmGiro(catalogStateValue(empresaPrincipal?.giro_mercantil ?? empresaPrincipal?.giro));
         const contacto = datos?.contacto || {};
         const domicilio = contacto?.domicilio || contacto?.domicilio_mexico || {};
 
@@ -1398,8 +1421,8 @@ export default function Page() {
 
     setSaving(true);
     try {
-      const act = actividades.find((x) => x.clave === pfActividad) || null;
-      const giro = giros.find((x) => x.clave === pmGiro) || null;
+      const actividadEconomicaPrincipal = catalogPayloadValue(actividades, pfActividad);
+      const giroMercantilPrincipal = catalogPayloadValue(giros, pmGiro);
 
       // ✅ Base: comunes + contacto (incluye email + domicilio contacto)
       const body: any = {
@@ -1428,7 +1451,7 @@ export default function Page() {
         if (tipoCliente === 'persona_fisica') {
           body.datos_completos.persona = stripEmpty({
             tipo: 'persona_fisica',
-            actividad_economica: act ? { clave: act.clave, descripcion: act.descripcion } : pfActividad
+            actividad_economica: actividadEconomicaPrincipal
           });
 
           body.datos_completos.recursos_terceros_aplica = recursosTercerosAplica;
@@ -1451,17 +1474,11 @@ export default function Page() {
         if (tipoCliente === 'persona_moral') {
             body.nombre_entidad = safeInput(pmRazonSocial).trim();
             body.datos_completos.empresa = stripEmpty({
-              giro: giro ? giro.descripcion : undefined,
+              giro_mercantil: giroMercantilPrincipal,
               razon_social: safeInput(pmRazonSocial).trim(),
               nombre_entidad: safeInput(pmRazonSocial).trim()
             });
 
-            body.nombre_entidad = safeInput(fidNombre).trim();
-            body.datos_completos.fideicomiso = stripEmpty({
-              ...(body.datos_completos.fideicomiso || {}),
-              nombre_fideicomiso: safeInput(fidNombre).trim(),
-              nombre_entidad: safeInput(fidNombre).trim()
-            });
           body.datos_completos.representante = stripEmpty({
             nombres: repNombre.trim(),
             apellido_paterno: repAP.trim(),
@@ -1793,6 +1810,9 @@ export default function Page() {
               className={classInput(!!errors['pf.actividad'])}
             >
               <option value="">Selecciona...</option>
+              {pfActividad && !catalogHasKey(actividades, pfActividad) ? (
+                <option value={pfActividad}>Valor legacy/manual: {pfActividad}</option>
+              ) : null}
               {actividades.map((a) => (
                 <option key={a.clave} value={a.clave}>
                   {a.descripcion} ({a.clave})
@@ -1975,6 +1995,9 @@ export default function Page() {
               className={classInput(!!errors['pm.giro'])}
             >
               <option value="">Selecciona...</option>
+              {pmGiro && !catalogHasKey(giros, pmGiro) ? (
+                <option value={pmGiro}>Valor legacy/manual: {pmGiro}</option>
+              ) : null}
               {giros.map((g) => (
                 <option key={g.clave} value={g.clave}>
                   {g.descripcion} ({g.clave})
