@@ -830,6 +830,9 @@ function validateDatosCompletosOr400(res: Response, tipo: any, datos_completos: 
   const contacto = datos_completos?.contacto ?? {};
   if (!isNonEmptyString(contacto?.pais)) return (badRequest(res, 'contacto.pais es obligatorio'), false);
 
+  const contactoPaisKey = String(contacto?.pais ?? '').trim().toLowerCase();
+  const contactoPaisEsMexico = contactoPaisKey === 'mexico-mx' || contactoPaisKey === 'mex';
+
   if (!isNonEmptyString(contacto?.email)) return (badRequest(res, 'contacto.email es obligatorio'), false);
   if (!isEmail(contacto?.email)) return (badRequest(res, 'contacto.email inválido'), false);
 
@@ -844,7 +847,7 @@ function validateDatosCompletosOr400(res: Response, tipo: any, datos_completos: 
   if (!isNonEmptyString(dom?.ciudad_delegacion))
     return (badRequest(res, 'contacto.domicilio.ciudad_delegacion es obligatoria'), false);
   if (!isNonEmptyString(dom?.codigo_postal)) return (badRequest(res, 'contacto.domicilio.codigo_postal es obligatorio'), false);
-  if (!/^\d{5}$/.test(String(dom?.codigo_postal).trim()))
+  if (contactoPaisEsMexico && !/^\d{5}$/.test(String(dom?.codigo_postal).trim()))
     return (badRequest(res, 'contacto.domicilio.codigo_postal inválido'), false);
   if (!isNonEmptyString(dom?.estado)) return (badRequest(res, 'contacto.domicilio.estado es obligatorio'), false);
   if (!isNonEmptyString(dom?.pais)) return (badRequest(res, 'contacto.domicilio.pais es obligatorio'), false);
