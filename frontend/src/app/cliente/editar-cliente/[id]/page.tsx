@@ -1164,8 +1164,10 @@ export default function Page() {
 
   // PF
   const [pfActividad, setPfActividad] = useState('');
+  const [pfActividadOriginal, setPfActividadOriginal] = useState<any>(null);
   // PM
   const [pmGiro, setPmGiro] = useState('');
+  const [pmGiroOriginal, setPmGiroOriginal] = useState<any>(null);
 
   function catalogStateValue(value: any): string {
     if (isPlainObject(value)) {
@@ -1174,10 +1176,19 @@ export default function Page() {
     return safeInput(value).trim();
   }
 
-  function catalogPayloadValue(items: CatalogItem[], value: string) {
+  function catalogPayloadValue(items: CatalogItem[], value: string, originalValue?: any) {
     const key = safeInput(value).trim();
     const found = items.find((item) => item.clave === key);
-    return found ? { clave: found.clave, descripcion: found.descripcion } : key;
+    if (found) return { clave: found.clave, descripcion: found.descripcion };
+
+    if (isPlainObject(originalValue) && catalogStateValue(originalValue) === key) {
+      return {
+        clave: safeInput(originalValue?.clave).trim(),
+        descripcion: safeInput(originalValue?.descripcion).trim(),
+      };
+    }
+
+    return key;
   }
 
   function catalogHasKey(items: CatalogItem[], value: string) {
@@ -1236,8 +1247,12 @@ export default function Page() {
         const datos = cliente?.datos_completos || {};
         const personaPrincipal = datos?.persona || {};
         const empresaPrincipal = datos?.empresa || {};
-        setPfActividad(catalogStateValue(personaPrincipal?.actividad_economica));
-        setPmGiro(catalogStateValue(empresaPrincipal?.giro_mercantil ?? empresaPrincipal?.giro));
+        const nextPfActividadOriginal = personaPrincipal?.actividad_economica;
+        const nextPmGiroOriginal = empresaPrincipal?.giro_mercantil ?? empresaPrincipal?.giro;
+        setPfActividadOriginal(nextPfActividadOriginal);
+        setPmGiroOriginal(nextPmGiroOriginal);
+        setPfActividad(catalogStateValue(nextPfActividadOriginal));
+        setPmGiro(catalogStateValue(nextPmGiroOriginal));
         const contacto = datos?.contacto || {};
         const domicilio = contacto?.domicilio || contacto?.domicilio_mexico || {};
 
@@ -1421,8 +1436,8 @@ export default function Page() {
 
     setSaving(true);
     try {
-      const actividadEconomicaPrincipal = catalogPayloadValue(actividades, pfActividad);
-      const giroMercantilPrincipal = catalogPayloadValue(giros, pmGiro);
+      const actividadEconomicaPrincipal = catalogPayloadValue(actividades, pfActividad, pfActividadOriginal);
+      const giroMercantilPrincipal = catalogPayloadValue(giros, pmGiro, pmGiroOriginal);
 
       // ✅ Base: comunes + contacto (incluye email + domicilio contacto)
       const body: any = {
