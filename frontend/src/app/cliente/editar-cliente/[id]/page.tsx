@@ -1917,7 +1917,7 @@ export default function Page() {
 
                       <div className="space-y-1">
                         <label className="text-sm font-medium">Actividad / giro</label>
-                        <input
+                        <select
                           value={row.actividad_giro}
                           onChange={(e) =>
                             updateRecursoTerceroRow(
@@ -1928,7 +1928,19 @@ export default function Page() {
                             )
                           }
                           className={classInput(false)}
-                        />
+                        >
+                          <option value="">Selecciona...</option>
+                          {row.actividad_giro && !catalogHasKey(giros, row.actividad_giro) ? (
+                            <option value={row.actividad_giro}>
+                              Valor legacy/manual: {row.actividad_giro}
+                            </option>
+                          ) : null}
+                          {giros.map((g) => (
+                            <option key={g.clave} value={g.clave}>
+                              {g.descripcion} ({g.clave})
+                            </option>
+                          ))}
+                        </select>
                       </div>
 
                       <div className="space-y-1">
