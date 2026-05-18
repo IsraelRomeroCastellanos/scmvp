@@ -324,13 +324,15 @@ function valueToCatalogKey(v: string) {
   const [tipoNacionalidad, setTipoNacionalidad] = useState<TipoNacionalidad>("");
   const [a2Errors, setA2Errors] = useState<Record<string, string>>({});
 
+  const contactoPaisLabel =
+    tipo === "persona_fisica" ? "País de nacimiento" : "País de constitución";
+
   function handleTipoNacionalidadChange(next: TipoNacionalidad) {
     setTipoNacionalidad(next);
     setA2Errors({});
 
     if (next === "nacional") {
       setNacionalidad(MEXICO_CATALOGO_KEY);
-      setContactoPais(MEXICO_CATALOGO_KEY);
     }
   }
 
@@ -345,10 +347,6 @@ function valueToCatalogKey(v: string) {
       if (!isMexicoKey(nacionalidad)) {
         next.nacionalidad = "Para nacional, la nacionalidad debe ser México";
       }
-
-      if (!isMexicoKey(contactoPais)) {
-        next["contacto.pais"] = "Para nacional, el país de contacto debe ser México";
-      }
     }
 
     if (tipoNacionalidad === "extranjero") {
@@ -357,10 +355,10 @@ function valueToCatalogKey(v: string) {
       } else if (isMexicoKey(nacionalidad)) {
         next.nacionalidad = "Para extranjero, la nacionalidad no puede ser México";
       }
+    }
 
-      if (!contactoPais.trim()) {
-        next["contacto.pais"] = "País (contacto) es obligatorio";
-      }
+    if (!contactoPais.trim()) {
+      next["contacto.pais"] = `${contactoPaisLabel} es obligatorio`;
     }
 
     setA2Errors(next);
@@ -389,7 +387,7 @@ function valueToCatalogKey(v: string) {
   const [domCpAviso, setDomCpAviso] = useState("");
   const [b1Errors, setB1Errors] = useState<Record<string, string>>({});
 
-  const isContactoMexico = isMexicoKey(contactoPais);
+  const aplicaCpMexico = isMexicoKey(nacionalidad);
 
   useEffect(() => {
     let alive = true;
@@ -410,7 +408,7 @@ function valueToCatalogKey(v: string) {
   useEffect(() => {
     setB1Errors({});
 
-    if (!isContactoMexico) {
+    if (!aplicaCpMexico) {
       setDomColoniasOpciones([]);
       setDomCpAviso("");
       return;
@@ -451,17 +449,17 @@ function valueToCatalogKey(v: string) {
     } else if (colonias.length > 1) {
       setDomColonia((prev) => (colonias.includes(prev) ? prev : ""));
     }
-  }, [codigosPostalesMx, domCP, isContactoMexico]);
+  }, [codigosPostalesMx, domCP, aplicaCpMexico]);
 
   function handleDomCPChange(value: string) {
-    const next = isMexicoKey(contactoPais) ? normalizeCodigoPostalMx(value) : value;
+    const next = isMexicoKey(nacionalidad) ? normalizeCodigoPostalMx(value) : value;
     setDomCP(next);
   }
 
   function validateB1Domicilio() {
     const next: Record<string, string> = {};
 
-    if (isMexicoKey(contactoPais)) {
+    if (isMexicoKey(nacionalidad)) {
       const cp = normalizeCodigoPostalMx(domCP);
 
       if (cp.length !== 5) {
@@ -2722,7 +2720,7 @@ persona: {
             ) : null}
 
             <p className="text-xs text-gray-500">
-              Nacional fija México en nacionalidad y país. Extranjero habilita selección manual.
+              Nacional fija México solo en Nacionalidad. El país de nacimiento/constitución se selecciona manualmente.
             </p>
           </div>
 
@@ -2739,13 +2737,13 @@ persona: {
           />
 
           <SearchableSelect
-            label="País (contacto)"
+            label={contactoPaisLabel}
             required
             value={contactoPais}
             items={paises}
             error={a2Errors["contacto.pais"] || errors["contacto.pais"]}
             onChange={(v) => {
-              if (tipoNacionalidad !== "nacional") setContactoPais(v);
+              setContactoPais(v);
             }}
             onBlur={() => validator.validateField("contacto.pais")}
           />
@@ -2837,7 +2835,7 @@ persona: {
         <div className="rounded border border-gray-200 p-4 space-y-4">
           <h2 className="font-medium">Domicilio (contacto)</h2>
           <p className="text-xs text-gray-500">
-            Para México, el código postal busca un catálogo local mínimo. Para extranjero,
+            Cuando la Nacionalidad es México, el código postal busca un catálogo local mínimo. Para Nacionalidad extranjera,
             la captura permanece manual.
           </p>
 
@@ -2889,7 +2887,7 @@ persona: {
               />
             </div>
 
-            {isContactoMexico && domColoniasOpciones.length > 1 ? (
+            {aplicaCpMexico && domColoniasOpciones.length > 1 ? (
               <div className="space-y-1">
                 <label className="text-sm font-medium">
                   Colonia <span className="text-red-600">*</span>
@@ -2999,7 +2997,7 @@ persona: {
                 onBlur={() =>
                   validator.validateField("contacto.domicilio.codigo_postal")
                 }
-                placeholder={isContactoMexico ? "Ej. 44100" : "Código postal"}
+                placeholder={aplicaCpMexico ? "Ej. 44100" : "Código postal"}
               />
               {(b1Errors["contacto.domicilio.codigo_postal"] || errors["contacto.domicilio.codigo_postal"]) ? (
                 <p className="text-xs text-red-600">
