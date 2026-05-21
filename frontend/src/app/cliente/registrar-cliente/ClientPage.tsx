@@ -919,16 +919,57 @@ function valueToCatalogKey(v: string) {
           ? buildCanonicalPMPayloadData(row.datos_completos as RelatedPMData)
           : buildCanonicalFIDPayloadData(row.datos_completos as RelatedFIDData);
 
-    return {
+    const nombreEntidad =
+      deriveRelatedNombreEntidad(row.tipo_entidad, datos_completos) ||
+      safeInput(row.nombre_entidad).trim();
+
+    const base = {
       tipo_entidad: row.tipo_entidad,
-      nombre_entidad:
-        deriveRelatedNombreEntidad(row.tipo_entidad, datos_completos) ||
-        safeInput(row.nombre_entidad).trim(),
+      nombre_entidad: nombreEntidad,
       nacionalidad: valueToCatalogKey(row.nacionalidad) || safeInput(row.nacionalidad).trim() || "MEX",
       relacion_con_cliente: safeInput(row.relacion_con_cliente).trim(),
       sin_documentacion: !!row.sin_documentacion,
       observaciones: safeInput(row.observaciones).trim(),
       datos_completos,
+    };
+
+    if (row.tipo_entidad === "fideicomiso") {
+      return base;
+    }
+
+    const personaRelated =
+      row.tipo_entidad === "persona_fisica"
+        ? (datos_completos as RelatedPFData).persona
+        : null;
+    const empresaRelated =
+      row.tipo_entidad === "persona_moral"
+        ? (datos_completos as RelatedPMData).empresa
+        : null;
+
+    const actividadGiro =
+      row.tipo_entidad === "persona_fisica"
+        ? safeInput(personaRelated?.actividad_economica).trim()
+        : safeInput(empresaRelated?.giro_mercantil).trim();
+
+    const documentacionPlano =
+      row.tipo_entidad === "persona_fisica"
+        ? {
+            rfc: safeInput(personaRelated?.rfc).trim().toUpperCase(),
+            curp: safeInput(personaRelated?.curp).trim().toUpperCase(),
+            fecha_nacimiento:
+              normalizeToYYYYMMDD(personaRelated?.fecha_nacimiento) ??
+              safeInput(personaRelated?.fecha_nacimiento).trim(),
+          }
+        : {
+            rfc: safeInput(empresaRelated?.rfc).trim().toUpperCase(),
+          };
+
+    return {
+      ...base,
+      tipo_tercero: row.tipo_entidad,
+      nombre_razon_social: nombreEntidad,
+      actividad_giro: actividadGiro,
+      ...documentacionPlano,
     };
   }
 
@@ -1370,12 +1411,15 @@ function valueToCatalogKey(v: string) {
               />
             </div>
 
-            <div className="space-y-1 sm:col-span-3">
-              <label className="text-sm font-medium">Actividad económica</label>
-              <input
+            <div className="sm:col-span-3">
+              <SearchableSelect
+                label="Actividad económica"
+                required
                 value={safeInput(persona.actividad_economica)}
-                onChange={(e) => updateRelatedRecursoDataField(index, "persona", "actividad_economica", e.target.value)}
-                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                items={actividades}
+                onChange={(v) =>
+                  updateRelatedRecursoDataField(index, "persona", "actividad_economica", v)
+                }
               />
             </div>
           </div>
@@ -1422,14 +1466,15 @@ function valueToCatalogKey(v: string) {
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Giro mercantil</label>
-              <input
-                value={safeInput(empresa.giro_mercantil)}
-                onChange={(e) => updateRelatedRecursoDataField(index, "empresa", "giro_mercantil", e.target.value)}
-                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-              />
-            </div>
+            <SearchableSelect
+              label="Giro mercantil"
+              required
+              value={safeInput(empresa.giro_mercantil)}
+              items={giros}
+              onChange={(v) =>
+                updateRelatedRecursoDataField(index, "empresa", "giro_mercantil", v)
+              }
+            />
           </div>
 
           {renderRelatedRecursoContactoFields(row, index)}
