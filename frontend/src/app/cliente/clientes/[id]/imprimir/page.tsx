@@ -31,6 +31,21 @@ function Checkbox({ checked }: { checked: boolean }) {
   );
 }
 
+
+function YesNoBoxes({ text }: { text: string }) {
+  return (
+    <div className="flex items-start gap-3 text-sm">
+      <span className="inline-flex items-center gap-1 whitespace-nowrap">
+        <Checkbox checked={false} /> Sí
+      </span>
+      <span className="inline-flex items-center gap-1 whitespace-nowrap">
+        <Checkbox checked={false} /> No
+      </span>
+      <span className="flex-1">{text}</span>
+    </div>
+  );
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="border border-gray-300 rounded p-3 space-y-2">
@@ -50,6 +65,67 @@ function Row({ label, value }: { label: string; value: any }) {
   );
 }
 
+function formatCatalogValue(v: any): string {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'object' && (v?.clave || v?.descripcion)) {
+    const clave = String(v?.clave ?? '').trim();
+    const descripcion = String(v?.descripcion ?? '').trim();
+    if (descripcion && clave) return `${descripcion} (${clave})`;
+    if (descripcion) return descripcion;
+    if (clave) return clave;
+  }
+  return String(v ?? '').trim();
+}
+
+function boolText(v: any): string {
+  return v ? 'Sí' : 'No';
+}
+
+function getDomicilio(contacto: any): any {
+  return contacto?.domicilio ?? contacto?.domicilio_mexico ?? {};
+}
+
+function getRecursosTerceros(dc: any, persona: any): any[] {
+  const root = Array.isArray(dc?.recursos_terceros) ? dc.recursos_terceros : [];
+  const personaRecursos = Array.isArray(persona?.recursos_terceros) ? persona.recursos_terceros : [];
+  const merged = [...root, ...personaRecursos];
+  const seen = new Set<string>();
+
+  return merged.filter((row) => {
+    let key = '';
+    try {
+      key = JSON.stringify(row);
+    } catch {
+      key = String(row);
+    }
+
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function recursoActividad(row: any): any {
+  return (
+    row?.actividad_giro ??
+    row?.datos_completos?.persona?.actividad_economica ??
+    row?.datos_completos?.empresa?.giro_mercantil ??
+    ''
+  );
+}
+
+function recursoRfc(row: any): any {
+  return row?.rfc ?? row?.datos_completos?.persona?.rfc ?? row?.datos_completos?.empresa?.rfc ?? '';
+}
+
+function recursoCurp(row: any): any {
+  return row?.curp ?? row?.datos_completos?.persona?.curp ?? '';
+}
+
+function recursoFechaNacimiento(row: any): any {
+  return row?.fecha_nacimiento ?? row?.datos_completos?.persona?.fecha_nacimiento ?? '';
+}
+
 export default function ImprimirClientePage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -67,6 +143,7 @@ export default function ImprimirClientePage() {
       router.push('/login');
       return;
     }
+
     if (!id || Number.isNaN(id)) {
       setFatal('ID inválido');
       setLoading(false);
@@ -82,6 +159,7 @@ export default function ImprimirClientePage() {
           headers: { Authorization: `Bearer ${token}` },
           cache: 'no-store'
         });
+
         const data = await res.json().catch(() => null);
 
         if (!res.ok) {
@@ -112,21 +190,28 @@ export default function ImprimirClientePage() {
   const rep = dc.representante ?? {};
   const repId = rep.identificacion ?? {};
 
+  const contactoDomicilio = getDomicilio(contacto);
+  const recursosTerceros = getRecursosTerceros(dc, persona);
+
   const isPF = cliente.tipo_cliente === 'persona_fisica';
   const isPM = cliente.tipo_cliente === 'persona_moral';
 
   return (
     <div className="max-w-3xl mx-auto p-4 space-y-4 print:p-0">
-      {/* Barra de acciones (NO imprime automático, solo botón) */}
       <div className="flex items-center justify-between gap-3 print:hidden">
         <button className="rounded border border-gray-300 px-3 py-2 text-sm" onClick={() => router.back()}>
           Volver
         </button>
+
         <div className="flex items-center gap-2">
           <button className="rounded bg-black px-3 py-2 text-sm text-white" onClick={() => window.print()}>
             Imprimir
           </button>
-          <button className="rounded border border-gray-300 px-3 py-2 text-sm" onClick={() => router.push(`/cliente/clientes/${id}`)}>
+
+          <button
+            className="rounded border border-gray-300 px-3 py-2 text-sm"
+            onClick={() => router.push(`/cliente/clientes/${id}`)}
+          >
             Ir a detalle
           </button>
         </div>
@@ -135,7 +220,8 @@ export default function ImprimirClientePage() {
       <div className="text-center space-y-1">
         <div className="text-lg font-semibold">Formato de Identificación de Cliente</div>
         <div className="text-sm text-gray-700">
-          Cliente ID: {cliente.id} · Empresa ID: {cliente.empresa_id} · Tipo: {cliente.tipo_cliente} · Estado: {cliente.estado}
+          Cliente ID: {cliente.id} · Empresa ID: {cliente.empresa_id} · Tipo: {cliente.tipo_cliente} · Estado:{' '}
+          {cliente.estado}
         </div>
       </div>
 
@@ -146,10 +232,27 @@ export default function ImprimirClientePage() {
       </Section>
 
       <Section title="Contacto">
-        <Row label="País" value={contacto.pais ?? ''} />
+        <Row label={isPF ? 'País de nacimiento' : 'País'} value={contacto.pais ?? ''} />
         <Row label="Email" value={contacto.email ?? ''} />
         <Row label="Teléfono" value={contacto.telefono ?? ''} />
       </Section>
+
+      {isPF ? (
+        <Section title="Domicilio">
+          <Row label="Calle" value={contactoDomicilio.calle ?? ''} />
+          <Row label="Número exterior" value={contactoDomicilio.numero ?? ''} />
+          <Row label="Número interior" value={contactoDomicilio.interior ?? ''} />
+          <Row label="Colonia" value={contactoDomicilio.colonia ?? ''} />
+          <Row label="Municipio" value={contactoDomicilio.municipio ?? ''} />
+          <Row
+            label="Ciudad / Delegación"
+            value={contactoDomicilio.ciudad_delegacion ?? contactoDomicilio.ciudadDelegacion ?? contactoDomicilio.ciudad ?? ''}
+          />
+          <Row label="Código postal" value={contactoDomicilio.codigo_postal ?? contactoDomicilio.codigoPostal ?? ''} />
+          <Row label="Estado" value={contactoDomicilio.estado ?? ''} />
+          <Row label="País domicilio" value={contactoDomicilio.pais ?? ''} />
+        </Section>
+      ) : null}
 
       {isPF ? (
         <>
@@ -160,14 +263,7 @@ export default function ImprimirClientePage() {
             <Row label="Apellido paterno" value={persona.apellido_paterno ?? ''} />
             <Row label="Apellido materno" value={persona.apellido_materno ?? ''} />
             <Row label="Fecha nacimiento" value={fmtYYYYMMDD(persona.fecha_nacimiento)} />
-            <Row
-              label="Actividad económica"
-              value={
-                typeof persona.actividad_economica === 'object'
-                  ? `${persona.actividad_economica.descripcion} (${persona.actividad_economica.clave})`
-                  : persona.actividad_economica
-              }
-            />
+            <Row label="Actividad económica" value={formatCatalogValue(persona.actividad_economica)} />
           </Section>
 
           <Section title="Identificación / Acreditación">
@@ -178,24 +274,39 @@ export default function ImprimirClientePage() {
             <Row label="Fecha expiración" value={fmtYYYYMMDD(pfId.fecha_expiracion)} />
           </Section>
 
+          <Section title="Recursos de terceros">
+            {recursosTerceros.length ? (
+              <div className="space-y-3">
+                {recursosTerceros.map((row, index) => (
+                  <div key={index} className="rounded border border-gray-200 p-3 space-y-1">
+                    <div className="text-sm font-medium">Recurso {index + 1}</div>
+                    <Row label="Tipo tercero" value={row?.tipo_tercero ?? row?.tipo_entidad ?? ''} />
+                    <Row label="Nombre / Razón social" value={row?.nombre_razon_social ?? row?.nombre_entidad ?? ''} />
+                    <Row label="Relación con cliente" value={row?.relacion_con_cliente ?? ''} />
+                    <Row label="Actividad / giro" value={formatCatalogValue(recursoActividad(row))} />
+                    <Row label="Sin documentación" value={boolText(row?.sin_documentacion)} />
+                    <Row label="RFC" value={recursoRfc(row)} />
+                    <Row label="CURP" value={recursoCurp(row)} />
+                    <Row label="Fecha nacimiento" value={fmtYYYYMMDD(recursoFechaNacimiento(row))} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-gray-600">Sin recursos de terceros registrados.</div>
+            )}
+          </Section>
+
           <Section title="Acuerdo de confidencialidad (PF)">
             <div className="text-sm text-gray-800">
-              Texto a insertar (pendiente versión final) con espacios para el nombre oficial de la empresa (empresa_id: {cliente.empresa_id}).
+              Texto a insertar (pendiente versión final) con espacios para el nombre oficial de la empresa (empresa_id:{' '}
+              {cliente.empresa_id}).
             </div>
 
-            <div className="space-y-2 pt-2 text-sm">
-              <div className="flex items-center gap-2">
-                <Checkbox checked={false} /> Declaro que acepto los términos incluidos en el acuerdo de confidencialidad (Sí/No)
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox checked={false} /> Declaro bajo protesta de decir verdad, que los datos asentados son verdaderos y que actuó por cuenta propia. (Sí/No)
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox checked={false} /> Declaro que el origen de los recursos con los que operaré son de origen lícito y la finalidad de la operación será para un fin lícito. (Sí/No)
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox checked={false} /> Declaro bajo protesta de confirmar que se realizó entrevista personal, donde se me conoció de manera directa. (Sí/No)
-              </div>
+            <div className="space-y-2 pt-2">
+              <YesNoBoxes text="Declaro que acepto los términos incluidos en el acuerdo de confidencialidad." />
+              <YesNoBoxes text="Declaro bajo protesta de decir verdad, que los datos asentados son verdaderos y que actuó por cuenta propia." />
+              <YesNoBoxes text="Declaro que el origen de los recursos con los que operaré son de origen lícito y la finalidad de la operación será para un fin lícito." />
+              <YesNoBoxes text="Declaro bajo protesta de confirmar que se realizó entrevista personal, donde se me conoció de manera directa." />
             </div>
 
             <div className="pt-6 text-sm">
@@ -211,14 +322,7 @@ export default function ImprimirClientePage() {
           <Section title="Persona Moral">
             <Row label="RFC (empresa)" value={empresa.rfc ?? ''} />
             <Row label="Fecha constitución" value={empresa.fecha_constitucion ?? ''} />
-            <Row
-              label="Giro mercantil"
-              value={
-                typeof empresa.giro_mercantil === 'object'
-                  ? `${empresa.giro_mercantil.descripcion} (${empresa.giro_mercantil.clave})`
-                  : empresa.giro_mercantil
-              }
-            />
+            <Row label="Giro mercantil" value={formatCatalogValue(empresa.giro_mercantil)} />
           </Section>
 
           <Section title="Representante Legal">
@@ -235,18 +339,22 @@ export default function ImprimirClientePage() {
 
           <Section title="Acuerdo de confidencialidad (PM)">
             <div className="text-sm text-gray-800">
-              Texto a insertar (pendiente versión final) con espacios para el nombre oficial de la empresa (empresa_id: {cliente.empresa_id}).
+              Texto a insertar (pendiente versión final) con espacios para el nombre oficial de la empresa (empresa_id:{' '}
+              {cliente.empresa_id}).
             </div>
 
             <div className="space-y-2 pt-2 text-sm">
               <div className="flex items-center gap-2">
-                <Checkbox checked={false} /> Declaro que acepto los términos incluidos en el acuerdo de confidencialidad (Sí/No)
+                <Checkbox checked={false} /> Declaro que acepto los términos incluidos en el acuerdo de confidencialidad
+                (Sí/No)
               </div>
               <div className="flex items-center gap-2">
-                <Checkbox checked={false} /> Declaro bajo protesta de decir verdad, que los datos asentados son verdaderos. (Sí/No)
+                <Checkbox checked={false} /> Declaro bajo protesta de decir verdad, que los datos asentados son
+                verdaderos. (Sí/No)
               </div>
               <div className="flex items-center gap-2">
-                <Checkbox checked={false} /> Declaro bajo protesta de confirmar que se realizó entrevista personal, donde se me conoció de manera directa. (Sí/No)
+                <Checkbox checked={false} /> Declaro bajo protesta de confirmar que se realizó entrevista personal,
+                donde se me conoció de manera directa. (Sí/No)
               </div>
             </div>
 
