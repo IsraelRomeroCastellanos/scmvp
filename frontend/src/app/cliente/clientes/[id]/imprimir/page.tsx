@@ -85,10 +85,26 @@ function getDomicilio(contacto: any): any {
   return contacto?.domicilio ?? contacto?.domicilio_mexico ?? {};
 }
 
-function getRecursosTerceros(dc: any, persona: any): any[] {
+function getRecursosTerceros(dc: any, persona: any, empresa?: any, tipoCliente?: string): any[] {
   const root = Array.isArray(dc?.recursos_terceros) ? dc.recursos_terceros : [];
   const personaRecursos = Array.isArray(persona?.recursos_terceros) ? persona.recursos_terceros : [];
-  const merged = [...root, ...personaRecursos];
+  const empresaRecursos = Array.isArray(empresa?.recursos_terceros) ? empresa.recursos_terceros : [];
+
+  let merged: any[] = [];
+
+  if (tipoCliente === 'persona_moral') {
+    merged = [...root, ...empresaRecursos];
+
+    // Fallback legacy/pruebas: solo usar persona.recursos_terceros si PM no trae root/empresa.
+    if (!merged.length && personaRecursos.length) {
+      merged = [...personaRecursos];
+    }
+  } else if (tipoCliente === 'persona_fisica') {
+    merged = [...root, ...personaRecursos];
+  } else {
+    merged = [...root];
+  }
+
   const seen = new Set<string>();
 
   return merged.filter((row) => {
@@ -124,6 +140,21 @@ function recursoCurp(row: any): any {
 
 function recursoFechaNacimiento(row: any): any {
   return row?.fecha_nacimiento ?? row?.datos_completos?.persona?.fecha_nacimiento ?? '';
+}
+
+
+function fullNameFromParts(v: any): string {
+  const direct = String(v?.nombre_completo ?? v?.nombre ?? '').trim();
+  if (direct) return direct;
+
+  return [
+    v?.nombres,
+    v?.apellido_paterno,
+    v?.apellido_materno
+  ]
+    .map((part) => String(part ?? '').trim())
+    .filter(Boolean)
+    .join(' ');
 }
 
 export default function ImprimirClientePage() {
@@ -190,11 +221,12 @@ export default function ImprimirClientePage() {
   const rep = dc.representante ?? {};
   const repId = rep.identificacion ?? {};
 
-  const contactoDomicilio = getDomicilio(contacto);
-  const recursosTerceros = getRecursosTerceros(dc, persona);
-
   const isPF = cliente.tipo_cliente === 'persona_fisica';
   const isPM = cliente.tipo_cliente === 'persona_moral';
+
+  const contactoDomicilio = getDomicilio(contacto);
+  const recursosTerceros = getRecursosTerceros(dc, persona, empresa, cliente.tipo_cliente);
+  const paisContactoLabel = isPF ? 'País de nacimiento' : isPM ? 'País de constitución' : 'País';
 
   return (
     <div className="max-w-3xl mx-auto p-4 space-y-4 print:p-0">
@@ -226,18 +258,21 @@ export default function ImprimirClientePage() {
       </div>
 
       <Section title="Encabezado">
-        <Row label="Nombre entidad" value={cliente.nombre_entidad} />
+        <Row
+          label={isPM ? 'Razón social' : 'Nombre entidad'}
+          value={isPM ? empresa.razon_social ?? empresa.nombre_entidad ?? cliente.nombre_entidad : cliente.nombre_entidad}
+        />
         <Row label="Nacionalidad" value={cliente.nacionalidad} />
         <Row label="Creado" value={cliente.creado_en ?? ''} />
       </Section>
 
       <Section title="Contacto">
-        <Row label={isPF ? 'País de nacimiento' : 'País'} value={contacto.pais ?? ''} />
+        <Row label={paisContactoLabel} value={contacto.pais ?? ''} />
         <Row label="Email" value={contacto.email ?? ''} />
         <Row label="Teléfono" value={contacto.telefono ?? ''} />
       </Section>
 
-      {isPF ? (
+      {isPF || isPM ? (
         <Section title="Domicilio">
           <Row label="Calle" value={contactoDomicilio.calle ?? ''} />
           <Row label="Número exterior" value={contactoDomicilio.numero ?? ''} />
@@ -326,7 +361,10 @@ export default function ImprimirClientePage() {
           </Section>
 
           <Section title="Representante Legal">
-            <Row label="Nombre completo" value={rep.nombre_completo ?? ''} />
+            <Row label="Nombre completo" value={fullNameFromParts(rep)} />
+            <Row label="RFC" value={rep.rfc ?? ''} />
+            <Row label="CURP" value={rep.curp ?? ''} />
+            <Row label="Fecha nacimiento" value={fmtYYYYMMDD(rep.fecha_nacimiento)} />
           </Section>
 
           <Section title="Identificación del Representante Legal">
@@ -337,25 +375,38 @@ export default function ImprimirClientePage() {
             <Row label="Fecha expiración" value={fmtYYYYMMDD(repId.fecha_expiracion)} />
           </Section>
 
+          <Section title="Recursos de terceros">
+            {recursosTerceros.length ? (
+              <div className="space-y-3">
+                {recursosTerceros.map((row, index) => (
+                  <div key={index} className="rounded border border-gray-200 p-3 space-y-1">
+                    <div className="text-sm font-medium">Recurso {index + 1}</div>
+                    <Row label="Tipo tercero" value={row?.tipo_tercero ?? row?.tipo_entidad ?? ''} />
+                    <Row label="Nombre / Razón social" value={row?.nombre_razon_social ?? row?.nombre_entidad ?? ''} />
+                    <Row label="Relación con cliente" value={row?.relacion_con_cliente ?? ''} />
+                    <Row label="Actividad / giro" value={formatCatalogValue(recursoActividad(row))} />
+                    <Row label="Sin documentación" value={boolText(row?.sin_documentacion)} />
+                    <Row label="RFC" value={recursoRfc(row)} />
+                    <Row label="CURP" value={recursoCurp(row)} />
+                    <Row label="Fecha nacimiento" value={fmtYYYYMMDD(recursoFechaNacimiento(row))} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-gray-600">Sin recursos de terceros registrados.</div>
+            )}
+          </Section>
+
           <Section title="Acuerdo de confidencialidad (PM)">
             <div className="text-sm text-gray-800">
               Texto a insertar (pendiente versión final) con espacios para el nombre oficial de la empresa (empresa_id:{' '}
               {cliente.empresa_id}).
             </div>
 
-            <div className="space-y-2 pt-2 text-sm">
-              <div className="flex items-center gap-2">
-                <Checkbox checked={false} /> Declaro que acepto los términos incluidos en el acuerdo de confidencialidad
-                (Sí/No)
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox checked={false} /> Declaro bajo protesta de decir verdad, que los datos asentados son
-                verdaderos. (Sí/No)
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox checked={false} /> Declaro bajo protesta de confirmar que se realizó entrevista personal,
-                donde se me conoció de manera directa. (Sí/No)
-              </div>
+            <div className="space-y-2 pt-2">
+              <YesNoBoxes text="Declaro que acepto los términos incluidos en el acuerdo de confidencialidad." />
+              <YesNoBoxes text="Declaro bajo protesta de decir verdad, que los datos asentados son verdaderos." />
+              <YesNoBoxes text="Declaro bajo protesta de confirmar que se realizó entrevista personal, donde se me conoció de manera directa." />
             </div>
 
             <div className="pt-6 text-sm space-y-3">
