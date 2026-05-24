@@ -169,3 +169,53 @@
 - Riesgos pendientes:
   - mantener actualizado el procedimiento repetible para futuras expiraciones de trial
   - revisar rotación de credenciales si hubo exposición accidental
+
+### 2026-05-23 — CONTROL-DOC-01 / Estado estable post-D2
+
+- Frente documental abierto para consolidar el estado estable del módulo Clientes posterior a D2.
+- Main estable documentado:
+  - merge D2: `3934929`
+  - commit funcional D2: `6d9a074 fix(clientes): completar impresion pm base`
+  - merge D1: `8398908`
+  - commit funcional D1: `deccf4a fix(clientes): completar impresion pf base`
+- Producción validada:
+  - Frontend: Vercel Production Ready
+  - Backend vigente: `https://scmvp-1jhq.onrender.com`
+  - DB lógica vigente: `scmvp_xeu1`
+
+Cierres recientes consolidados:
+- B1/B2/B3 — Domicilio inteligente cerrado.
+- C1 — Actividad económica / giro mercantil principales PF/PM cerrado.
+- C2A — Recursos de terceros en editar cerrado.
+- UX/TEXTO-01 — País de nacimiento / constitución en registrar cerrado.
+- C2B-2A + F1 — relatedRecursos PF/PM en registrar cerrado.
+- D1 + D1-F1 — Impresión PF base completa cerrada.
+- D2 + D2-F1 — Impresión PM base completa cerrada.
+
+Impresión:
+- D1 imprime PF base completa con domicilio, actividad económica, recursos de terceros y sin JSON crudo.
+- D2 imprime PM base completa con razón social, país de constitución, domicilio, representante legal, recursos de terceros y sin JSON crudo.
+- D1-F1 y D2-F1 son solo visuales/imprimibles: casillas `[ ] Sí / [ ] No`, sin persistencia, sin backend y sin cambio de contrato.
+
+Reglas funcionales vigentes:
+- Tipo de Nacionalidad controla Nacionalidad.
+- Nacionalidad gobierna CP / domicilio inteligente.
+- País de nacimiento / constitución se selecciona manualmente y no gobierna CP.
+- No existe campo “País del domicilio” separado.
+
+Salvedades / diferidos:
+- C2C accionista tercero PM diferido.
+- C2D dueños/beneficiarios / relatedDuenos diferido.
+- D3 FID no abierto.
+- PF/BC condicionado no abierto.
+- Domicilio inteligente en dueños/beneficiarios queda como criterio futuro, no abierto.
+- Usuarios, empresas, carga masiva, perfil transaccional y grado de riesgo quedan para roadmap posterior.
+
+Disciplina de Control:
+- No depender solo de conversación, PRs o memoria.
+- Después de hitos relevantes deben actualizarse documentos formales y decidir tag estable antes de abrir frentes mayores nuevos.
+- Siguiente acción propuesta: tag estable post-D2, sin crearlo hasta autorización expresa de Control.
+
+Propuesta de tag estable:
+- Recomendado: `stable-clientes-d2-20260523`
+- Alternativa: `stable-clientes-impresion-pf-pm-20260523`
