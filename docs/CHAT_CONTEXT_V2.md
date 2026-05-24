@@ -137,3 +137,45 @@ H) Bootstrap 10 líneas para iniciar chat nuevo en Proyectos
 9.	Pendiente principal: validaciones bloqueantes FE+BE por tipo (onBlur + submit) y contrato de payload unificado.
 10.	Regla: no inventar datos; secretos/tokens/passwords siempre REDACTED; entregar siempre archivos completos al proponer cambios.
 
+
+I) Estado congelado post-D2 — 2026-05-23
+
+- Estado estable del módulo Clientes posterior a impresión PF/PM:
+  - main: `3934929`
+  - D2 funcional: `6d9a074 fix(clientes): completar impresion pm base`
+  - D1 funcional: `deccf4a fix(clientes): completar impresion pf base`
+- Backend vigente: `https://scmvp-1jhq.onrender.com`
+- DB lógica vigente: `scmvp_xeu1`
+- Frontend: Vercel Production Ready.
+
+Cierres recientes:
+1. B1/B2/B3 — Domicilio inteligente cerrado.
+2. C1 — Actividad económica / giro mercantil principales PF/PM cerrado.
+3. C2A — Recursos de terceros en editar cerrado.
+4. UX/TEXTO-01 — País de nacimiento / constitución en registrar cerrado.
+5. C2B-2A + F1 — relatedRecursos PF/PM en registrar cerrado.
+6. D1 + D1-F1 — Impresión PF base completa cerrada.
+7. D2 + D2-F1 — Impresión PM base completa cerrada.
+
+Reglas funcionales vigentes:
+- Tipo de Nacionalidad controla Nacionalidad.
+- Nacionalidad gobierna CP / domicilio inteligente.
+- País de nacimiento / constitución se selecciona manualmente y no gobierna CP.
+- No existe campo separado “País del domicilio”.
+
+Impresión:
+- PF: impresión base completa con recursos y sin JSON crudo.
+- PM: impresión base completa con razón social, país de constitución, domicilio, representante legal, recursos de terceros y sin JSON crudo.
+- Acuerdos PF/PM: casillas `[ ] Sí / [ ] No` visuales/imprimibles; sin persistencia y sin backend.
+
+Salvedades vigentes:
+- D3 FID no abierto.
+- C2C accionista tercero PM diferido.
+- C2D dueños/beneficiarios / relatedDuenos diferido.
+- PF/BC condicionado no abierto.
+- Usuarios / empresas / carga masiva / perfil transaccional / grado de riesgo quedan para roadmap posterior.
+
+Disciplina:
+- No depender solo de conversación, PRs o memoria.
+- Mantener documentos formales y tags estables como práctica de Control.
+- Propuesta de tag post-D2: `stable-clientes-d2-20260523`.

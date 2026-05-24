@@ -110,3 +110,37 @@
 - Verificación adicional reportada:
   - módulos Usuarios / Empresas / Clientes cargan correctamente en UI.
 - Runbook repetible actualizado para futuras expiraciones de trial.
+
+### 2026-05-23 — CONTROL-DOC-01 / Consolidación post-D2
+
+- Se consolida estado estable del módulo Clientes posterior a:
+  - D1 + D1-F1 — Impresión PF base completa.
+  - D2 + D2-F1 — Impresión PM base completa.
+- Main estable:
+  - merge D2: `3934929`
+  - funcional D2: `6d9a074`
+  - merge D1: `8398908`
+  - funcional D1: `deccf4a`
+- Producción validada:
+  - Vercel Production Ready.
+  - Backend vigente: `https://scmvp-1jhq.onrender.com`.
+  - DB lógica vigente: `scmvp_xeu1`.
+
+Cierres consolidados:
+- B1/B2/B3 — Domicilio inteligente.
+- C1 — Actividad económica / giro mercantil principales.
+- C2A — Recursos de terceros en editar.
+- UX/TEXTO-01 — País nacimiento / constitución en registrar.
+- C2B-2A + F1 — relatedRecursos PF/PM en registrar.
+- D1 + D1-F1 — Impresión PF.
+- D2 + D2-F1 — Impresión PM.
+
+Salvedades vigentes:
+- C2C accionista tercero PM diferido.
+- C2D dueños/beneficiarios / relatedDuenos diferido.
+- D3 FID no abierto.
+- PF/BC condicionado no abierto.
+
+Propuesta de versión estable:
+- `stable-clientes-d2-20260523`
+- No se crea tag en este frente sin autorización posterior.

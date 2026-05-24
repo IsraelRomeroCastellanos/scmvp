@@ -117,3 +117,38 @@ Se espera:
 - DB lógica vigente después de la migración: scmvp_xeu1
 - En esta iteración también se actualizó NEXT_PUBLIC_API_BASE_URL en Vercel.
 - La migración no requirió cambios de código.
+
+### CONTROL-DOC-01 — checkpoint documental post-D2
+
+Contexto estable:
+- main post-D2: `3934929`
+- D2 funcional: `6d9a074`
+- D1 merge: `8398908`
+- D1 funcional: `deccf4a`
+- Backend vigente: `https://scmvp-1jhq.onrender.com`
+- DB lógica vigente: `scmvp_xeu1`
+
+Validación mínima post-D2 recomendada:
+1. Login:
+   - `POST /api/auth/login` → HTTP 200
+2. PM impresión:
+   - `GET /api/cliente/clientes/63` → HTTP 200
+   - `/cliente/clientes/63/imprimir`
+   - Confirmar razón social, país de constitución, domicilio, RFC empresa, giro mercantil, representante legal, sin JSON crudo y `window.print`.
+3. PF regresión:
+   - `/cliente/clientes/83/imprimir`
+   - `/cliente/clientes/84/imprimir`
+4. FID regresión visual:
+   - `/cliente/clientes/73/imprimir`
+   - `/cliente/clientes/74/imprimir`
+5. Confirmar que no se abrió:
+   - D3
+   - C2C
+   - C2D
+   - PF/BC condicionado
+
+Disciplina:
+- Antes de abrir un frente funcional mayor posterior a D2, Control debe decidir documentación y tag estable.
+- Propuesta de tag:
+  - `stable-clientes-d2-20260523`
+- No crear tag sin autorización expresa de Control.
