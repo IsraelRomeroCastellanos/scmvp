@@ -1283,7 +1283,24 @@ export default function Page() {
 
         if (nextTipo === 'persona_moral') {
           const empresa = datos?.empresa || {};
+          const representante =
+            datos?.representante ||
+            empresa?.representante ||
+            datos?.representante_legal ||
+            datos?.representanteLegal ||
+            {};
+
           setPmRazonSocial(safeInput(empresa?.razon_social || cliente?.nombre_entidad));
+          setRepNombre(safeInput(
+            representante?.nombres ||
+            representante?.nombre_completo ||
+            representante?.nombre
+          ));
+          setRepAP(safeInput(representante?.apellido_paterno));
+          setRepAM(safeInput(representante?.apellido_materno));
+          setRepFechaNac(safeInput(representante?.fecha_nacimiento));
+          setRepRFC(safeInput(representante?.rfc));
+          setRepCURP(safeInput(representante?.curp));
         }
 
         if (nextTipo === 'fideicomiso') {
