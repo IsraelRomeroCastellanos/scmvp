@@ -179,3 +179,40 @@ Disciplina:
 - No depender solo de conversación, PRs o memoria.
 - Mantener documentos formales y tags estables como práctica de Control.
 - Propuesta de tag post-D2: `stable-clientes-d2-20260523`.
+
+## Contexto congelado — CONTROL-DOC-02 / QA post-D2 — 2026-05-25
+
+Después de CONTROL-DOC-01 y del tag `stable-clientes-d2-20260523`, se integraron dos micro-correcciones antes de abrir U1:
+
+1. QA-REG-01-F1A — Hidratar representante PM en editar
+   - Merge main: `b4fdcd2`.
+   - Commit funcional: `5737584`.
+   - Archivo:
+     - `frontend/src/app/cliente/editar-cliente/[id]/page.tsx`.
+   - Resultado:
+     - PM cliente 63 hidrata representante legal correctamente;
+     - PF 67 conserva actividad económica;
+     - cliente 66 conserva recursos SERVICIOS / COMERCIAL;
+     - no se guardaron ni modificaron datos.
+
+2. UX-TEXTO-02A — Alinear País en Domicilio (contacto) en registrar
+   - Merge main: `07c9e5f`.
+   - Commit funcional: `c68816c`.
+   - Archivo:
+     - `frontend/src/app/cliente/registrar-cliente/ClientPage.tsx`.
+   - Resultado:
+     - ya no aparece `País (domicilio)` editable;
+     - se muestra `País` solo lectura en Domicilio (contacto);
+     - el valor se deriva de Nacionalidad;
+     - `contacto.pais` sigue siendo País de nacimiento / constitución;
+     - `contacto.domicilio.pais` se conserva internamente derivado de Nacionalidad;
+     - Nacionalidad sigue gobernando CP;
+     - no se guardaron ni modificaron datos.
+
+Estado operativo antes de U1:
+- Main actual: `07c9e5f`.
+- U1 aún no abierto.
+- D3, C2C, C2D y PF/BC condicionado siguen diferidos/no abiertos.
+- Usuarios, empresas, carga masiva y riesgo siguen fuera de este checkpoint.
+- Tag propuesto posterior a este checkpoint:
+  - `stable-clientes-qa-post-d2-20260525`

@@ -144,3 +144,26 @@ Salvedades vigentes:
 Propuesta de versión estable:
 - `stable-clientes-d2-20260523`
 - No se crea tag en este frente sin autorización posterior.
+## 2026-05-25 — CONTROL-DOC-02 / Mini checkpoint QA post-D2
+
+- Se registra estado QA post-D2 posterior al tag `stable-clientes-d2-20260523`.
+- Main actual documentado:
+  - `07c9e5f` merge UX-TEXTO-02A.
+  - `c68816c` funcional UX-TEXTO-02A.
+  - `b4fdcd2` merge QA-REG-01-F1A.
+  - `5737584` funcional QA-REG-01-F1A.
+- QA-REG-01-F1A:
+  - representante PM en editar quedó hidratado;
+  - PM 63 validado;
+  - PF 67 y cliente 66 sin regresión;
+  - sin guardar/modificar datos.
+- UX-TEXTO-02A:
+  - se retiró el label editable `País (domicilio)`;
+  - se conserva `País` solo lectura en Domicilio (contacto);
+  - el valor se deriva de Nacionalidad;
+  - País de nacimiento/constitución permanece separado;
+  - CP sigue gobernado por Nacionalidad;
+  - sin guardar/modificar datos.
+- No se abrió U1, D3, C2C, C2D ni PF/BC condicionado.
+- Tag estable propuesto:
+  - `stable-clientes-qa-post-d2-20260525`
