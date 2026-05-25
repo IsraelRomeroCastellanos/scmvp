@@ -390,6 +390,21 @@ function valueToCatalogKey(v: string) {
   const aplicaCpMexico = isMexicoKey(nacionalidad);
 
   useEffect(() => {
+    const nextDomPais = isMexicoKey(nacionalidad) ? "MEX" : nacionalidad.trim();
+    setDomPais(nextDomPais);
+  }, [nacionalidad]);
+
+  const domPaisCatalogItem = paises.find((item: any) =>
+    String(item?.clave ?? item?.value ?? item?.id ?? "").toLowerCase() === domPais.trim().toLowerCase()
+  );
+
+  const domPaisDisplay = domPais.trim()
+    ? isMexicoKey(domPais)
+      ? "México"
+      : String(domPaisCatalogItem?.descripcion ?? domPais)
+    : "";
+
+  useEffect(() => {
     let alive = true;
 
     loadCodigosPostalesMx()
@@ -3073,26 +3088,22 @@ persona: {
                 </p>
               ) : null}
             </div>
-
             <div className="space-y-1">
-              <label className="text-sm font-medium">
-                País (domicilio) <span className="text-red-600">*</span>
-              </label>
+              <label className="text-sm font-medium">País</label>
               <input
-                className={`w-full rounded border px-3 py-2 text-sm ${errors["contacto.domicilio.pais"] ? "border-red-500" : "border-gray-300"}`}
-                value={domPais}
-                onChange={(e) => setDomPais(e.target.value)}
-                onBlur={() =>
-                  validator.validateField("contacto.domicilio.pais")
-                }
-                placeholder="Ej. México"
+                className="w-full rounded border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-700"
+                value={domPaisDisplay}
+                readOnly
+                aria-readonly="true"
+                tabIndex={-1}
+                placeholder="Derivado de Nacionalidad"
               />
-              {errors["contacto.domicilio.pais"] ? (
-                <p className="text-xs text-red-600">
-                  {errors["contacto.domicilio.pais"]}
-                </p>
-              ) : null}
+              <p className="text-xs text-gray-500">
+                Derivado automáticamente de Nacionalidad; no se captura manualmente.
+              </p>
             </div>
+
+
           </div>
         </div>
 
