@@ -219,3 +219,46 @@ Disciplina de Control:
 Propuesta de tag estable:
 - Recomendado: `stable-clientes-d2-20260523`
 - Alternativa: `stable-clientes-impresion-pf-pm-20260523`
+## CONTROL-DOC-02 — Mini checkpoint QA post-D2 — 2026-05-25
+
+Estado actual de `main`:
+- `07c9e5f` — Merge pull request #12 / UX-TEXTO-02A.
+- `c68816c` — `fix(clientes): alinear pais domicilio en registrar`.
+- `b4fdcd2` — Merge pull request #11 / QA-REG-01-F1A.
+- `5737584` — `fix(clientes): hidratar representante pm en editar`.
+- Base documental previa:
+  - `631ab98` — CONTROL-DOC-01.
+  - Tag estable previo: `stable-clientes-d2-20260523`.
+
+### QA-REG-01-F1A — Representante PM en editar
+- Cerrado funcionalmente.
+- PM cliente 63 validado:
+  - representante legal hidrata correctamente;
+  - nombre, apellidos, RFC, CURP y fecha de nacimiento visibles;
+  - giro mercantil y razón social se conservan visibles.
+- Regresión mínima validada:
+  - PF cliente 67 conserva actividad económica;
+  - cliente 66 conserva recursos SERVICIOS / COMERCIAL y `actividad_giro` string.
+- No se guardaron ni modificaron datos.
+
+### UX-TEXTO-02A — País en Domicilio (contacto)
+- Cerrado funcionalmente.
+- En registrar ya no aparece el label editable `País (domicilio)`.
+- En Domicilio (contacto) se muestra `País` como campo solo lectura, derivado de Nacionalidad.
+- Para Nacionalidad México muestra `México`.
+- `contacto.pais` sigue correspondiendo a País de nacimiento / constitución.
+- `contacto.domicilio.pais` se mantiene internamente derivado de Nacionalidad.
+- Nacionalidad sigue gobernando CP / domicilio inteligente.
+- País de nacimiento / constitución no gobierna CP.
+- No se guardaron ni modificaron datos.
+
+### Estado previo a U1
+- U1 aún no abierto.
+- D3 FID completo diferido.
+- C2C accionista tercero PM diferido.
+- C2D dueños/beneficiarios / relatedDuenos diferido.
+- PF/BC condicionado no abierto.
+- Usuarios, empresas, carga masiva y riesgo siguen fuera de este checkpoint.
+
+Tag propuesto para estabilización posterior:
+- `stable-clientes-qa-post-d2-20260525`
