@@ -1069,12 +1069,21 @@ function valueToCatalogKey(v: string) {
 
   function buildCanonicalDuenoRowFromRelated(row: RelatedDuenoRow) {
     const datos_completos = buildCanonicalPFPayloadData(row.datos_completos);
+    const persona = datos_completos.persona || {};
 
     return {
       tipo_entidad: "persona_fisica" as const,
       nombre_entidad:
         deriveRelatedNombreEntidad("persona_fisica", datos_completos) ||
         safeInput(row.nombre_entidad).trim(),
+      nombres: safeInput(persona.nombres).trim(),
+      apellido_paterno: safeInput(persona.apellido_paterno).trim(),
+      apellido_materno: safeInput(persona.apellido_materno).trim(),
+      fecha_nacimiento:
+        normalizeToYYYYMMDD(persona.fecha_nacimiento) ??
+        safeInput(persona.fecha_nacimiento).trim(),
+      rfc: safeInput(persona.rfc).trim().toUpperCase(),
+      curp: safeInput(persona.curp).trim().toUpperCase(),
       nacionalidad: valueToCatalogKey(row.nacionalidad) || safeInput(row.nacionalidad).trim() || "MEX",
       relacion_con_cliente: safeInput(row.relacion_con_cliente).trim(),
       porcentaje_participacion: safeInput(row.porcentaje_participacion).trim(),
@@ -2531,20 +2540,39 @@ persona: {
     }
 
     if (tipo === "persona_moral" && pmBeneficiarioControlador === "si") {
-        let ok = true;
-        const n = (pmBcNombres || "").trim();
-        const ap = (pmBcApPat || "").trim();
-        const am = (pmBcApMat || "").trim();
+      let ok = true;
 
-        if (!n) { setErr("beneficiario_controlador.nombres", "Nombres del beneficiario controlador es obligatorio"); ok = false; }
-        if (!ap) { setErr("beneficiario_controlador.apellido_paterno", "Apellido paterno del beneficiario controlador es obligatorio"); ok = false; }
-        if (!am) { setErr("beneficiario_controlador.apellido_materno", "Apellido materno del beneficiario controlador es obligatorio"); ok = false; }
+      if (relatedDuenos.length > 0) {
+        const firstRelatedDueno = relatedDuenos[0];
+        const persona = (((firstRelatedDueno.datos_completos as Record<string, any>).persona || {}) as Record<string, any>);
 
-        if (!ok) {
-          setFatal("Completa la sección de Beneficiario Controlador para continuar.");
-          return;
-        }
+        const n = safeInput(persona.nombres).trim();
+        const ap = safeInput(persona.apellido_paterno).trim();
+        const am = safeInput(persona.apellido_materno).trim();
+
+        if (!n) { setErr("duenos_beneficiarios.0.nombres", "Nombres del beneficiario controlador es obligatorio"); ok = false; }
+        if (!ap) { setErr("duenos_beneficiarios.0.apellido_paterno", "Apellido paterno del beneficiario controlador es obligatorio"); ok = false; }
+        if (!am) { setErr("duenos_beneficiarios.0.apellido_materno", "Apellido materno del beneficiario controlador es obligatorio"); ok = false; }
+      } else if (duenosBeneficiarios.length > 0) {
+        const firstLegacyDueno = duenosBeneficiarios[0];
+
+        const n = safeInput(firstLegacyDueno.nombres).trim();
+        const ap = safeInput(firstLegacyDueno.apellido_paterno).trim();
+        const am = safeInput(firstLegacyDueno.apellido_materno).trim();
+
+        if (!n) { setErr("duenos_beneficiarios.0.nombres", "Nombres del beneficiario controlador es obligatorio"); ok = false; }
+        if (!ap) { setErr("duenos_beneficiarios.0.apellido_paterno", "Apellido paterno del beneficiario controlador es obligatorio"); ok = false; }
+        if (!am) { setErr("duenos_beneficiarios.0.apellido_materno", "Apellido materno del beneficiario controlador es obligatorio"); ok = false; }
+      } else {
+        setErr("duenos_beneficiarios", "Agrega al menos un Beneficiario Controlador");
+        ok = false;
       }
+
+      if (!ok) {
+        setFatal("Completa la sección de Beneficiario Controlador para continuar.");
+        return;
+      }
+    }
       // P1-1 PF Terceros: si manifiesta terceros, exigir minimos y no enviar placeholders
       if (tipo === "persona_fisica" && pfManifiestaTerceros) {
         let ok = true;
