@@ -389,20 +389,8 @@ function valueToCatalogKey(v: string) {
 
   const aplicaCpMexico = isMexicoKey(nacionalidad);
 
-  useEffect(() => {
-    const nextDomPais = isMexicoKey(nacionalidad) ? "MEX" : nacionalidad.trim();
-    setDomPais(nextDomPais);
-  }, [nacionalidad]);
-
-  const domPaisCatalogItem = paises.find((item: any) =>
-    String(item?.clave ?? item?.value ?? item?.id ?? "").toLowerCase() === domPais.trim().toLowerCase()
-  );
-
-  const domPaisDisplay = domPais.trim()
-    ? isMexicoKey(domPais)
-      ? "México"
-      : String(domPaisCatalogItem?.descripcion ?? domPais)
-    : "";
+  // UX-TEXTO-03A: País en Domicilio/contacto se captura manualmente.
+  // No debe derivarse ni sobrescribirse automáticamente desde Nacionalidad.
 
   useEffect(() => {
     let alive = true;
@@ -3119,15 +3107,13 @@ persona: {
             <div className="space-y-1">
               <label className="text-sm font-medium">País</label>
               <input
-                className="w-full rounded border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-700"
-                value={domPaisDisplay}
-                readOnly
-                aria-readonly="true"
-                tabIndex={-1}
-                placeholder="Derivado de Nacionalidad"
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                value={domPais}
+                onChange={(e) => setDomPais(e.target.value)}
+                placeholder="México"
               />
               <p className="text-xs text-gray-500">
-                Derivado automáticamente de Nacionalidad; no se captura manualmente.
+                País del domicilio/contacto. Se captura manualmente y no modifica la regla de Código Postal.
               </p>
             </div>
 
