@@ -2327,9 +2327,9 @@ persona: {
             nombres: pfNombres.trim(),
             apellido_paterno: pfApPat.trim(),
             apellido_materno: pfApMat.trim(),
-            pais_nacimiento: pfPaisNacimiento.trim(),
+            pais_nacimiento: valueToCatalogKey(contactoPais),
             residencia: pfResidencia.trim(),
-            nacional_extranjero: pfNacionalExtranjero.trim(),
+            nacional_extranjero: tipoNacionalidad,
             CargoPublico: pfCargoPublicoActual.trim(),
             BeneficiarioTerceros: pfManifiestaTerceros,
             actividad_economica: act
@@ -2337,21 +2337,21 @@ persona: {
               : pfActividad,
           },
           calidad_migratoria: pfCalidadMigratoria.trim() || null,
-          estado_civil: pfEstadoCivil.trim(),
-          regimen_matrimonial: pfRegimenMatrimonial.trim(),
-          bienes_mancomunados: pfBienesMancomunados.trim(),
+          estado_civil: "",
+          regimen_matrimonial: "",
+          bienes_mancomunados: "",
           direccion_privada: {
-            calle: pfPrivCalle.trim(),
-            numero: pfPrivNumero.trim(),
-            colonia: pfPrivColonia.trim(),
-            municipio: pfPrivMunicipio.trim(),
-            ciudad_delegacion: pfPrivCiudadDelegacion.trim(),
-            codigo_postal: pfPrivCP.trim(),
-            estado: pfPrivEstado.trim(),
-            pais: pfPrivPais.trim(),
+            calle: "",
+            numero: "",
+            colonia: "",
+            municipio: "",
+            ciudad_delegacion: "",
+            codigo_postal: "",
+            estado: "",
+            pais: "",
           },
-          ocupacion: pfOcupacion.trim(),
-          actividad_profesional: pfActividadProfesional.trim(),
+          ocupacion: "",
+          actividad_profesional: "",
           cargo_publico: {
             actual: pfCargoPublicoActual.trim(),
             previo: pfCargoPublicoPrevio.trim(),
@@ -3260,25 +3260,6 @@ persona: {
                 }
               />
               
-              <div className="space-y-1">
-                <label className="text-sm font-medium">
-                  País de nacimiento <span className="text-red-600">*</span>
-                </label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors["persona.pais_nacimiento"] ? "border-red-500" : "border-gray-300"
-                  }`}
-                  value={pfPaisNacimiento}
-                  onChange={(e) => setPfPaisNacimiento(e.target.value)}
-                  onBlur={() => validator.validateField("persona.pais_nacimiento")}
-                  placeholder="mexico-mx"
-                />
-                {errors["persona.pais_nacimiento"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["persona.pais_nacimiento"]}
-                  </p>
-                ) : null}
-              </div>
 
               <div className="space-y-1">
                 <label className="text-sm font-medium">
@@ -3303,28 +3284,6 @@ persona: {
                 ) : null}
               </div>
 
-              <div className="space-y-1">
-                <label className="text-sm font-medium">
-                  Nacional / Extranjero <span className="text-red-600">*</span>
-                </label>
-                <select
-                  className={`w-full rounded border px-3 py-2 text-sm ${
-                    errors["persona.nacional_extranjero"] ? "border-red-500" : "border-gray-300"
-                  }`}
-                  value={pfNacionalExtranjero}
-                  onChange={(e) => setPfNacionalExtranjero(e.target.value)}
-                  onBlur={() => validator.validateField("persona.nacional_extranjero")}
-                >
-                  <option value="">Selecciona</option>
-                  <option value="nacional">Nacional</option>
-                  <option value="extranjero">Extranjero</option>
-                </select>
-                {errors["persona.nacional_extranjero"] ? (
-                  <p className="text-xs text-red-600">
-                    {errors["persona.nacional_extranjero"]}
-                  </p>
-                ) : null}
-              </div>
             </div>
 
             <hr className="my-2" />
@@ -3452,71 +3411,7 @@ persona: {
 
               <hr className="my-2" />
 
-              <h3 className="font-medium">
-                Estado civil / régimen matrimonial
-              </h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Estado civil *</label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.estado_civil"] ? "border-red-500" : "border-gray-300"}`}
-                    value={pfEstadoCivil}
-                    onChange={(e) => setPfEstadoCivil(e.target.value)}
-                    onBlur={() =>
-                      validator.validateField("persona.estado_civil")
-                    }
-                    placeholder="Soltero(a) / Casado(a) / ..."
-                  />
-                  {errors["persona.estado_civil"] ? (
-                    <p className="text-xs text-red-600">
-                      {errors["persona.estado_civil"]}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">
-                    Régimen matrimonial *
-                  </label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.regimen_matrimonial"] ? "border-red-500" : "border-gray-300"}`}
-                    value={pfRegimenMatrimonial}
-                    onChange={(e) => setPfRegimenMatrimonial(e.target.value)}
-                    onBlur={() =>
-                      validator.validateField("persona.regimen_matrimonial")
-                    }
-                    placeholder="Sociedad conyugal / Separación de bienes / ..."
-                  />
-                  {errors["persona.regimen_matrimonial"] ? (
-                    <p className="text-xs text-red-600">
-                      {errors["persona.regimen_matrimonial"]}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">
-                    Bienes mancomunados *
-                  </label>
-                  <select
-                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.bienes_mancomunados"] ? "border-red-500" : "border-gray-300"}`}
-                    value={pfBienesMancomunados}
-                    onChange={(e) => setPfBienesMancomunados(e.target.value)}
-                    onBlur={() =>
-                      validator.validateField("persona.bienes_mancomunados")
-                    }
-                  >
-                    <option value="">Selecciona...</option>
-                    <option value="si">Sí</option>
-                    <option value="no">No</option>
-                  </select>
-                  {errors["persona.bienes_mancomunados"] ? (
-                    <p className="text-xs text-red-600">
-                      {errors["persona.bienes_mancomunados"]}
-                    </p>
-                  ) : null}
-                </div>
-
                 <div className="space-y-1 md:col-span-3">
                   <label className="text-sm font-medium">
                     Calidad migratoria (opcional)
@@ -3530,201 +3425,7 @@ persona: {
                 </div>
               </div>
 
-              <hr className="my-2" />
 
-              <h3 className="font-medium">Dirección privada</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Calle *</label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.direccion_privada.calle"] ? "border-red-500" : "border-gray-300"}`}
-                    value={pfPrivCalle}
-                    onChange={(e) => setPfPrivCalle(e.target.value)}
-                    onBlur={() =>
-                      validator.validateField("persona.direccion_privada.calle")
-                    }
-                  />
-                  {errors["persona.direccion_privada.calle"] ? (
-                    <p className="text-xs text-red-600">
-                      {errors["persona.direccion_privada.calle"]}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Número *</label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.direccion_privada.numero"] ? "border-red-500" : "border-gray-300"}`}
-                    value={pfPrivNumero}
-                    onChange={(e) => setPfPrivNumero(e.target.value)}
-                    onBlur={() =>
-                      validator.validateField(
-                        "persona.direccion_privada.numero",
-                      )
-                    }
-                  />
-                  {errors["persona.direccion_privada.numero"] ? (
-                    <p className="text-xs text-red-600">
-                      {errors["persona.direccion_privada.numero"]}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Colonia *</label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.direccion_privada.colonia"] ? "border-red-500" : "border-gray-300"}`}
-                    value={pfPrivColonia}
-                    onChange={(e) => setPfPrivColonia(e.target.value)}
-                    onBlur={() =>
-                      validator.validateField(
-                        "persona.direccion_privada.colonia",
-                      )
-                    }
-                  />
-                  {errors["persona.direccion_privada.colonia"] ? (
-                    <p className="text-xs text-red-600">
-                      {errors["persona.direccion_privada.colonia"]}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Municipio *</label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.direccion_privada.municipio"] ? "border-red-500" : "border-gray-300"}`}
-                    value={pfPrivMunicipio}
-                    onChange={(e) => setPfPrivMunicipio(e.target.value)}
-                    onBlur={() =>
-                      validator.validateField(
-                        "persona.direccion_privada.municipio",
-                      )
-                    }
-                  />
-                  {errors["persona.direccion_privada.municipio"] ? (
-                    <p className="text-xs text-red-600">
-                      {errors["persona.direccion_privada.municipio"]}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">
-                    Ciudad/Delegación *
-                  </label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.direccion_privada.ciudad_delegacion"] ? "border-red-500" : "border-gray-300"}`}
-                    value={pfPrivCiudadDelegacion}
-                    onChange={(e) => setPfPrivCiudadDelegacion(e.target.value)}
-                    onBlur={() =>
-                      validator.validateField(
-                        "persona.direccion_privada.ciudad_delegacion",
-                      )
-                    }
-                  />
-                  {errors["persona.direccion_privada.ciudad_delegacion"] ? (
-                    <p className="text-xs text-red-600">
-                      {errors["persona.direccion_privada.ciudad_delegacion"]}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Código postal *</label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.direccion_privada.codigo_postal"] ? "border-red-500" : "border-gray-300"}`}
-                    value={pfPrivCP}
-                    onChange={(e) => setPfPrivCP(e.target.value)}
-                    onBlur={() =>
-                      validator.validateField(
-                        "persona.direccion_privada.codigo_postal",
-                      )
-                    }
-                    placeholder="44100"
-                  />
-                  {errors["persona.direccion_privada.codigo_postal"] ? (
-                    <p className="text-xs text-red-600">
-                      {errors["persona.direccion_privada.codigo_postal"]}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Estado *</label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.direccion_privada.estado"] ? "border-red-500" : "border-gray-300"}`}
-                    value={pfPrivEstado}
-                    onChange={(e) => setPfPrivEstado(e.target.value)}
-                    onBlur={() =>
-                      validator.validateField(
-                        "persona.direccion_privada.estado",
-                      )
-                    }
-                    placeholder="Jalisco"
-                  />
-                  {errors["persona.direccion_privada.estado"] ? (
-                    <p className="text-xs text-red-600">
-                      {errors["persona.direccion_privada.estado"]}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">País *</label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.direccion_privada.pais"] ? "border-red-500" : "border-gray-300"}`}
-                    value={pfPrivPais}
-                    onChange={(e) => setPfPrivPais(e.target.value)}
-                    onBlur={() =>
-                      validator.validateField("persona.direccion_privada.pais")
-                    }
-                    placeholder="México"
-                  />
-                  {errors["persona.direccion_privada.pais"] ? (
-                    <p className="text-xs text-red-600">
-                      {errors["persona.direccion_privada.pais"]}
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-
-              <hr className="my-2" />
-
-              <h3 className="font-medium">Ocupación</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Ocupación *</label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.ocupacion"] ? "border-red-500" : "border-gray-300"}`}
-                    value={pfOcupacion}
-                    onChange={(e) => setPfOcupacion(e.target.value)}
-                    onBlur={() => validator.validateField("persona.ocupacion")}
-                  />
-                  {errors["persona.ocupacion"] ? (
-                    <p className="text-xs text-red-600">
-                      {errors["persona.ocupacion"]}
-                    </p>
-                  ) : null}
-                </div>
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">
-                    Actividad profesional *
-                  </label>
-                  <input
-                    className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.actividad_profesional"] ? "border-red-500" : "border-gray-300"}`}
-                    value={pfActividadProfesional}
-                    onChange={(e) => setPfActividadProfesional(e.target.value)}
-                    onBlur={() =>
-                      validator.validateField("persona.actividad_profesional")
-                    }
-                  />
-                  {errors["persona.actividad_profesional"] ? (
-                    <p className="text-xs text-red-600">
-                      {errors["persona.actividad_profesional"]}
-                    </p>
-                  ) : null}
-                </div>
-              </div>
 
               <hr className="my-2" />
 
