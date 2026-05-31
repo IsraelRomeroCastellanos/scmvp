@@ -3525,8 +3525,7 @@ persona: {
                   />
                   <span>
                     Manifiesto que tengo conocimiento de la existencia del dueño
-                    beneficiario y/o parte o totalidad de los recursos provienen
-                    de terceros.
+                    beneficiario.
                   </span>
                 </label>
 
@@ -3549,7 +3548,7 @@ persona: {
                       <div key={index} className="rounded border border-gray-200 p-4 space-y-4">
                         <div className="flex items-center justify-between">
                           <p className="text-sm font-medium">
-                            Recurso de tercero #{index + 1}
+                            Beneficiario Controlador #{index + 1}
                           </p>
                           <button
                             type="button"
@@ -3609,29 +3608,7 @@ persona: {
                             />
                           </div>
 
-                          <div className="space-y-1 md:col-span-2">
-                            <label className="text-sm font-medium">Nombre entidad (derivado)</label>
-                            <input
-                              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                              value={row.nombre_entidad}
-                              readOnly
-                            />
-                          </div>
 
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium">Observaciones</label>
-                            <input
-                              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                              value={row.observaciones}
-                              onChange={(e) =>
-                                updateRelatedRecursoCommonField(
-                                  index,
-                                  "observaciones",
-                                  e.target.value,
-                                )
-                              }
-                            />
-                          </div>
                         </div>
 
                         <label className="flex items-start gap-2 text-sm">
