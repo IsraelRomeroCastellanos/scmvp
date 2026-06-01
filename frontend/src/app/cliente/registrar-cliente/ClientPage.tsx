@@ -3748,7 +3748,6 @@ persona: {
                           onBlur={() =>
                             validator.validateField("empresa.regimen_capital")
                           }
-                          placeholder="Variable / Fijo / ..."
                         />
                         {errors["empresa.regimen_capital"] ? (
                           <p className="text-xs text-red-600">
@@ -3887,16 +3886,6 @@ persona: {
                         }
                       />
 
-                      <div className="space-y-1 md:col-span-3">
-                        <label className="text-sm font-medium">
-                          Régimen jurídico de legal estancia en México (si aplica)
-                        </label>
-                        <input
-                          className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                          value={pmRepRegimenEstancia}
-                          onChange={(e) => setPmRepRegimenEstancia(e.target.value)}
-                        />
-                      </div>
 
                       <div className="space-y-1">
                         <label className="text-sm font-medium">CURP *</label>
@@ -3968,30 +3957,6 @@ persona: {
                         ) : null}
                       </div>
 
-                      <div className="space-y-1 md:col-span-3">
-                        <label className="text-sm font-medium">
-                          Nombre completo (compatibilidad API) *
-                        </label>
-                        <input
-                          className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.nombre_completo.pm"] ? "border-red-500" : "border-gray-300"}`}
-                          value={pmRepNombreCompleto}
-                          onChange={(e) => setPmRepNombreCompleto(e.target.value)}
-                          onBlur={() =>
-                            validator.validateField("representante.nombre_completo.pm")
-                          }
-                          placeholder="Se puede dejar vacío si llenas nombres y apellidos"
-                        />
-                        {errors["representante.nombre_completo.pm"] ? (
-                          <p className="text-xs text-red-600">
-                            {errors["representante.nombre_completo.pm"]}
-                          </p>
-                        ) : (
-                          <p className="text-xs text-gray-500">
-                            El backend actual valida nombre_completo; lo enviamos
-                            generado si lo dejas vacío.
-                          </p>
-                        )}
-                      </div>
                     </div>
 
                     <div className="rounded border border-gray-200 p-3 space-y-3">
