@@ -3499,9 +3499,6 @@ persona: {
 
               <hr className="my-2" />
 
-              <h3 className="font-medium">
-                Dueño beneficiario / recursos de terceros
-              </h3>
               <div className="space-y-2">
                 <label className="flex items-start gap-2 text-sm">
                   <input
