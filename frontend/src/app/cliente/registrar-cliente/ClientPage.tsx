@@ -582,16 +582,10 @@ function valueToCatalogKey(v: string) {
   const [relatedDuenosAplica, setRelatedDuenosAplica] = useState(false);
   const [relatedDuenos, setRelatedDuenos] = useState<RelatedDuenoRow[]>([]);
 
-  // PM: Si representante NO es accionista
-  const [pmRepEsAccionista, setPmRepEsAccionista] = useState(true);
+  // PM: representante legal accionista
+  const [pmRepEsAccionista, setPmRepEsAccionista] = useState(false);
   const pmBcDefaultAppliedRef = useRef(false);
-  const [pmAccNombres, setPmAccNombres] = useState("");
-  const [pmAccApPat, setPmAccApPat] = useState("");
-  const [pmAccApMat, setPmAccApMat] = useState("");
-  const [pmAccFechaNac, setPmAccFechaNac] = useState(""); // YYYY-MM-DD o AAAAMMDD
   const [pmAccPct, setPmAccPct] = useState("");
-  const [pmAccNacionalidad, setPmAccNacionalidad] = useState(""); // clave catálogo
-  const [pmAccActividadGiro, setPmAccActividadGiro] = useState(""); // clave
   const [pmAccRelacion, setPmAccRelacion] = useState("");
   const [fidIdentificador, setFidIdentificador] = useState("");
   const [fidDenominacionFiduciario, setFidDenominacionFiduciario] = useState("");
@@ -2391,18 +2385,20 @@ persona: {
           duenos_beneficiarios: buildCanonicalDuenosPayload(),
           representante_es_accionista: pmRepEsAccionista,
           accionista_tercero: pmRepEsAccionista
-            ? null
-            : {
-                nombres: pmAccNombres.trim(),
-                apellido_paterno: pmAccApPat.trim(),
-                apellido_materno: pmAccApMat.trim(),
+            ? {
+                nombres: pmRepNombres.trim(),
+                apellido_paterno: pmRepApPat.trim(),
+                apellido_materno: pmRepApMat.trim(),
                 fecha_nacimiento:
-                  normalizeToYYYYMMDD(pmAccFechaNac) ?? pmAccFechaNac.trim(),
+                  normalizeToYYYYMMDD(pmRepFechaNac) ?? pmRepFechaNac.trim(),
                 porcentaje_accionario: pmAccPct.trim(),
-                nacionalidad: valueToCatalogKey(pmAccNacionalidad),
-                actividad_giro: pmAccActividadGiro.trim(),
+                nacionalidad: valueToCatalogKey(pmRepNacionalidad),
+                rfc: pmRepRfc.trim().toUpperCase(),
+                curp: pmRepCurp.trim().toUpperCase(),
+                actividad_giro: giro ? giro.clave : pmGiro.trim(),
                 relacion: pmAccRelacion.trim(),
-              },
+              }
+            : null,
           empresa: {
             tipo: "persona_moral",
             rfc: pmRfc.trim().toUpperCase(),
@@ -3503,9 +3499,6 @@ persona: {
 
               <hr className="my-2" />
 
-              <h3 className="font-medium">
-                Dueño beneficiario / recursos de terceros
-              </h3>
               <div className="space-y-2">
                 <label className="flex items-start gap-2 text-sm">
                   <input
@@ -4150,83 +4143,8 @@ persona: {
                         <span>El Representante Legal es Accionista</span>
                       </label>
 
-                      {!pmRepEsAccionista ? (
+                      {pmRepEsAccionista ? (
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium">Nombres *</label>
-                            <input
-                              className={`w-full rounded border px-3 py-2 text-sm ${errors["accionista.nombres"] ? "border-red-500" : "border-gray-300"}`}
-                              value={pmAccNombres}
-                              onChange={(e) => setPmAccNombres(e.target.value)}
-                              onBlur={() =>
-                                validator.validateField("accionista.nombres")
-                              }
-                            />
-                            {errors["accionista.nombres"] ? (
-                              <p className="text-xs text-red-600">
-                                {errors["accionista.nombres"]}
-                              </p>
-                            ) : null}
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium">
-                              Apellido paterno *
-                            </label>
-                            <input
-                              className={`w-full rounded border px-3 py-2 text-sm ${errors["accionista.apellido_paterno"] ? "border-red-500" : "border-gray-300"}`}
-                              value={pmAccApPat}
-                              onChange={(e) => setPmAccApPat(e.target.value)}
-                              onBlur={() =>
-                                validator.validateField("accionista.apellido_paterno")
-                              }
-                            />
-                            {errors["accionista.apellido_paterno"] ? (
-                              <p className="text-xs text-red-600">
-                                {errors["accionista.apellido_paterno"]}
-                              </p>
-                            ) : null}
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium">
-                              Apellido materno *
-                            </label>
-                            <input
-                              className={`w-full rounded border px-3 py-2 text-sm ${errors["accionista.apellido_materno"] ? "border-red-500" : "border-gray-300"}`}
-                              value={pmAccApMat}
-                              onChange={(e) => setPmAccApMat(e.target.value)}
-                              onBlur={() =>
-                                validator.validateField("accionista.apellido_materno")
-                              }
-                            />
-                            {errors["accionista.apellido_materno"] ? (
-                              <p className="text-xs text-red-600">
-                                {errors["accionista.apellido_materno"]}
-                              </p>
-                            ) : null}
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium">
-                              Fecha de nacimiento (AAAAMMDD) *
-                            </label>
-                            <input
-                              className={`w-full rounded border px-3 py-2 text-sm ${errors["accionista.fecha_nacimiento"] ? "border-red-500" : "border-gray-300"}`}
-                              value={pmAccFechaNac}
-                              onChange={(e) => setPmAccFechaNac(e.target.value)}
-                              onBlur={() =>
-                                validator.validateField("accionista.fecha_nacimiento")
-                              }
-                              placeholder="19900101"
-                            />
-                            {errors["accionista.fecha_nacimiento"] ? (
-                              <p className="text-xs text-red-600">
-                                {errors["accionista.fecha_nacimiento"]}
-                              </p>
-                            ) : null}
-                          </div>
-
                           <div className="space-y-1">
                             <label className="text-sm font-medium">
                               % Accionario *
@@ -4247,31 +4165,7 @@ persona: {
                             ) : null}
                           </div>
 
-                          <SearchableSelect
-                            label="Nacionalidad (accionista)"
-                            required
-                            value={pmAccNacionalidad}
-                            items={paises}
-                            error={errors["accionista.nacionalidad"]}
-                            onChange={(v) => setPmAccNacionalidad(v)}
-                            onBlur={() =>
-                              validator.validateField("accionista.nacionalidad")
-                            }
-                          />
-
-                          <SearchableSelect
-                            label="Actividad / giro del negocio del tercero"
-                            required
-                            value={pmAccActividadGiro}
-                            items={giros}
-                            error={errors["accionista.actividad_giro"]}
-                            onChange={(v) => setPmAccActividadGiro(v)}
-                            onBlur={() =>
-                              validator.validateField("accionista.actividad_giro")
-                            }
-                          />
-
-                          <div className="space-y-1 md:col-span-3">
+                          <div className="space-y-1 md:col-span-2">
                             <label className="text-sm font-medium">
                               Relación con el tercero *
                             </label>
