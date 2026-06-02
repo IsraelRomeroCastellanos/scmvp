@@ -1957,7 +1957,7 @@ function valueToCatalogKey(v: string) {
               </div>
 
               <div className="space-y-1">
-                <label className="text-sm font-medium">Porcentaje participación</label>
+                <label className="text-sm font-medium">Porcentaje accionario</label>
                 <input
                   className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
                   value={row.porcentaje_participacion}
@@ -1971,29 +1971,6 @@ function valueToCatalogKey(v: string) {
                 />
               </div>
 
-              <div className="space-y-1 sm:col-span-2">
-                <label className="text-sm font-medium">Nombre entidad (derivado)</label>
-                <input
-                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                  value={row.nombre_entidad}
-                  readOnly
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Observaciones</label>
-                <input
-                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                  value={row.observaciones}
-                  onChange={(e) =>
-                    updateRelatedDuenoCommonField(
-                      index,
-                      "observaciones",
-                      e.target.value,
-                    )
-                  }
-                />
-              </div>
             </div>
 
             {renderRelatedDuenoPFFields(row, index)}
