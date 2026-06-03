@@ -1,6 +1,6 @@
 // frontend/src/lib/auth.ts
 
-export type NormalizedRole = 'administrador' | 'consultor' | 'cliente';
+export type NormalizedRole = 'admin' | 'consultor' | 'cliente';
 
 const cookieManager = {
   get: (name: string): string | undefined => {
@@ -20,7 +20,7 @@ export const normalizeRole = (rol: any): NormalizedRole | null => {
     r === 'administrador' ||
     r === 'administrador del sistema'
   ) {
-    return 'administrador';
+    return 'admin';
   }
 
   if (r === 'consultor' || r === 'consultant') {
@@ -35,7 +35,7 @@ export const normalizeRole = (rol: any): NormalizedRole | null => {
 };
 
 export const isAdmin = (rol: any): boolean =>
-  normalizeRole(rol) === 'administrador';
+  normalizeRole(rol) === 'admin';
 
 export const isConsultor = (rol: any): boolean =>
   normalizeRole(rol) === 'consultor';
@@ -63,6 +63,8 @@ export const checkAuth = (requiredRole?: NormalizedRole) => {
     if (!normalized) {
       if (typeof localStorage !== 'undefined') {
         localStorage.removeItem('token');
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('accessToken');
         localStorage.removeItem('user');
       }
       return { authenticated: false, redirect: '/login' };
@@ -71,9 +73,9 @@ export const checkAuth = (requiredRole?: NormalizedRole) => {
     if (requiredRole && normalized !== requiredRole) {
       let defaultRoute = '/dashboard';
 
-      if (normalized === 'administrador') defaultRoute = '/admin/usuarios';
-      if (normalized === 'cliente') defaultRoute = '/clientes';
-      if (normalized === 'consultor') defaultRoute = '/dashboard';
+      if (normalized === 'admin') defaultRoute = '/admin/usuarios';
+      if (normalized === 'cliente') defaultRoute = '/cliente/clientes';
+      if (normalized === 'consultor') defaultRoute = '/cliente/clientes';
 
       return { authenticated: false, redirect: defaultRoute };
     }
@@ -88,6 +90,8 @@ export const checkAuth = (requiredRole?: NormalizedRole) => {
 
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem('token');
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('accessToken');
       localStorage.removeItem('user');
     }
 

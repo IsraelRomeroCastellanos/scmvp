@@ -4,6 +4,21 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  'https://scmvp-1jhq.onrender.com';
+
+const setCookie = (name: string, value: string, days = 7) => {
+  const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString();
+  const secure =
+    typeof window !== 'undefined' && window.location.protocol === 'https:'
+      ? '; Secure'
+      : '';
+
+  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax${secure}`;
+};
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -17,14 +32,11 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/login`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        }
-      );
+      const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
 
       const text = await res.text();
 
@@ -38,10 +50,18 @@ export default function LoginPage() {
         throw new Error('Respuesta inválida del servidor');
       }
 
+      const userJson = JSON.stringify(data.user);
+
       localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      localStorage.setItem('authToken', data.token);
+      localStorage.setItem('accessToken', data.token);
+      localStorage.setItem('user', userJson);
+
+      setCookie('token', data.token);
+      setCookie('user', userJson);
 
       router.push('/dashboard');
+      router.refresh();
     } catch (err: any) {
       console.error('Login error:', err);
       setError('Error al iniciar sesión');

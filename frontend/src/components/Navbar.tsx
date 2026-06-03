@@ -13,7 +13,7 @@ const cookieManager = {
     const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
     return match ? decodeURIComponent(match[2]) : undefined;
   },
-  
+
   set: (
     name: string,
     value: string,
@@ -38,22 +38,31 @@ const cookieManager = {
     }
     document.cookie = cookie;
   },
-  
+
   remove: (name: string, options: { path?: string } = {}) => {
     document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=${options.path || '/'};`;
   }
 };
 
-// Normaliza el rol para tolerar variaciones de texto y mayúsculas
+// Normaliza el rol para tolerar variaciones de texto y mayúsculas.
+// El contrato frontend/base es el mismo que backend: admin | consultor | cliente.
 const normalizeRole = (raw: any): string => {
   if (!raw) return '';
   const r = String(raw).toLowerCase().trim();
 
-  if (r === 'admin' || r === 'administrator') return 'administrador';
+  if (
+    r === 'admin' ||
+    r === 'administrator' ||
+    r === 'administrador' ||
+    r === 'administrador del sistema'
+  ) {
+    return 'admin';
+  }
+
   if (r === 'cliente' || r === 'client') return 'cliente';
   if (r === 'consultor' || r === 'consultant') return 'consultor';
 
-  return r;
+  return '';
 };
 
 export default function Navbar() {
@@ -65,7 +74,7 @@ export default function Navbar() {
   useEffect(() => {
     const userCookie = cookieManager.get('user');
     const tokenCookie = cookieManager.get('token');
-    
+
     if (userCookie && tokenCookie) {
       try {
         setUser(JSON.parse(userCookie));
@@ -91,10 +100,12 @@ export default function Navbar() {
 
   const handleLogout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('accessToken');
     localStorage.removeItem('user');
     cookieManager.remove('token', { path: '/' });
     cookieManager.remove('user', { path: '/' });
-    
+
     router.push('/login');
     router.refresh();
   };
@@ -109,33 +120,33 @@ export default function Navbar() {
     {
       href: '/dashboard',
       baseLabel: 'Dashboard',
-      roles: ['administrador', 'consultor', 'cliente'],
+      roles: ['admin', 'consultor', 'cliente'],
     },
     {
       href: '/admin/usuarios',
       baseLabel: 'Gestión de Usuarios',
-      roles: ['administrador'],
+      roles: ['admin'],
     },
     {
       href: '/admin/empresas',
       baseLabel: 'Gestión de Empresas',
-      roles: ['administrador'],
+      roles: ['admin'],
     },
     {
       // Módulo unificado de clientes
       href: '/cliente/clientes',
       baseLabel: 'Gestión de Clientes',
-      roles: ['administrador', 'consultor', 'cliente'],
+      roles: ['admin', 'consultor', 'cliente'],
     },
     {
       href: '/cliente/carga-masiva',
       baseLabel: 'Carga Masiva',
-      roles: ['administrador', 'cliente'],
+      roles: ['admin', 'cliente'],
     },
     {
       href: '/cliente/registrar-cliente',
       baseLabel: 'Registrar Cliente',
-      roles: ['administrador', 'cliente'],
+      roles: ['admin', 'cliente'],
     },
   ];
 
@@ -166,7 +177,7 @@ export default function Navbar() {
               Sistema de Cumplimiento
             </Link>
           </div>
-          
+
           {/* Desktop Menu */}
           <div className="hidden md:flex items-center space-x-8">
             {menuItems.map((item) => {
@@ -175,12 +186,12 @@ export default function Navbar() {
                   pathname === item.href ||
                   pathname.startsWith(item.href + '/');
                 return (
-                  <Link 
-                    key={item.href} 
-                    href={item.href} 
-                    className={`font-medium transition-colors ${ 
-                      isActive 
-                        ? 'text-blue-600 border-b-2 border-blue-600' 
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`font-medium transition-colors ${
+                      isActive
+                        ? 'text-blue-600 border-b-2 border-blue-600'
                         : 'text-gray-700 hover:text-blue-600'
                     }`}
                   >
@@ -190,7 +201,7 @@ export default function Navbar() {
               }
               return null;
             })}
-            
+
             {user && (
               <div className="flex items-center space-x-4">
                 <span className="text-gray-700">
@@ -205,7 +216,7 @@ export default function Navbar() {
               </div>
             )}
           </div>
-          
+
           {/* Mobile menu button */}
           <div className="md:hidden flex items-center">
             <button
@@ -224,7 +235,7 @@ export default function Navbar() {
           </div>
         </div>
       </div>
-      
+
       {/* Mobile Menu */}
       {isOpen && (
         <div className="md:hidden bg-white border-t">
@@ -232,9 +243,9 @@ export default function Navbar() {
             {menuItems.map((item) => {
               if (shouldShowItem(item)) {
                 return (
-                  <Link 
-                    key={item.href} 
-                    href={item.href} 
+                  <Link
+                    key={item.href}
+                    href={item.href}
                     className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-blue-600 hover:bg-gray-50 transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
@@ -244,7 +255,7 @@ export default function Navbar() {
               }
               return null;
             })}
-            
+
             {user && (
               <>
                 <div className="block px-3 py-2 text-base font-medium text-gray-700 border-t">
