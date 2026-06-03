@@ -6,15 +6,16 @@ const nextConfig = {
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production',
   },
-  
+
   async rewrites() {
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 
-                      (process.env.NODE_ENV === 'production' 
-                         ? 'https://scmvp.onrender.com' 
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ||
+                      process.env.NEXT_PUBLIC_API_BASE_URL ||
+                      (process.env.NODE_ENV === 'production'
+                         ? 'https://scmvp-1jhq.onrender.com'
                          : 'http://localhost:10000');
-    
+
     console.log('🌐 Configurando proxy a:', backendUrl);
-    
+
     return [
       {
         source: '/api/:path*',
@@ -22,7 +23,7 @@ const nextConfig = {
       }
     ];
   },
-  
+
   async headers() {
     return [
       {

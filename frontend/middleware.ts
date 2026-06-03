@@ -2,14 +2,42 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const protectedRoutes: { [key: string]: string | null } = {
-  '/dashboard': null,
-  '/admin/usuarios': 'administrador',
-  '/admin/empresas': 'administrador',
-  '/cliente/clientes': 'cliente',
-  '/cliente/carga-masiva': 'cliente',
-  '/cliente/registrar-cliente': 'cliente',
-  '/consultor': 'consultor',
+type AppRole = 'admin' | 'consultor' | 'cliente';
+
+const protectedRoutes: { path: string; roles: AppRole[] | null }[] = [
+  { path: '/dashboard', roles: null },
+  { path: '/admin/usuarios', roles: ['admin'] },
+  { path: '/admin/empresas', roles: ['admin'] },
+  { path: '/cliente/clientes', roles: ['admin', 'consultor', 'cliente'] },
+  { path: '/cliente/carga-masiva', roles: ['admin', 'cliente'] },
+  { path: '/cliente/registrar-cliente', roles: ['admin', 'cliente'] },
+  { path: '/consultor', roles: ['consultor'] },
+];
+
+const normalizeRole = (raw: unknown): AppRole | null => {
+  if (!raw) return null;
+  const r = String(raw).toLowerCase().trim();
+
+  if (
+    r === 'admin' ||
+    r === 'administrator' ||
+    r === 'administrador' ||
+    r === 'administrador del sistema'
+  ) {
+    return 'admin';
+  }
+
+  if (r === 'consultor' || r === 'consultant') return 'consultor';
+  if (r === 'cliente' || r === 'client') return 'cliente';
+
+  return null;
+};
+
+const defaultRouteForRole = (role: AppRole | null): string => {
+  if (role === 'admin') return '/admin/usuarios';
+  if (role === 'consultor') return '/cliente/clientes';
+  if (role === 'cliente') return '/cliente/clientes';
+  return '/dashboard';
 };
 
 export function middleware(request: NextRequest) {
@@ -17,16 +45,11 @@ export function middleware(request: NextRequest) {
   const userCookie = request.cookies.get('user')?.value;
   const { pathname } = request.nextUrl;
 
-  let requiredRole: string | null = null;
-  
-  for (const route in protectedRoutes) {
-    if (pathname === route || pathname.startsWith(route + '/')) {
-      requiredRole = protectedRoutes[route];
-      break;
-    }
-  }
+  const route = protectedRoutes.find(
+    (item) => pathname === item.path || pathname.startsWith(item.path + '/'),
+  );
 
-  if (requiredRole === undefined) {
+  if (!route) {
     return NextResponse.next();
   }
 
@@ -38,19 +61,21 @@ export function middleware(request: NextRequest) {
 
   try {
     const userData = JSON.parse(userCookie);
+    const role = normalizeRole(userData?.rol ?? userData?.role);
 
-    if (requiredRole && userData.rol !== requiredRole) {
-      let defaultRoute = '/dashboard';
-      if (userData.rol === 'administrador') defaultRoute = '/admin/usuarios';
-      if (userData.rol === 'cliente') defaultRoute = '/cliente/clientes';
-      if (userData.rol === 'consultor') defaultRoute = '/dashboard';
+    if (!role) {
+      const response = NextResponse.redirect(new URL('/login', request.url));
+      response.cookies.delete('token');
+      response.cookies.delete('user');
+      return response;
+    }
 
-      return NextResponse.redirect(new URL(defaultRoute, request.url));
+    if (route.roles && !route.roles.includes(role)) {
+      return NextResponse.redirect(new URL(defaultRouteForRole(role), request.url));
     }
 
     return NextResponse.next();
-
-  } catch (error) {
+  } catch (_error) {
     const response = NextResponse.redirect(new URL('/login', request.url));
     response.cookies.delete('token');
     response.cookies.delete('user');

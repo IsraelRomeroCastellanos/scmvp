@@ -25,11 +25,13 @@ export default function CargaMasiva() {
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
-    
+
     if (storedToken && storedUser) {
       const user = JSON.parse(storedUser);
-      // Verificar que el usuario sea cliente o administrador
-      if (user.rol === 'cliente' || user.rol === 'administrador') {
+      // Verificar que el usuario sea cliente o admin según contrato real backend
+      const rol = String(user.rol || user.role || '').toLowerCase().trim();
+
+      if (rol === 'cliente' || rol === 'admin') {
         setToken(storedToken);
       } else {
         router.push('/login');
@@ -45,38 +47,38 @@ export default function CargaMasiva() {
       setArchivo(file);
       setError('');
       setMensaje('');
-      
+
       // Validar tipo de archivo
       if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
         setError('Por favor selecciona un archivo CSV válido');
         setArchivo(null);
         return;
       }
-      
+
       // Leer y mostrar vista previa
       const reader = new FileReader();
       reader.onload = (event) => {
         try {
           const content = event.target?.result as string;
           const lines = content.split('\n').filter(line => line.trim() !== '');
-          
+
           if (lines.length < 2) {
             setError('El archivo está vacío o no tiene datos válidos');
             return;
           }
-          
+
           // Obtener encabezados
           const headers = lines[0].split(',').map(h => h.trim());
-          
+
           // Validar encabezados requeridos
           const requiredHeaders = ['nombre_entidad', 'tipo_cliente', 'actividad_economica'];
           const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
-          
+
           if (missingHeaders.length > 0) {
             setError(`Faltan las siguientes columnas requeridas: ${missingHeaders.join(', ')}`);
             return;
           }
-          
+
           // Procesar datos para vista previa (máximo 5 filas)
           const previewData = lines.slice(1, 6).map(line => {
             const values = line.split(',').map(v => v.trim());
@@ -86,7 +88,7 @@ export default function CargaMasiva() {
             });
             return row;
           });
-          
+
           setPreview(previewData);
         } catch (err) {
           setError('Error al procesar el archivo: formato inválido');
@@ -103,7 +105,7 @@ export default function CargaMasiva() {
 Joyeros de México,persona_moral,venta joyería,activo,joyerosmex
 Juan Pérez,persona_fisica,servicios legales,activo,juanp
 María López,persona_fisica,consultoría fiscal,activo,marial`;
-      
+
       const blob = new Blob([template], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -114,7 +116,7 @@ María López,persona_fisica,consultoría fiscal,activo,marial`;
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      
+
       toast.success('Plantilla descargada correctamente');
     } catch (err) {
       console.error('Error al descargar plantilla:', err);
@@ -128,29 +130,29 @@ María López,persona_fisica,consultoría fiscal,activo,marial`;
       setError('Por favor selecciona un archivo CSV');
       return;
     }
-    
+
     if (preview.length === 0) {
       setError('El archivo no contiene datos válidos para procesar');
       return;
     }
-    
+
     setLoading(true);
     setError('');
     setMensaje('');
-    
+
     try {
       // Leer el contenido del archivo
       const reader = new FileReader();
-      
+
       reader.onload = async (event) => {
         try {
           const csvContent = event.target?.result as string;
-          
+
           // Enviar al backend con tipado explícito
           const response = await api.post<CargaMasivaResponse>('/api/cliente/carga-masiva', {
             csvContent
           });
-          
+
           const data = response.data;
 
           if (data.success) {
@@ -170,7 +172,7 @@ María López,persona_fisica,consultoría fiscal,activo,marial`;
           setLoading(false);
         }
       };
-      
+
       reader.readAsText(archivo, 'utf-8');
     } catch (err: any) {
       console.error('Error en submit:', err);
@@ -286,10 +288,10 @@ María López,persona_fisica,consultoría fiscal,activo,marial`;
                           <tr key={index}>
                             {Object.values(row).map((value, idx) => (
                               <td key={idx} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {value != null 
-                                  ? (typeof value === 'object' 
-                                    ? JSON.stringify(value) 
-                                    : value.toString()) 
+                                {value != null
+                                  ? (typeof value === 'object'
+                                    ? JSON.stringify(value)
+                                    : value.toString())
                                   : 'N/A'}
                               </td>
                             ))}
