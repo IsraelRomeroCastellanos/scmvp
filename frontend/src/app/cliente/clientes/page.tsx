@@ -17,6 +17,47 @@ type Cliente = {
   estado?: string | null;
 };
 
+type AuthUser = {
+  rol?: string | null;
+  role?: string | null;
+  empresa_id?: number | string | null;
+};
+
+type AppRole = 'admin' | 'consultor' | 'cliente';
+
+function normalizeRole(raw: any): AppRole | null {
+  if (!raw) return null;
+  const r = String(raw).toLowerCase().trim();
+
+  if (
+    r === 'admin' ||
+    r === 'administrator' ||
+    r === 'administrador' ||
+    r === 'administrador del sistema'
+  ) {
+    return 'admin';
+  }
+
+  if (r === 'consultor' || r === 'consultant') return 'consultor';
+  if (r === 'cliente' || r === 'client' || r === 'user' || r === 'usuario') return 'cliente';
+
+  return null;
+}
+
+function getStoredUser(): AuthUser | null {
+  try {
+    const raw = localStorage.getItem('user');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function parsePositiveId(v: any): number | null {
+  const n = Number(v);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, '') ||
   'https://scmvp-1jhq.onrender.com';
@@ -65,8 +106,12 @@ export default function ClientesPage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
 
   const token = useMemo(() => getToken(), []);
+  const user = useMemo(() => getStoredUser(), []);
+  const role = useMemo(() => normalizeRole(user?.rol ?? user?.role), [user]);
+  const userEmpresaId = useMemo(() => parsePositiveId(user?.empresa_id), [user]);
 
-  // 1) Cargar empresas (para el selector)
+  // 1) Cargar empresas (para el selector de admin/consultor).
+  // Para rol cliente no se llama /api/admin/empresas; se usa empresa_id del token.
   useEffect(() => {
     let alive = true;
 
@@ -76,6 +121,18 @@ export default function ClientesPage() {
 
       try {
         if (!token) throw new Error('No hay token. Inicia sesión.');
+        if (!role) throw new Error('No hay rol válido en la sesión.');
+
+        if (role === 'cliente') {
+          if (!userEmpresaId) {
+            throw new Error('No hay empresa_id válido en la sesión del cliente.');
+          }
+
+          if (!alive) return;
+          setEmpresas([]);
+          setEmpresaSel(String(userEmpresaId));
+          return;
+        }
 
         const data = await apiGet<{ empresas: Empresa[] }>('/api/admin/empresas', token);
 
@@ -97,9 +154,10 @@ export default function ClientesPage() {
     return () => {
       alive = false;
     };
-  }, [token]);
+  }, [token, role, userEmpresaId]);
 
-  // 2) Cargar clientes (según selector)
+  // 2) Cargar clientes.
+  // Cliente: solo su empresa_id. Admin: conserva selector/Todas. Consultor: sin cambio de contrato en F1A.
   useEffect(() => {
     let alive = true;
 
@@ -109,6 +167,21 @@ export default function ClientesPage() {
 
       try {
         if (!token) throw new Error('No hay token. Inicia sesión.');
+
+        if (role === 'cliente') {
+          if (!userEmpresaId) {
+            throw new Error('No hay empresa_id válido en la sesión del cliente.');
+          }
+
+          const data = await apiGet<{ clientes: Cliente[] }>(
+            `/api/cliente/clientes?empresa_id=${encodeURIComponent(String(userEmpresaId))}`,
+            token
+          );
+
+          if (!alive) return;
+          setClientes(Array.isArray(data?.clientes) ? data.clientes : []);
+          return;
+        }
 
         // Caso A: “Todas” => pedimos por cada empresa y unimos
         if (empresaSel === 'all') {
@@ -168,7 +241,7 @@ export default function ClientesPage() {
     return () => {
       alive = false;
     };
-  }, [token, empresaSel, empresas]);
+  }, [token, role, userEmpresaId, empresaSel, empresas]);
 
   if (loading) {
     return <p className="p-6">Cargando...</p>;
@@ -183,9 +256,13 @@ export default function ClientesPage() {
       <div className="bg-white p-6 rounded shadow">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold mb-1">Gestión de Clientes</h1>
+            <h1 className="text-2xl font-semibold mb-1">
+              {role === 'cliente' ? 'Mis Clientes' : 'Gestión de Clientes'}
+            </h1>
             <p className="text-sm text-gray-500">
-              Listado general de clientes del sistema
+              {role === 'cliente'
+                ? 'Listado de clientes asociados a tu empresa'
+                : 'Listado general de clientes del sistema'}
             </p>
           </div>
 
@@ -197,30 +274,47 @@ export default function ClientesPage() {
           </button>
         </div>
 
-        {/* ✅ Selector con default “Todas” */}
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <label className="text-sm font-medium text-gray-700">Empresa:</label>
-          <select
-            className="border rounded px-3 py-2 text-sm bg-white"
-            value={empresaSel}
-            onChange={(e) => setEmpresaSel(e.target.value)}
-          >
-            <option value="all">Todas</option>
-            {empresas.map((e) => (
-              <option key={e.id} value={String(e.id)}>
-                {e.nombre_legal} (ID {e.id})
-              </option>
-            ))}
-          </select>
+        {role !== 'cliente' ? (
+          <>
+            {/* ✅ Selector con default “Todas” */}
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <label className="text-sm font-medium text-gray-700">Empresa:</label>
+              <select
+                className="border rounded px-3 py-2 text-sm bg-white"
+                value={empresaSel}
+                onChange={(e) => setEmpresaSel(e.target.value)}
+              >
+                <option value="all">Todas</option>
+                {empresas.map((e) => (
+                  <option key={e.id} value={String(e.id)}>
+                    {e.nombre_legal} (ID {e.id})
+                  </option>
+                ))}
+              </select>
 
-          {loadingClientes ? (
-            <span className="text-sm text-gray-500">Cargando clientes…</span>
-          ) : (
+              {loadingClientes ? (
+                <span className="text-sm text-gray-500">Cargando clientes…</span>
+              ) : (
+                <span className="text-sm text-gray-500">
+                  {clientes.length} cliente{clientes.length === 1 ? '' : 's'}
+                </span>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="mt-4 flex flex-wrap items-center gap-3">
             <span className="text-sm text-gray-500">
-              {clientes.length} cliente{clientes.length === 1 ? '' : 's'}
+              Empresa asignada: ID {userEmpresaId ?? '—'}
             </span>
-          )}
-        </div>
+            {loadingClientes ? (
+              <span className="text-sm text-gray-500">Cargando clientes…</span>
+            ) : (
+              <span className="text-sm text-gray-500">
+                {clientes.length} cliente{clientes.length === 1 ? '' : 's'}
+              </span>
+            )}
+          </div>
+        )}
 
         <div className="mt-4">
           {clientes.length === 0 ? (
