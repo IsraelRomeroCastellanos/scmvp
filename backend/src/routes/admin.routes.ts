@@ -55,7 +55,7 @@ router.get(
 router.get(
   '/empresas',
   authenticate,
-  authorizeRoles('admin'),
+  authorizeRoles('admin', 'consultor'),
   async (_req, res) => {
     try {
       const result = await pool.query(`
