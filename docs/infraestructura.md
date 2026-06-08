@@ -70,3 +70,42 @@
 - Persistencia de drift de esquema mitigada parcialmente con columnas de compatibilidad
 - Pendiente formalizar migraciones/alineación estable de esquema
 - Recomendable rotación de credenciales si hubo exposición accidental
+
+## Migración DB 2026-06-08 (Render PostgreSQL)
+
+- **Motivo:** vencimiento inminente del periodo trial de PostgreSQL en Render.
+- **Origen:** Render.com PostgreSQL (trial)
+  - **DB lógica anterior:** `scmvp_xeu1`
+- **Destino:** Render.com PostgreSQL (nueva instancia en otra cuenta)
+  - **DB lógica destino:** **PENDIENTE** (nombre lógico pendiente de recuperar)
+- **Backend vigente actual (validado):** https://scmvp-nxtj.onrender.com
+- **Backend anterior/histórico (salvo evidencia posterior):** https://scmvp-1jhq.onrender.com
+
+### Cambios ejecutados (infra)
+- Backup SQL: **sí**
+  - Archivo generado: `scmvp_20260608_003123.sql`
+- Restore SQL: **sí**
+  - Desde `*.render_ready.sql`
+  - Se removieron antes del restore:
+    - `\restrict`
+    - `\unrestrict`
+    - `ALTER DEFAULT PRIVILEGES`
+- Render Webservice:
+  - `DATABASE_URL` actualizado
+  - Redeploy ejecutado
+- Frontend/Vercel:
+  - env vars actualizadas; redeploy; UI conectada correctamente (reportado)
+- External Database URL:
+  - usado para restauración desde WSL/local
+- Internal Database URL:
+  - no aplica fuera de Render
+
+### Validaciones mínimas
+- `GET /api/admin/empresas` sin token → **401**
+- `POST /api/auth/login` → **200** con token
+- `GET /api/admin/empresas` con token → **200**
+- UI Vercel → conectada correctamente (reportado)
+
+### Cambios NO ejecutados
+- Sin cambios de código.
+- Sin ajustes de esquema adicionales.

@@ -152,3 +152,31 @@ Disciplina:
 - Propuesta de tag:
   - `stable-clientes-d2-20260523`
 - No crear tag sin autorización expresa de Control.
+
+## Runbook: Backup + Restore DB Render (trial → nueva instancia)
+
+### Reglas
+- Desde WSL/local usar **External Database URL**.
+- **No usar Internal Database URL** fuera de Render.
+- No imprimir ni documentar secretos (DATABASE_URL completas, passwords, tokens).
+- Rotar credenciales si se copiaron/pegaron URLs con secretos en historial/terminal.
+
+### Pasos
+1) Backup SQL (pg_dump) desde DB origen.
+2) Preparar `*.render_ready.sql` removiendo:
+   - `\restrict`
+   - `\unrestrict`
+   - `ALTER DEFAULT PRIVILEGES`
+3) Restore en DB destino:
+   - `DROP SCHEMA public CASCADE; CREATE SCHEMA public;`
+   - `psql -f *.render_ready.sql`
+4) Swap en Render Webservice:
+   - actualizar `DATABASE_URL`
+   - redeploy
+5) Vercel:
+   - actualizar `NEXT_PUBLIC_API_BASE_URL` si cambia backend
+   - redeploy
+6) Validaciones mínimas (curl):
+   - `GET /api/admin/empresas` sin token → 401 `Token no proporcionado`
+   - `POST /api/auth/login` → 200 con token
+   - `GET /api/admin/empresas` con token → 200 lista

@@ -262,3 +262,19 @@ Estado actual de `main`:
 
 Tag propuesto para estabilización posterior:
 - `stable-clientes-qa-post-d2-20260525`
+
+## Infraestructura vigente (actual)
+
+- **Backend activo vigente:** https://scmvp-nxtj.onrender.com
+- **Backend histórico/anterior (salvo evidencia posterior):** https://scmvp-1jhq.onrender.com
+- **Base de datos vigente:** nueva instancia PostgreSQL en Render migrada el **2026-06-08**
+  - **DB lógica destino:** **PENDIENTE** (nombre lógico pendiente de recuperar)
+  - **DB lógica anterior:** `scmvp_xeu1`
+
+### Variables tocadas (solo nombres)
+- Backend (Render Webservice): `DATABASE_URL`
+- Frontend (Vercel): `NEXT_PUBLIC_API_BASE_URL`
+
+### Validación mínima
+- `/api/admin/empresas` → 401 sin token, 200 con token.
+- UI Vercel conectada correctamente (reportado).

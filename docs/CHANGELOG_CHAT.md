@@ -167,3 +167,5 @@ Propuesta de versión estable:
 - No se abrió U1, D3, C2C, C2D ni PF/BC condicionado.
 - Tag estable propuesto:
   - `stable-clientes-qa-post-d2-20260525`
+
+- **[2026-06-08] Infra / DB:** Migración de PostgreSQL en Render por expiración de trial. Backup+restore SQL ejecutados, `DATABASE_URL` actualizado en Render Webservice y redeploy. Frontend/Vercel actualizado mediante env var. Validación mínima: login 200 + `/api/admin/empresas` 200 con token; sin token 401. Backend vigente actual: https://scmvp-nxtj.onrender.com. DB destino: nombre lógico pendiente de recuperar.
