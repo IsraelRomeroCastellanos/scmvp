@@ -18,6 +18,7 @@ export default function GestionUsuarios() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [updatingUserId, setUpdatingUserId] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchUsuarios = async () => {
@@ -57,6 +58,62 @@ export default function GestionUsuarios() {
     fetchUsuarios();
   }, [router]);
 
+  const cambiarEstadoUsuario = async (id: number, activoNuevo: boolean) => {
+    setError('');
+    setUpdatingUserId(id);
+
+    try {
+      const token = localStorage.getItem('token');
+      const base = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+
+      if (!base) {
+        throw new Error('Falta NEXT_PUBLIC_API_BASE_URL');
+      }
+
+      const res = await fetch(`${base}/api/admin/usuarios/${id}/activo`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ activo: activoNuevo }),
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(data?.error || 'Error al cambiar estado del usuario');
+      }
+
+      const usuarioActualizado = data?.usuario;
+
+      setUsuarios((prev) =>
+        prev.map((u) =>
+          u.id === id
+            ? {
+                ...u,
+                activo:
+                  typeof usuarioActualizado?.activo === 'boolean'
+                    ? usuarioActualizado.activo
+                    : activoNuevo,
+              }
+            : u
+        )
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Error al cambiar estado del usuario'
+      );
+    } finally {
+      setUpdatingUserId(null);
+    }
+  };
+
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -90,12 +147,13 @@ export default function GestionUsuarios() {
                 <th className="px-4 py-2 border">Rol</th>
                 <th className="px-4 py-2 border">Empresa</th>
                 <th className="px-4 py-2 border">Estado</th>
+                <th className="px-4 py-2 border">Acción</th>
               </tr>
             </thead>
             <tbody>
               {usuarios.length === 0 && (
                 <tr>
-                  <td className="px-4 py-6 border text-center text-gray-500" colSpan={6}>
+                  <td className="px-4 py-6 border text-center text-gray-500" colSpan={7}>
                     No hay usuarios registrados.
                   </td>
                 </tr>
@@ -118,6 +176,24 @@ export default function GestionUsuarios() {
                     >
                       {u.activo ? 'Activo' : 'Inactivo'}
                     </span>
+                  </td>
+                  <td className="px-4 py-2 border">
+                    <button
+                      type="button"
+                      disabled={updatingUserId === u.id}
+                      onClick={() => cambiarEstadoUsuario(u.id, !u.activo)}
+                      className={`px-3 py-1 rounded text-xs font-medium disabled:opacity-60 disabled:cursor-not-allowed ${
+                        u.activo
+                          ? 'bg-red-600 text-white hover:bg-red-700'
+                          : 'bg-green-600 text-white hover:bg-green-700'
+                      }`}
+                    >
+                      {updatingUserId === u.id
+                        ? 'Actualizando…'
+                        : u.activo
+                          ? 'Desactivar'
+                          : 'Activar'}
+                    </button>
                   </td>
                 </tr>
               ))}
