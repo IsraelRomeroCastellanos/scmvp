@@ -169,6 +169,65 @@ router.post(
 );
 
 
+
+// ===============================
+// ACTIVAR / DESACTIVAR USUARIO (ADMIN)
+// ===============================
+router.patch(
+  '/usuarios/:id/activo',
+  authenticate,
+  authorizeRoles('admin'),
+  async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const activo = req.body?.activo;
+
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: 'id invalido' });
+      }
+
+      if (typeof activo !== 'boolean') {
+        return res.status(400).json({ error: 'activo debe ser boolean' });
+      }
+
+      const authenticatedUserId = Number((req as any).user?.id);
+
+      if (
+        Number.isInteger(authenticatedUserId) &&
+        authenticatedUserId === id &&
+        activo === false
+      ) {
+        return res.status(400).json({ error: 'no puedes desactivar tu propio usuario' });
+      }
+
+      const result = await pool.query(
+        `
+        UPDATE usuarios
+        SET activo = $1
+        WHERE id = $2
+        RETURNING
+          id,
+          email,
+          nombre_completo,
+          rol,
+          empresa_id,
+          activo
+        `,
+        [activo, id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'usuario no encontrado' });
+      }
+
+      return res.json({ usuario: result.rows[0] });
+    } catch (error) {
+      console.error('Error al cambiar estado de usuario:', error);
+      return res.status(500).json({ error: 'Error al cambiar estado de usuario' });
+    }
+  }
+);
+
 /**
  * ===============================
  * LISTAR EMPRESAS
