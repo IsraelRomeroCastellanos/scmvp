@@ -171,6 +171,118 @@ router.post(
 
 
 // ===============================
+// EDITAR USUARIO MINIMO (ADMIN)
+// ===============================
+router.patch(
+  '/usuarios/:id',
+  authenticate,
+  authorizeRoles('admin'),
+  async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const nombre_completo = String(req.body?.nombre_completo ?? '').trim();
+      const rol = String(req.body?.rol ?? '').trim().toLowerCase();
+      const empresaIdRaw = req.body?.empresa_id;
+
+      const rolesPermitidos = ['admin', 'consultor', 'cliente'];
+      const camposProhibidos = ['email', 'password', 'password_hash', 'activo'];
+
+      for (const campo of camposProhibidos) {
+        if (Object.prototype.hasOwnProperty.call(req.body ?? {}, campo)) {
+          return res.status(400).json({ error: ` no puede modificarse en este endpoint` });
+        }
+      }
+
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: 'id invalido' });
+      }
+
+      if (!nombre_completo) {
+        return res.status(400).json({ error: 'nombre_completo es obligatorio' });
+      }
+
+      if (!rolesPermitidos.includes(rol)) {
+        return res.status(400).json({ error: 'rol invalido' });
+      }
+
+      let empresa_id: number | null = null;
+
+      if (rol === 'cliente') {
+        if (empresaIdRaw === undefined || empresaIdRaw === null || empresaIdRaw === '') {
+          return res.status(400).json({ error: 'empresa_id es obligatorio para rol cliente' });
+        }
+
+        const parsedEmpresaId = Number(empresaIdRaw);
+
+        if (!Number.isInteger(parsedEmpresaId) || parsedEmpresaId <= 0) {
+          return res.status(400).json({ error: 'empresa_id invalido' });
+        }
+
+        empresa_id = parsedEmpresaId;
+      } else if (empresaIdRaw !== undefined && empresaIdRaw !== null && empresaIdRaw !== '') {
+        return res.status(400).json({ error: 'empresa_id debe ser null para rol admin o consultor' });
+      }
+
+      const existingUser = await pool.query(
+        'SELECT id, rol FROM usuarios WHERE id = $1 LIMIT 1',
+        [id]
+      );
+
+      if (existingUser.rows.length === 0) {
+        return res.status(404).json({ error: 'usuario no encontrado' });
+      }
+
+      const authenticatedUserId = Number((req as any).user?.id);
+
+      if (
+        Number.isInteger(authenticatedUserId) &&
+        authenticatedUserId === id &&
+        existingUser.rows[0].rol === 'admin' &&
+        rol !== 'admin'
+      ) {
+        return res.status(400).json({ error: 'no puedes cambiar tu propio rol fuera de admin' });
+      }
+
+      if (empresa_id !== null) {
+        const empresaResult = await pool.query(
+          'SELECT id FROM empresas WHERE id = $1 LIMIT 1',
+          [empresa_id]
+        );
+
+        if (empresaResult.rows.length === 0) {
+          return res.status(400).json({ error: 'empresa_id no existe' });
+        }
+      }
+
+      const result = await pool.query(
+        `
+        UPDATE usuarios
+        SET
+          nombre_completo = $1,
+          rol = $2,
+          empresa_id = $3
+        WHERE id = $4
+        RETURNING
+          id,
+          email,
+          nombre_completo,
+          rol,
+          empresa_id,
+          activo
+        `,
+        [nombre_completo, rol, empresa_id, id]
+      );
+
+      return res.json({ usuario: result.rows[0] });
+    } catch (error) {
+      console.error('Error al editar usuario:', error);
+      return res.status(500).json({ error: 'Error al editar usuario' });
+    }
+  }
+);
+
+
+// ===============================
 // ACTIVAR / DESACTIVAR USUARIO (ADMIN)
 // ===============================
 router.patch(
