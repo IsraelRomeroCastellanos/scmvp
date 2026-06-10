@@ -216,3 +216,48 @@ Estado operativo antes de U1:
 - Usuarios, empresas, carga masiva y riesgo siguen fuera de este checkpoint.
 - Tag propuesto posterior a este checkpoint:
   - `stable-clientes-qa-post-d2-20260525`
+
+## CONTROL-DOC-USUARIOS-20260610
+
+Estado operativo actual:
+- Main: `583ec5d`
+- Backend vigente: https://scmvp-nxtj.onrender.com
+- Frontend Production: https://scmvp.vercel.app
+
+Bloque Usuarios cerrado:
+- U1C completo.
+- U1D completo.
+- U1E completo.
+
+Usuario QA de referencia:
+- ID 40
+- qa-u1c-ft1-08062026@example.local
+- consultor
+- activo=false
+
+Edición mínima usuarios:
+
+Ruta:
+- /admin/editar-usuario/[id]
+
+Payload permitido:
+- nombre_completo
+- rol
+- empresa_id
+
+Campos excluidos:
+- email
+- password
+- password_hash
+- activo
+
+Ramas U1C/U1D/U1E:
+- integradas en main
+- cerradas
+- eliminadas local/remoto
+
+No tocar automáticamente:
+- backups/
+- backups-previous/
+- db/
+- *.bak_*

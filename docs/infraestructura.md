@@ -109,3 +109,19 @@
 ### Cambios NO ejecutados
 - Sin cambios de código.
 - Sin ajustes de esquema adicionales.
+
+## Estado vigente validado — 2026-06-10
+
+Backend vigente:
+- https://scmvp-nxtj.onrender.com
+
+Frontend Production:
+- https://scmvp.vercel.app
+
+Backend histórico:
+- https://scmvp-1jhq.onrender.com
+
+Último checkpoint funcional integrado:
+- U1E-FE1
+- commit funcional: `a67ea53`
+- merge main: `583ec5d`
