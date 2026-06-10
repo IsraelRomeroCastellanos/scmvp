@@ -180,3 +180,63 @@ Disciplina:
    - `GET /api/admin/empresas` sin token → 401 `Token no proporcionado`
    - `POST /api/auth/login` → 200 con token
    - `GET /api/admin/empresas` con token → 200 lista
+
+## Usuarios Admin — Resumen operativo
+
+### Listar usuarios
+
+GET /api/admin/usuarios
+
+Uso:
+- administración
+- edición frontend
+- validaciones QA
+
+### Crear usuario
+
+POST /api/admin/usuarios
+
+Campos esperados:
+- email
+- password
+- nombre_completo
+- rol
+- empresa_id
+- activo
+
+### Activar / desactivar usuario
+
+PATCH /api/admin/usuarios/:id/activo
+
+Body:
+```json
+{
+  "activo": true
+}
+```
+
+### Editar usuario
+
+PATCH /api/admin/usuarios/:id
+
+Campos permitidos:
+- nombre_completo
+- rol
+- empresa_id
+
+Campos prohibidos:
+- email
+- password
+- password_hash
+- activo
+
+### Restricciones
+
+No existe actualmente:
+- delete usuario
+- password reset
+- password change administrativo
+
+Nunca exponer:
+- password
+- password_hash

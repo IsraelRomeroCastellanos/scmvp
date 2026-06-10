@@ -278,3 +278,44 @@ Tag propuesto para estabilización posterior:
 ### Validación mínima
 - `/api/admin/empresas` → 401 sin token, 200 con token.
 - UI Vercel conectada correctamente (reportado).
+
+## CONTROL-DOC-USUARIOS-20260610
+
+### Estado consolidado
+
+- Main actual: `583ec5d`
+- Último funcional integrado: `a67ea53`
+- Frontend Production: https://scmvp.vercel.app
+- Backend vigente: https://scmvp-nxtj.onrender.com
+
+### Bloque Usuarios
+
+Cerrado funcionalmente:
+
+- U1C-BE1 — Alta usuarios backend.
+- U1C-FE1 — Alta usuarios frontend.
+- U1C-FT1 — QA alta usuario.
+- U1C-FT1-M1 — Mitigación usuario QA activo=false.
+- U1C-FE1-F1 — Diagnóstico alta usuarios.
+- U1D-BE1 — Activar/desactivar backend.
+- U1D-FE1 — Activar/desactivar frontend.
+- U1E-DIAG-01 — Diagnóstico edición usuarios.
+- U1E-BE1 — Edición mínima backend.
+- U1E-BE1-F1 — Corrección mensaje campos prohibidos.
+- U1E-FE1 — Edición mínima frontend.
+
+### Usuario QA de referencia
+
+- ID: 40
+- Email: qa-u1c-ft1-08062026@example.local
+- Rol: consultor
+- Activo: false
+
+### Pendientes fuera de alcance
+
+- D3 Fideicomiso completo.
+- C2C accionista tercero PM.
+- C2D dueños/beneficiarios.
+- PF/BC condicionado.
+- Ajustes UX/validaciones futuras.
+- Limpieza de untracked históricos.

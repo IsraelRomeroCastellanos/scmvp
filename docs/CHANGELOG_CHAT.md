@@ -169,3 +169,45 @@ Propuesta de versión estable:
   - `stable-clientes-qa-post-d2-20260525`
 
 - **[2026-06-08] Infra / DB:** Migración de PostgreSQL en Render por expiración de trial. Backup+restore SQL ejecutados, `DATABASE_URL` actualizado en Render Webservice y redeploy. Frontend/Vercel actualizado mediante env var. Validación mínima: login 200 + `/api/admin/empresas` 200 con token; sin token 401. Backend vigente actual: https://scmvp-nxtj.onrender.com. DB destino: nombre lógico pendiente de recuperar.
+
+## 2026-06-10 — CONTROL-DOC-USUARIOS-20260610
+
+Checkpoint documental posterior al cierre completo del bloque Usuarios.
+
+Estado integrado en main:
+- Main: `583ec5d`
+- Funcional principal: `a67ea53`
+
+Bloque Usuarios cerrado:
+
+### U1C — Alta usuarios
+- Backend alta usuarios.
+- Frontend alta usuarios.
+- QA usuario ID 40.
+- Mitigación QA activo=false.
+
+### U1D — Activar / desactivar usuarios
+- Endpoint backend de cambio de estado.
+- Acción frontend integrada en listado.
+
+### U1E — Edición mínima usuarios
+- Diagnóstico funcional.
+- PATCH backend edición mínima.
+- Corrección mensaje campos prohibidos.
+- Ruta frontend `/admin/editar-usuario/[id]`.
+- Payload limitado a:
+  - nombre_completo
+  - rol
+  - empresa_id
+
+Campos excluidos:
+- email
+- password
+- password_hash
+- activo
+
+Backend vigente:
+- https://scmvp-nxtj.onrender.com
+
+Frontend Production:
+- https://scmvp.vercel.app
