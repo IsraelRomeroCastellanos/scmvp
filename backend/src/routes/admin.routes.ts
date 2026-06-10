@@ -189,7 +189,7 @@ router.patch(
 
       for (const campo of camposProhibidos) {
         if (Object.prototype.hasOwnProperty.call(req.body ?? {}, campo)) {
-          return res.status(400).json({ error: ` no puede modificarse en este endpoint` });
+          return res.status(400).json({ error: `${campo} no puede modificarse en este endpoint` });
         }
       }
 
