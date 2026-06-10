@@ -1,257 +1,308 @@
-// src/app/admin/editar-usuario/[id]/page.tsx
+// frontend/src/app/admin/editar-usuario/[id]/page.tsx
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useRouter, useParams } from 'next/navigation';
-import axios from 'axios';
-import { toast } from 'react-toastify';
+import { useEffect, useMemo, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+
+type RolUsuario = 'admin' | 'consultor' | 'cliente';
+
+interface Usuario {
+  id: number;
+  email: string;
+  nombre_completo: string;
+  rol: RolUsuario;
+  empresa_id: number | null;
+  activo: boolean;
+}
+
+interface Empresa {
+  id: number;
+  nombre_legal: string;
+  rfc?: string | null;
+}
 
 export default function EditarUsuario() {
-  const [formData, setFormData] = useState({
-    email: '',
-    nombre_completo: '',
-    rol: 'consultor',
-    empresa_id: '',
-    activo: true
-  });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>('');
-  const [saving, setSaving] = useState(false);
   const router = useRouter();
-  const { id } = useParams();
-  const [token, setToken] = useState<string>('');
+  const params = useParams();
+  const userId = useMemo(() => String(params?.id || ''), [params]);
 
-  const fetchUsuario = useCallback(async (authToken: string, userId: string) => {
-    try {
-      setLoading(true);
-      const response = await axios.get(`/api/admin/usuarios/${userId}`, {
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-        },
-      });
-      
-      if (response.data && response.data.usuario) {
-        const usuario = response.data.usuario;
-        setFormData({
-          email: usuario.email,
-          nombre_completo: usuario.nombre_completo,
-          rol: usuario.rol,
-          empresa_id: usuario.empresa_id ? usuario.empresa_id.toString() : '',
-          activo: usuario.activo
-        });
-      } else {
-        setError('Usuario no encontrado');
-      }
-    } catch (err: any) {
-      console.error('Error al cargar usuario:', err);
-      setError(err.response?.data?.error || 'Error al cargar usuario');
-      if (err.response?.status === 401 || err.response?.status === 403) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        router.push('/login');
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [router]);
+  const [email, setEmail] = useState('');
+  const [nombreCompleto, setNombreCompleto] = useState('');
+  const [rol, setRol] = useState<RolUsuario>('consultor');
+  const [empresaId, setEmpresaId] = useState('');
+  const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingEmpresas, setLoadingEmpresas] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
-    
-    if (storedToken && storedUser) {
-      const user = JSON.parse(storedUser);
-      if (user.rol === 'admin') {
-        setToken(storedToken);
-        if (id) {
-          fetchUsuario(storedToken, id.toString());
-        }
-      } else {
-        router.push('/login');
-      }
-    } else {
-      router.push('/login');
-    }
-  }, [id, router, fetchUsuario]);
+    const cargarDatos = async () => {
+      setLoading(true);
+      setError('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+      try {
+        const token = localStorage.getItem('token');
+        const base = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+        if (!token) {
+          router.push('/login');
+          return;
+        }
+
+        if (!base) {
+          throw new Error('Falta NEXT_PUBLIC_API_BASE_URL');
+        }
+
+        const usuariosRes = await fetch(`${base}/api/admin/usuarios`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const usuariosData = await usuariosRes.json().catch(() => null);
+
+        if (!usuariosRes.ok) {
+          throw new Error(usuariosData?.error || 'Error al cargar usuarios');
+        }
+
+        const usuarios: Usuario[] = usuariosData?.usuarios || [];
+        const usuario = usuarios.find((u) => Number(u.id) === Number(userId));
+
+        if (!usuario) {
+          throw new Error('Usuario no encontrado');
+        }
+
+        setEmail(usuario.email || '');
+        setNombreCompleto(usuario.nombre_completo || '');
+        setRol(usuario.rol);
+        setEmpresaId(usuario.empresa_id ? String(usuario.empresa_id) : '');
+
+        setLoadingEmpresas(true);
+
+        const empresasRes = await fetch(`${base}/api/admin/empresas`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const empresasData = await empresasRes.json().catch(() => null);
+
+        if (!empresasRes.ok) {
+          throw new Error(empresasData?.error || 'Error al cargar empresas');
+        }
+
+        setEmpresas(empresasData?.empresas || []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Error al cargar usuario');
+      } finally {
+        setLoading(false);
+        setLoadingEmpresas(false);
+      }
+    };
+
+    if (userId) {
+      cargarDatos();
+    }
+  }, [router, userId]);
+
+  const handleRolChange = (nuevoRol: RolUsuario) => {
+    setRol(nuevoRol);
+
+    if (nuevoRol !== 'cliente') {
+      setEmpresaId('');
+    }
+  };
+
+  const validar = () => {
+    if (!nombreCompleto.trim()) {
+      return 'nombre_completo es obligatorio';
+    }
+
+    if (!['admin', 'consultor', 'cliente'].includes(rol)) {
+      return 'rol invalido';
+    }
+
+    if (rol === 'cliente' && !empresaId) {
+      return 'empresa_id es obligatorio para rol cliente';
+    }
+
+    return '';
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setSaving(true);
     setError('');
+    setSuccess('');
+
+    const validationError = validar();
+
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setSaving(true);
 
     try {
-      await axios.put(`/api/admin/usuarios/${id}`, {
-        email: formData.email,
-        nombre_completo: formData.nombre_completo,
-        rol: formData.rol,
-        empresa_id: formData.empresa_id ? parseInt(formData.empresa_id) : null,
-        activo: formData.activo
-      }, {
+      const token = localStorage.getItem('token');
+      const base = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+
+      if (!base) {
+        throw new Error('Falta NEXT_PUBLIC_API_BASE_URL');
+      }
+
+      const payload = {
+        nombre_completo: nombreCompleto.trim(),
+        rol,
+        empresa_id: rol === 'cliente' ? Number(empresaId) : null,
+      };
+
+      const res = await fetch(`${base}/api/admin/usuarios/${userId}`, {
+        method: 'PATCH',
         headers: {
           Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify(payload),
       });
-      
-      toast.success('Usuario actualizado correctamente');
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(data?.error || 'Error al actualizar usuario');
+      }
+
+      setSuccess('Usuario actualizado correctamente');
       router.push('/admin/usuarios');
-    } catch (err: any) {
-      console.error('Error al actualizar usuario:', err);
-      setError(err.response?.data?.error || 'Error al actualizar usuario');
-      toast.error(err.response?.data?.error || 'Error al actualizar usuario');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al actualizar usuario');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value, type } = e.target;
-    
-    if (type === 'checkbox') {
-      const checked = (e.target as HTMLInputElement).checked;
-      setFormData(prev => ({ ...prev, activo: checked }));
-    } else {
-      setFormData(prev => ({ ...prev, [name]: value }));
-    }
-  };
-
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="flex justify-center items-center h-64">
-          <div className="text-lg text-gray-600">Cargando usuario...</div>
-        </div>
+      <div className="p-6 bg-gray-50 min-h-screen">
+        <p>Cargando usuario…</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <main className="max-w-2xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-gray-900">Editar Usuario</h1>
+    <div className="p-6 bg-gray-50 min-h-screen">
+      <div className="max-w-2xl mx-auto bg-white rounded shadow p-6">
+        <div className="mb-6">
+          <h1 className="text-2xl font-semibold mb-1">Editar usuario</h1>
+          <p className="text-sm text-gray-600">
+            Edición mínima de datos no sensibles del usuario.
+          </p>
+        </div>
+
+        {error && <p className="mb-4 text-red-600">{error}</p>}
+        {success && <p className="mb-4 text-green-700">{success}</p>}
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              readOnly
+              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 bg-gray-100 text-gray-700"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              El email es solo referencia y no se modifica en este flujo.
+            </p>
           </div>
 
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-md">
-              {error}
+          <div>
+            <label htmlFor="nombre_completo" className="block text-sm font-medium text-gray-700">
+              Nombre completo
+            </label>
+            <input
+              id="nombre_completo"
+              name="nombre_completo"
+              type="text"
+              required
+              value={nombreCompleto}
+              onChange={(e) => setNombreCompleto(e.target.value)}
+              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="rol" className="block text-sm font-medium text-gray-700">
+              Rol
+            </label>
+            <select
+              id="rol"
+              name="rol"
+              value={rol}
+              onChange={(e) => handleRolChange(e.target.value as RolUsuario)}
+              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3"
+              required
+            >
+              <option value="admin">Administrador</option>
+              <option value="consultor">Consultor</option>
+              <option value="cliente">Cliente</option>
+            </select>
+          </div>
+
+          {rol === 'cliente' && (
+            <div>
+              <label htmlFor="empresa_id" className="block text-sm font-medium text-gray-700">
+                Empresa
+              </label>
+              <select
+                id="empresa_id"
+                name="empresa_id"
+                value={empresaId}
+                onChange={(e) => setEmpresaId(e.target.value)}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3"
+                required
+              >
+                <option value="">
+                  {loadingEmpresas ? 'Cargando empresas…' : 'Selecciona una empresa'}
+                </option>
+                {empresas.map((empresa) => (
+                  <option key={empresa.id} value={empresa.id}>
+                    {empresa.nombre_legal}
+                    {empresa.rfc ? ` — ${empresa.rfc}` : ''}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 
-          <div className="bg-white shadow rounded-lg p-6">
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                    Email
-                  </label>
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    required
-                    value={formData.email}
-                    onChange={handleChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="nombre_completo" className="block text-sm font-medium text-gray-700">
-                    Nombre Completo
-                  </label>
-                  <input
-                    id="nombre_completo"
-                    name="nombre_completo"
-                    type="text"
-                    required
-                    value={formData.nombre_completo}
-                    onChange={handleChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="rol" className="block text-sm font-medium text-gray-700">
-                    Rol
-                  </label>
-                  <select
-                    id="rol"
-                    name="rol"
-                    value={formData.rol}
-                    onChange={handleChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  >
-                    <option value="admin">Administrador</option>
-                    <option value="consultor">Consultor</option>
-                    <option value="cliente">Cliente</option>
-                  </select>
-                </div>
-
-                {formData.rol === 'cliente' && (
-                  <div>
-                    <label htmlFor="empresa_id" className="block text-sm font-medium text-gray-700">
-                      ID de la Empresa
-                    </label>
-                    <input
-                      id="empresa_id"
-                      name="empresa_id"
-                      type="number"
-                      min="1"
-                      value={formData.empresa_id}
-                      onChange={handleChange}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    />
-                    <p className="mt-1 text-xs text-gray-500">
-                      ID de la empresa a la que pertenece el cliente
-                    </p>
-                  </div>
-                )}
-
-                <div className="sm:col-span-2">
-                  <label htmlFor="activo" className="flex items-center">
-                    <input
-                      id="activo"
-                      name="activo"
-                      type="checkbox"
-                      checked={formData.activo}
-                      onChange={handleChange}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">Usuario activo</span>
-                  </label>
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => router.back()}
-                  className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                >
-                  {saving ? (
-                    <span className="flex items-center">
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Guardando...
-                    </span>
-                  ) : 'Actualizar Usuario'}
-                </button>
-              </div>
-            </form>
+          <div className="flex justify-end gap-3 pt-4">
+            <button
+              type="button"
+              onClick={() => router.push('/admin/usuarios')}
+              className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-60"
+            >
+              {saving ? 'Guardando…' : 'Guardar cambios'}
+            </button>
           </div>
-        </div>
-      </main>
+        </form>
+      </div>
     </div>
   );
 }

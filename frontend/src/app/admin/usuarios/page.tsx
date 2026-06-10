@@ -148,12 +148,13 @@ export default function GestionUsuarios() {
                 <th className="px-4 py-2 border">Empresa</th>
                 <th className="px-4 py-2 border">Estado</th>
                 <th className="px-4 py-2 border">Acción</th>
+                <th className="px-4 py-2 border">Editar</th>
               </tr>
             </thead>
             <tbody>
               {usuarios.length === 0 && (
                 <tr>
-                  <td className="px-4 py-6 border text-center text-gray-500" colSpan={7}>
+                  <td className="px-4 py-6 border text-center text-gray-500" colSpan={8}>
                     No hay usuarios registrados.
                   </td>
                 </tr>
@@ -195,6 +196,15 @@ export default function GestionUsuarios() {
                           : 'Activar'}
                     </button>
                   </td>
+                    <td className="px-4 py-2 border">
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/admin/editar-usuario/${u.id}`)}
+                        className="px-3 py-1 rounded text-xs font-medium bg-blue-600 text-white hover:bg-blue-700"
+                      >
+                        Editar
+                      </button>
+                    </td>
                 </tr>
               ))}
             </tbody>
