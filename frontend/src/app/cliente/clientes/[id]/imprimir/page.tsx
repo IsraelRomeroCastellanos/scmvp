@@ -220,9 +220,11 @@ export default function ImprimirClientePage() {
   const empresa = dc.empresa ?? {};
   const rep = dc.representante ?? {};
   const repId = rep.identificacion ?? {};
+  const fidei = dc.fideicomiso ?? {};
 
   const isPF = cliente.tipo_cliente === 'persona_fisica';
   const isPM = cliente.tipo_cliente === 'persona_moral';
+  const isFID = cliente.tipo_cliente === 'fideicomiso';
 
   const contactoDomicilio = getDomicilio(contacto);
   const recursosTerceros = getRecursosTerceros(dc, persona, empresa, cliente.tipo_cliente);
@@ -272,7 +274,7 @@ export default function ImprimirClientePage() {
         <Row label="Teléfono" value={contacto.telefono ?? ''} />
       </Section>
 
-      {isPF || isPM ? (
+      {isPF || isPM || isFID ? (
         <Section title="Domicilio">
           <Row label="Calle" value={contactoDomicilio.calle ?? ''} />
           <Row label="Número exterior" value={contactoDomicilio.numero ?? ''} />
@@ -428,7 +430,62 @@ export default function ImprimirClientePage() {
         </>
       ) : null}
 
-      <div className="text-xs text-gray-500 print:hidden">Nota: Fideicomiso (impresión) pendiente por requerimiento.</div>
+
+      {isFID ? (
+        <>
+          <Section title="Fideicomiso">
+            <Row label="Nombre del fideicomiso" value={fidei.fideicomiso_nombre ?? ''} />
+            <Row label="Identificador del fideicomiso" value={fidei.identificador ?? ''} />
+            <Row label="Denominación / Razón social del fiduciario" value={fidei.denominacion_fiduciario ?? ''} />
+            <Row label="RFC del fiduciario" value={fidei.rfc_fiduciario ?? ''} />
+          </Section>
+
+          <Section title="Representante Legal">
+            <Row label="Nombre completo" value={fullNameFromParts(rep)} />
+            <Row label="RFC" value={rep.rfc ?? ''} />
+            <Row label="CURP" value={rep.curp ?? ''} />
+            <Row label="Fecha nacimiento" value={fmtYYYYMMDD(rep.fecha_nacimiento)} />
+          </Section>
+
+          <Section title="Identificación del Representante Legal">
+            <Row label="Tipo / documento" value={repId.tipo ?? ''} />
+            <Row label="Autoridad" value={repId.autoridad ?? ''} />
+            <Row label="Número" value={repId.numero ?? ''} />
+            <Row label="Fecha expedición" value={fmtYYYYMMDD(repId.fecha_expedicion)} />
+            <Row label="Fecha expiración" value={fmtYYYYMMDD(repId.fecha_expiracion)} />
+          </Section>
+
+          <Section title="Acuerdo de confidencialidad (Fideicomiso)">
+            <div className="text-sm text-gray-800">
+              Texto a insertar (pendiente versión final) con espacios para el nombre oficial de la empresa (empresa_id:{' '}
+              {cliente.empresa_id}).
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <YesNoBoxes text="Declaro que acepto los términos incluidos en el acuerdo de confidencialidad." />
+              <YesNoBoxes text="Declaro bajo protesta de decir verdad, que los datos asentados son verdaderos." />
+              <YesNoBoxes text="Declaro bajo protesta de confirmar que se realizó entrevista personal, donde se me conoció de manera directa." />
+            </div>
+
+            <div className="pt-6 text-sm space-y-3">
+              <div className="border-b border-gray-500 mt-6" />
+              <div className="text-center">NOMBRE DEL FIDEICOMISO</div>
+
+              <div className="grid grid-cols-2 gap-6 pt-8">
+                <div>
+                  <div className="border-b border-gray-500" />
+                  <div className="text-center mt-2">Fecha</div>
+                </div>
+                <div>
+                  <div className="border-b border-gray-500" />
+                  <div className="text-center mt-2">FIRMA REPRESENTANTE LEGAL</div>
+                </div>
+              </div>
+            </div>
+          </Section>
+        </>
+      ) : null}
+
     </div>
   );
 }
