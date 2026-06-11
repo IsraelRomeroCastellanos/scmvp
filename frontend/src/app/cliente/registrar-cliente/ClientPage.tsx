@@ -2306,6 +2306,13 @@ persona: {
             actividad_economica: act
               ? { clave: act.clave, descripcion: act.descripcion }
               : pfActividad,
+            identificacion: {
+              tipo: pfIdTipo.trim(),
+              autoridad: pfIdAutoridad.trim(),
+              numero: pfIdNumero.trim(),
+              fecha_expedicion: idExp,
+              fecha_expiracion: idExpi,
+            },
           },
           calidad_migratoria: pfCalidadMigratoria.trim() || null,
           estado_civil: "",
@@ -2397,6 +2404,13 @@ persona: {
               nacionalidad: valueToCatalogKey(pmRepNacionalidad),
               curp: pmRepCurp.trim().toUpperCase(),
               rfc: pmRepRfc.trim().toUpperCase(),
+              identificacion: {
+                tipo: pmRepIdTipo.trim(),
+                autoridad: pmRepIdAutoridad.trim(),
+                numero: pmRepIdNumero.trim(),
+                fecha_expedicion: repExp,
+                fecha_expiracion: repExpi,
+              },
             },
           },
         },
