@@ -595,6 +595,11 @@ function valueToCatalogKey(v: string) {
   const [fidRepRfc, setFidRepRfc] = useState("");
   const [fidRepCurp, setFidRepCurp] = useState("");
   const [fidRepFechaNac, setFidRepFechaNac] = useState("");
+  const [fidRepIdTipo, setFidRepIdTipo] = useState("");
+  const [fidRepIdAutoridad, setFidRepIdAutoridad] = useState("");
+  const [fidRepIdNumero, setFidRepIdNumero] = useState("");
+  const [fidRepIdExpedicion, setFidRepIdExpedicion] = useState("");
+  const [fidRepIdExpiracion, setFidRepIdExpiracion] = useState("");
 
 
   // PM Identificación representante (iteración 1)
@@ -2440,6 +2445,17 @@ persona: {
           curp: fidRepCurp.trim().toUpperCase(),
           fecha_nacimiento:
             normalizeToYYYYMMDD(fidRepFechaNac) ?? fidRepFechaNac.trim(),
+          identificacion: {
+            tipo: fidRepIdTipo.trim(),
+            autoridad: fidRepIdAutoridad.trim(),
+            numero: fidRepIdNumero.trim(),
+            fecha_expedicion:
+              normalizeToYYYYMMDD(fidRepIdExpedicion) ??
+              fidRepIdExpedicion.trim(),
+            fecha_expiracion:
+              normalizeToYYYYMMDD(fidRepIdExpiracion) ??
+              fidRepIdExpiracion.trim(),
+          },
         },
           duenos_beneficiarios_aplica: duenosBeneficiariosAplica,
           duenos_beneficiarios: duenosBeneficiarios.map((row) => ({
@@ -4856,6 +4872,73 @@ persona: {
 
 
                       </div>
+
+                      <div className="space-y-1 md:col-span-2">
+                        <h3 className="mt-2 text-sm font-semibold text-gray-700">
+                          Identificación / Acreditación del representante legal
+                        </h3>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">Tipo *</label>
+                        <input
+                          className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                          value={fidRepIdTipo}
+                          onChange={(e) => setFidRepIdTipo(e.target.value)}
+                          placeholder="INE, pasaporte, poder notarial, etc."
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">Autoridad emisora *</label>
+                        <input
+                          className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                          value={fidRepIdAutoridad}
+                          onChange={(e) => setFidRepIdAutoridad(e.target.value)}
+                          placeholder="INE, SRE, notaría, etc."
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">Número de identificación *</label>
+                        <input
+                          className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                          value={fidRepIdNumero}
+                          onChange={(e) => setFidRepIdNumero(e.target.value)}
+                          placeholder="Número / folio"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">
+                          Fecha de expedición (AAAAMMDD) *
+                        </label>
+                        <input
+                          className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                          value={fidRepIdExpedicion}
+                          onChange={(e) =>
+                            setFidRepIdExpedicion(onlyDigits(e.target.value).slice(0, 8))
+                          }
+                          placeholder="20200101"
+                          maxLength={8}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">
+                          Fecha de expiración (AAAAMMDD) *
+                        </label>
+                        <input
+                          className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                          value={fidRepIdExpiracion}
+                          onChange={(e) =>
+                            setFidRepIdExpiracion(onlyDigits(e.target.value).slice(0, 8))
+                          }
+                          placeholder="20300101"
+                          maxLength={8}
+                        />
+                      </div>
+
 
 
                       <hr className="my-2" />
