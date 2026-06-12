@@ -218,7 +218,7 @@ export default function ImprimirClientePage() {
   const pfId = persona.identificacion ?? {};
 
   const empresa = dc.empresa ?? {};
-  const rep = dc.representante ?? {};
+  const rep = dc.representante ?? empresa.representante ?? {};
   const repId = rep.identificacion ?? {};
   const fidei = dc.fideicomiso ?? {};
 
@@ -228,6 +228,7 @@ export default function ImprimirClientePage() {
 
   const contactoDomicilio = getDomicilio(contacto);
   const recursosTerceros = getRecursosTerceros(dc, persona, empresa, cliente.tipo_cliente);
+  const duenosBeneficiarios = Array.isArray(dc.duenos_beneficiarios) ? dc.duenos_beneficiarios : [];
   const paisContactoLabel = isPF ? 'País de nacimiento' : isPM ? 'País de constitución' : 'País';
 
   return (
@@ -399,6 +400,31 @@ export default function ImprimirClientePage() {
             )}
           </Section>
 
+          <Section title="Dueños / Beneficiarios">
+            {duenosBeneficiarios.length ? (
+              <div className="space-y-3">
+                {duenosBeneficiarios.map((row: any, index: number) => {
+                  const p = row?.datos_completos?.persona ?? row ?? {};
+                  const nombre = [p?.nombres, p?.apellido_paterno, p?.apellido_materno].filter(Boolean).join(' ') || row?.nombre_entidad || '';
+                  return (
+                    <div key={index} className="rounded border border-gray-200 p-3 space-y-1">
+                      <div className="text-sm font-medium">Beneficiario {index + 1}</div>
+                      <Row label="Nombre" value={nombre} />
+                      <Row label="Relación con cliente" value={p?.relacion_con_cliente ?? row?.relacion_con_cliente ?? ''} />
+                      <Row label="Porcentaje participación" value={p?.porcentaje_participacion ?? row?.porcentaje_participacion ?? ''} />
+                      <Row label="Nacionalidad" value={p?.nacionalidad ?? row?.nacionalidad ?? ''} />
+                      <Row label="RFC" value={p?.rfc ?? row?.rfc ?? ''} />
+                      <Row label="CURP" value={p?.curp ?? row?.curp ?? ''} />
+                      <Row label="Fecha nacimiento" value={fmtYYYYMMDD(p?.fecha_nacimiento ?? row?.fecha_nacimiento)} />
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-sm text-gray-600">Sin dueños/beneficiarios registrados.</div>
+            )}
+          </Section>
+
           <Section title="Acuerdo de confidencialidad (PM)">
             <div className="text-sm text-gray-800">
               Texto a insertar (pendiente versión final) con espacios para el nombre oficial de la empresa (empresa_id:{' '}
@@ -453,6 +479,31 @@ export default function ImprimirClientePage() {
             <Row label="Número" value={repId.numero ?? ''} />
             <Row label="Fecha expedición" value={fmtYYYYMMDD(repId.fecha_expedicion)} />
             <Row label="Fecha expiración" value={fmtYYYYMMDD(repId.fecha_expiracion)} />
+          </Section>
+
+          <Section title="Dueños / Beneficiarios">
+            {duenosBeneficiarios.length ? (
+              <div className="space-y-3">
+                {duenosBeneficiarios.map((row: any, index: number) => {
+                  const p = row?.datos_completos?.persona ?? row ?? {};
+                  const nombre = [p?.nombres, p?.apellido_paterno, p?.apellido_materno].filter(Boolean).join(' ') || row?.nombre_entidad || '';
+                  return (
+                    <div key={index} className="rounded border border-gray-200 p-3 space-y-1">
+                      <div className="text-sm font-medium">Beneficiario {index + 1}</div>
+                      <Row label="Nombre" value={nombre} />
+                      <Row label="Relación con cliente" value={p?.relacion_con_cliente ?? row?.relacion_con_cliente ?? ''} />
+                      <Row label="Porcentaje participación" value={p?.porcentaje_participacion ?? row?.porcentaje_participacion ?? ''} />
+                      <Row label="Nacionalidad" value={p?.nacionalidad ?? row?.nacionalidad ?? ''} />
+                      <Row label="RFC" value={p?.rfc ?? row?.rfc ?? ''} />
+                      <Row label="CURP" value={p?.curp ?? row?.curp ?? ''} />
+                      <Row label="Fecha nacimiento" value={fmtYYYYMMDD(p?.fecha_nacimiento ?? row?.fecha_nacimiento)} />
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-sm text-gray-600">Sin dueños/beneficiarios registrados.</div>
+            )}
           </Section>
 
           <Section title="Acuerdo de confidencialidad (Fideicomiso)">

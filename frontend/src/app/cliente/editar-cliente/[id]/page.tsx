@@ -463,6 +463,13 @@ function createEmptyRelatedPMData(): RelatedPMData {
       fecha_nacimiento: '',
       rfc: '',
       curp: '',
+      identificacion: {
+        tipo: '',
+        autoridad: '',
+        numero: '',
+        fecha_expedicion: '',
+        fecha_expiracion: '',
+      },
     },
   };
 }
@@ -496,6 +503,13 @@ function createEmptyRelatedFIDData(): RelatedFIDData {
       fecha_nacimiento: '',
       rfc: '',
       curp: '',
+      identificacion: {
+        tipo: '',
+        autoridad: '',
+        numero: '',
+        fecha_expedicion: '',
+        fecha_expiracion: '',
+      },
     },
   };
 }
@@ -1203,6 +1217,11 @@ export default function Page() {
   const [repFechaNac, setRepFechaNac] = useState('');
   const [repRFC, setRepRFC] = useState('');
   const [repCURP, setRepCURP] = useState('');
+  const [repIdTipo, setRepIdTipo] = useState('');
+  const [repIdAutoridad, setRepIdAutoridad] = useState('');
+  const [repIdNumero, setRepIdNumero] = useState('');
+  const [repIdExpedicion, setRepIdExpedicion] = useState('');
+  const [repIdExpiracion, setRepIdExpiracion] = useState('');
 
   const [recursosTercerosAplica, setRecursosTercerosAplica] = useState(false);
   const [recursosTerceros, setRecursosTerceros] = useState<RecursoTerceroItem[]>([]);
@@ -1281,6 +1300,12 @@ export default function Page() {
         setDomCpFueEditado(false);
         setDomInicialHidratado(true);
 
+        setRepIdTipo('');
+        setRepIdAutoridad('');
+        setRepIdNumero('');
+        setRepIdExpedicion('');
+        setRepIdExpiracion('');
+
         if (nextTipo === 'persona_moral') {
           const empresa = datos?.empresa || {};
           const representante =
@@ -1301,6 +1326,16 @@ export default function Page() {
           setRepFechaNac(safeInput(representante?.fecha_nacimiento));
           setRepRFC(safeInput(representante?.rfc));
           setRepCURP(safeInput(representante?.curp));
+
+          const identificacion =
+            representante?.identificacion ||
+            empresa?.representante?.identificacion ||
+            {};
+          setRepIdTipo(safeInput(identificacion?.tipo));
+          setRepIdAutoridad(safeInput(identificacion?.autoridad));
+          setRepIdNumero(safeInput(identificacion?.numero));
+          setRepIdExpedicion(safeInput(identificacion?.fecha_expedicion));
+          setRepIdExpiracion(safeInput(identificacion?.fecha_expiracion));
         }
 
         if (nextTipo === 'fideicomiso') {
@@ -1321,6 +1356,13 @@ export default function Page() {
           setRepFechaNac(safeInput(representante?.fecha_nacimiento));
           setRepRFC(safeInput(representante?.rfc));
           setRepCURP(safeInput(representante?.curp));
+
+          const identificacion = representante?.identificacion || {};
+          setRepIdTipo(safeInput(identificacion?.tipo));
+          setRepIdAutoridad(safeInput(identificacion?.autoridad));
+          setRepIdNumero(safeInput(identificacion?.numero));
+          setRepIdExpedicion(safeInput(identificacion?.fecha_expedicion));
+          setRepIdExpiracion(safeInput(identificacion?.fecha_expiracion));
         }
 
         const hydrated = hydrateRelatedCollectionsFromDatos(datos);
@@ -1517,7 +1559,14 @@ export default function Page() {
             apellido_materno: repAM.trim(),
             fecha_nacimiento: repFechaNac.trim(),
             rfc: normalizeUpper(repRFC),
-            curp: normalizeUpper(repCURP)
+            curp: normalizeUpper(repCURP),
+            identificacion: stripEmpty({
+              tipo: repIdTipo.trim(),
+              autoridad: repIdAutoridad.trim(),
+              numero: repIdNumero.trim(),
+              fecha_expedicion: onlyDigits(repIdExpedicion).slice(0, 8),
+              fecha_expiracion: onlyDigits(repIdExpiracion).slice(0, 8),
+            })
           });
 
           body.datos_completos.duenos_beneficiarios_aplica = duenosBeneficiariosAplica;
@@ -1542,7 +1591,14 @@ export default function Page() {
             nombre_completo: `${repNombre.trim()} ${repAP.trim()} ${repAM.trim()}`.trim(),
             fecha_nacimiento: repFechaNac.trim(),
             rfc: normalizeUpper(repRFC),
-            curp: normalizeUpper(repCURP)
+            curp: normalizeUpper(repCURP),
+            identificacion: stripEmpty({
+              tipo: repIdTipo.trim(),
+              autoridad: repIdAutoridad.trim(),
+              numero: repIdNumero.trim(),
+              fecha_expedicion: onlyDigits(repIdExpedicion).slice(0, 8),
+              fecha_expiracion: onlyDigits(repIdExpiracion).slice(0, 8),
+            })
           });
 
           body.datos_completos.duenos_beneficiarios_aplica = duenosBeneficiariosAplica;
@@ -2113,6 +2169,42 @@ export default function Page() {
                 {errText(errors['rep.curp'])}
               </div>
             </div>
+
+            <div className="border-t pt-3 space-y-3">
+              <h4 className="font-medium">Identificación / Acreditación del representante legal</h4>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Tipo / documento</label>
+                  <input value={repIdTipo} onChange={(e) => setRepIdTipo(e.target.value)} className={classInput(false)} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Autoridad</label>
+                  <input value={repIdAutoridad} onChange={(e) => setRepIdAutoridad(e.target.value)} className={classInput(false)} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Número</label>
+                  <input value={repIdNumero} onChange={(e) => setRepIdNumero(e.target.value)} className={classInput(false)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Fecha expedición (AAAAMMDD)</label>
+                  <input
+                    value={repIdExpedicion}
+                    onChange={(e) => setRepIdExpedicion(onlyDigits(e.target.value).slice(0, 8))}
+                    className={classInput(false)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Fecha expiración (AAAAMMDD)</label>
+                  <input
+                    value={repIdExpiracion}
+                    onChange={(e) => setRepIdExpiracion(onlyDigits(e.target.value).slice(0, 8))}
+                    className={classInput(false)}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
             <div className="border-t pt-3 space-y-3">
               {renderRelatedDuenosList({
@@ -2176,6 +2268,42 @@ export default function Page() {
                 <label className="text-sm font-medium">CURP *</label>
                 <input value={repCURP} onChange={(e) => setRepCURP(e.target.value)} className={classInput(!!errors['rep.curp'])} />
                 {errText(errors['rep.curp'])}
+              </div>
+            </div>
+
+            <div className="border-t pt-3 space-y-3">
+              <h4 className="font-medium">Identificación / Acreditación del representante legal</h4>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Tipo / documento</label>
+                  <input value={repIdTipo} onChange={(e) => setRepIdTipo(e.target.value)} className={classInput(false)} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Autoridad</label>
+                  <input value={repIdAutoridad} onChange={(e) => setRepIdAutoridad(e.target.value)} className={classInput(false)} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Número</label>
+                  <input value={repIdNumero} onChange={(e) => setRepIdNumero(e.target.value)} className={classInput(false)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Fecha expedición (AAAAMMDD)</label>
+                  <input
+                    value={repIdExpedicion}
+                    onChange={(e) => setRepIdExpedicion(onlyDigits(e.target.value).slice(0, 8))}
+                    className={classInput(false)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Fecha expiración (AAAAMMDD)</label>
+                  <input
+                    value={repIdExpiracion}
+                    onChange={(e) => setRepIdExpiracion(onlyDigits(e.target.value).slice(0, 8))}
+                    className={classInput(false)}
+                  />
+                </div>
               </div>
             </div>
 
