@@ -229,6 +229,16 @@ export default function ImprimirClientePage() {
   const contactoDomicilio = getDomicilio(contacto);
   const recursosTerceros = getRecursosTerceros(dc, persona, empresa, cliente.tipo_cliente);
   const duenosBeneficiarios = Array.isArray(dc.duenos_beneficiarios) ? dc.duenos_beneficiarios : [];
+
+  const representanteEsAccionista =
+    dc?.representante_es_accionista === true;
+
+  const accionistaTercero =
+    dc?.accionista_tercero &&
+    typeof dc.accionista_tercero === 'object' &&
+    !Array.isArray(dc.accionista_tercero)
+      ? dc.accionista_tercero
+      : null;
   const paisContactoLabel = isPF ? 'País de nacimiento' : isPM ? 'País de constitución' : 'País';
 
   return (
@@ -400,7 +410,33 @@ export default function ImprimirClientePage() {
             )}
           </Section>
 
-          <Section title="Dueños / Beneficiarios">
+          <Section title="Participación accionaria del representante legal">
+  <Row
+  label="El representante legal también es accionista"
+  value={representanteEsAccionista ? 'Sí' : 'No'}
+  />
+
+  {representanteEsAccionista ? (
+  accionistaTercero ? (
+  <>
+  <Row
+  label="Porcentaje accionario"
+  value={accionistaTercero?.porcentaje_accionario ?? ''}
+  />
+  <Row
+  label="Relación con la sociedad"
+  value={accionistaTercero?.relacion ?? ''}
+  />
+  </>
+  ) : (
+  <div className="text-sm text-gray-600">
+  Información accionaria no disponible.
+  </div>
+  )
+  ) : null}
+  </Section>
+
+  <Section title="Dueños / Beneficiarios">
             {duenosBeneficiarios.length ? (
               <div className="space-y-3">
                 {duenosBeneficiarios.map((row: any, index: number) => {
