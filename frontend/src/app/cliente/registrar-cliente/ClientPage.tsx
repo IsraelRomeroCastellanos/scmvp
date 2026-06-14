@@ -587,6 +587,97 @@ function valueToCatalogKey(v: string) {
   const pmBcDefaultAppliedRef = useRef(false);
   const [pmAccPct, setPmAccPct] = useState("");
   const [pmAccRelacion, setPmAccRelacion] = useState("");
+
+  function setPmAccionistaError(key: string, message?: string) {
+    setErrors((prev) => {
+      const next = { ...prev };
+
+      if (message) {
+        next[key] = message;
+      } else {
+        delete next[key];
+      }
+
+      return next;
+    });
+  }
+
+  function validatePmAccionistaPorcentaje(): boolean {
+    if (!pmRepEsAccionista) {
+      setPmAccionistaError("accionista.porcentaje");
+      return true;
+    }
+
+    const raw = pmAccPct.trim();
+
+    if (!raw) {
+      setPmAccionistaError(
+        "accionista.porcentaje",
+        "El porcentaje accionario del representante es obligatorio",
+      );
+      return false;
+    }
+
+    const porcentaje = Number(raw.replace(",", "."));
+
+    if (!Number.isFinite(porcentaje)) {
+      setPmAccionistaError(
+        "accionista.porcentaje",
+        "El porcentaje accionario debe ser un número válido",
+      );
+      return false;
+    }
+
+    if (porcentaje <= 0) {
+      setPmAccionistaError(
+        "accionista.porcentaje",
+        "El porcentaje accionario debe ser mayor que 0",
+      );
+      return false;
+    }
+
+    if (porcentaje > 100) {
+      setPmAccionistaError(
+        "accionista.porcentaje",
+        "El porcentaje accionario debe ser menor o igual a 100",
+      );
+      return false;
+    }
+
+    setPmAccionistaError("accionista.porcentaje");
+    return true;
+  }
+
+  function validatePmAccionistaRelacion(): boolean {
+    if (!pmRepEsAccionista) {
+      setPmAccionistaError("accionista.relacion");
+      return true;
+    }
+
+    if (!pmAccRelacion.trim()) {
+      setPmAccionistaError(
+        "accionista.relacion",
+        "La relación del representante con la sociedad es obligatoria",
+      );
+      return false;
+    }
+
+    setPmAccionistaError("accionista.relacion");
+    return true;
+  }
+
+  function validatePmAccionistaFields(): boolean {
+    if (tipo !== "persona_moral" || !pmRepEsAccionista) {
+      setPmAccionistaError("accionista.porcentaje");
+      setPmAccionistaError("accionista.relacion");
+      return true;
+    }
+
+    const porcentajeOk = validatePmAccionistaPorcentaje();
+    const relacionOk = validatePmAccionistaRelacion();
+
+    return porcentajeOk && relacionOk;
+  }
   const [fidIdentificador, setFidIdentificador] = useState("");
   const [fidDenominacionFiduciario, setFidDenominacionFiduciario] = useState("");
   const [fidRfcFiduciario, setFidRfcFiduciario] = useState("");
@@ -2602,7 +2693,14 @@ persona: {
     }
 
     console.log("TIPO_ANTES_DE_ENVIAR", tipo);
-          const payload = buildPayload();
+
+    if (!validatePmAccionistaFields()) {
+      setFatal("Corrige los datos del representante accionista para continuar.");
+      return;
+    }
+
+    setFatal(null);
+    const payload = buildPayload();
 
       if (tipo === "persona_fisica") {
         payload.nombre_entidad = [pfNombres, pfApPat, pfApMat]
@@ -4145,23 +4243,33 @@ persona: {
                           type="checkbox"
                           className="mt-1"
                           checked={pmRepEsAccionista}
-                          onChange={(e) => setPmRepEsAccionista(e.target.checked)}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setPmRepEsAccionista(checked);
+
+                            if (!checked) {
+                              setPmAccPct("");
+                              setPmAccRelacion("");
+                              setPmAccionistaError("accionista.porcentaje");
+                              setPmAccionistaError("accionista.relacion");
+                            }
+                          }}
                         />
-                        <span>El Representante Legal es Accionista</span>
+                        <span>El representante legal también es accionista</span>
                       </label>
 
                       {pmRepEsAccionista ? (
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           <div className="space-y-1">
                             <label className="text-sm font-medium">
-                              % Accionario *
+                              Porcentaje accionario del representante *
                             </label>
                             <input
                               className={`w-full rounded border px-3 py-2 text-sm ${errors["accionista.porcentaje"] ? "border-red-500" : "border-gray-300"}`}
                               value={pmAccPct}
                               onChange={(e) => setPmAccPct(e.target.value)}
                               onBlur={() =>
-                                validator.validateField("accionista.porcentaje")
+                                validatePmAccionistaPorcentaje()
                               }
                               placeholder="25"
                             />
@@ -4174,14 +4282,14 @@ persona: {
 
                           <div className="space-y-1 md:col-span-2">
                             <label className="text-sm font-medium">
-                              Relación con el tercero *
+                              Relación del representante con la sociedad *
                             </label>
                             <input
                               className={`w-full rounded border px-3 py-2 text-sm ${errors["accionista.relacion"] ? "border-red-500" : "border-gray-300"}`}
                               value={pmAccRelacion}
                               onChange={(e) => setPmAccRelacion(e.target.value)}
                               onBlur={() =>
-                                validator.validateField("accionista.relacion")
+                                validatePmAccionistaRelacion()
                               }
                             />
                             {errors["accionista.relacion"] ? (
