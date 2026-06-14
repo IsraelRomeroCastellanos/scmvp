@@ -1223,6 +1223,93 @@ export default function Page() {
   const [repIdExpedicion, setRepIdExpedicion] = useState('');
   const [repIdExpiracion, setRepIdExpiracion] = useState('');
 
+  // C2D-PM-ACC-FE1:
+  // El bloque corresponde al mismo representante legal cuando también
+  // participa como accionista.
+  const [pmRepEsAccionista, setPmRepEsAccionista] = useState(false);
+  const [pmAccPct, setPmAccPct] = useState('');
+  const [pmAccRelacion, setPmAccRelacion] = useState('');
+  const [pmAccionistaOriginal, setPmAccionistaOriginal] =
+    useState<Record<string, any>>({});
+
+  function setPmAccError(key: string, message?: string) {
+    setErrors((prev: Errors) => {
+      const next: Errors = { ...prev };
+
+      if (message) {
+        next[key] = message;
+      } else {
+        delete next[key];
+      }
+
+      return next;
+    });
+  }
+
+  function validatePmAccPorcentajeOnBlur(): boolean {
+    if (!pmRepEsAccionista) {
+      setPmAccError('accionista.porcentaje');
+      return true;
+    }
+
+    const raw = pmAccPct.trim();
+
+    if (!raw) {
+      setPmAccError(
+        'accionista.porcentaje',
+        'El porcentaje accionario del representante es obligatorio'
+      );
+      return false;
+    }
+
+    const porcentaje = Number(raw.replace(',', '.'));
+
+    if (!Number.isFinite(porcentaje)) {
+      setPmAccError(
+        'accionista.porcentaje',
+        'El porcentaje accionario debe ser un número válido'
+      );
+      return false;
+    }
+
+    if (porcentaje <= 0) {
+      setPmAccError(
+        'accionista.porcentaje',
+        'El porcentaje accionario debe ser mayor que 0'
+      );
+      return false;
+    }
+
+    if (porcentaje > 100) {
+      setPmAccError(
+        'accionista.porcentaje',
+        'El porcentaje accionario debe ser menor o igual a 100'
+      );
+      return false;
+    }
+
+    setPmAccError('accionista.porcentaje');
+    return true;
+  }
+
+  function validatePmAccRelacionOnBlur(): boolean {
+    if (!pmRepEsAccionista) {
+      setPmAccError('accionista.relacion');
+      return true;
+    }
+
+    if (!pmAccRelacion.trim()) {
+      setPmAccError(
+        'accionista.relacion',
+        'La relación del representante con la sociedad es obligatoria'
+      );
+      return false;
+    }
+
+    setPmAccError('accionista.relacion');
+    return true;
+  }
+
   const [recursosTercerosAplica, setRecursosTercerosAplica] = useState(false);
   const [recursosTerceros, setRecursosTerceros] = useState<RecursoTerceroItem[]>([]);
   const [duenosBeneficiariosAplica, setDuenosBeneficiariosAplica] = useState(false);
@@ -1305,6 +1392,10 @@ export default function Page() {
         setRepIdNumero('');
         setRepIdExpedicion('');
         setRepIdExpiracion('');
+        setPmRepEsAccionista(false);
+        setPmAccPct('');
+        setPmAccRelacion('');
+        setPmAccionistaOriginal({});
 
         if (nextTipo === 'persona_moral') {
           const empresa = datos?.empresa || {};
@@ -1326,6 +1417,22 @@ export default function Page() {
           setRepFechaNac(safeInput(representante?.fecha_nacimiento));
           setRepRFC(safeInput(representante?.rfc));
           setRepCURP(safeInput(representante?.curp));
+
+          const accionistaTercero =
+            isPlainObject(datos?.accionista_tercero)
+              ? datos.accionista_tercero
+              : {};
+
+          setPmRepEsAccionista(
+            datos?.representante_es_accionista === true
+          );
+          setPmAccPct(
+            safeInput(accionistaTercero?.porcentaje_accionario)
+          );
+          setPmAccRelacion(
+            safeInput(accionistaTercero?.relacion)
+          );
+          setPmAccionistaOriginal(accionistaTercero);
 
           const identificacion =
             representante?.identificacion ||
@@ -1467,6 +1574,36 @@ export default function Page() {
 
       if (domColoniasOpciones.length > 1 && !domColonia.trim()) {
         e['contacto.domicilio.colonia'] = 'Selecciona una colonia';
+      }
+    }
+
+    if (
+      tipoCliente === 'persona_moral' &&
+      pmRepEsAccionista
+    ) {
+      const raw = pmAccPct.trim();
+
+      if (!raw) {
+        e['accionista.porcentaje'] =
+          'El porcentaje accionario del representante es obligatorio';
+      } else {
+        const porcentaje = Number(raw.replace(',', '.'));
+
+        if (!Number.isFinite(porcentaje)) {
+          e['accionista.porcentaje'] =
+            'El porcentaje accionario debe ser un número válido';
+        } else if (porcentaje <= 0) {
+          e['accionista.porcentaje'] =
+            'El porcentaje accionario debe ser mayor que 0';
+        } else if (porcentaje > 100) {
+          e['accionista.porcentaje'] =
+            'El porcentaje accionario debe ser menor o igual a 100';
+        }
+      }
+
+      if (!pmAccRelacion.trim()) {
+        e['accionista.relacion'] =
+          'La relación del representante con la sociedad es obligatoria';
       }
     }
 
@@ -1620,6 +1757,33 @@ export default function Page() {
         }
       // Limpieza final para evitar mandar vacíos u objetos vacíos
       body.datos_completos = stripEmpty(body.datos_completos);
+
+      if (tipoCliente === 'persona_moral') {
+        const bodyAny = body as any;
+
+        const accionistaTercero = pmRepEsAccionista
+          ? stripEmpty({
+              ...pmAccionistaOriginal,
+              nombres: repNombre.trim(),
+              apellido_paterno: repAP.trim(),
+              apellido_materno: repAM.trim(),
+              fecha_nacimiento: onlyDigits(repFechaNac).slice(0, 8),
+              rfc: normalizeUpper(repRFC),
+              curp: normalizeUpper(repCURP),
+              actividad_giro: safeInput(pmGiro).trim(),
+              porcentaje_accionario: pmAccPct.trim(),
+              relacion: pmAccRelacion.trim(),
+            })
+          : null;
+
+        bodyAny.datos_completos = {
+          ...(isPlainObject(bodyAny.datos_completos)
+            ? bodyAny.datos_completos
+            : {}),
+          representante_es_accionista: pmRepEsAccionista,
+          accionista_tercero: accionistaTercero,
+        };
+      }
 
       const res = await fetch(`${apiBase}/api/cliente/clientes/${id}`, {
         method: 'PUT',
@@ -2171,6 +2335,75 @@ export default function Page() {
             </div>
 
             <div className="border-t pt-3 space-y-3">
+          <div className="rounded border border-gray-200 p-3 space-y-3">
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={pmRepEsAccionista}
+                onChange={(event) => {
+                  const checked = event.target.checked;
+
+                  setPmRepEsAccionista(checked);
+
+                  if (!checked) {
+                    setPmAccPct('');
+                    setPmAccRelacion('');
+                    setPmAccError('accionista.porcentaje');
+                    setPmAccError('accionista.relacion');
+                  }
+                }}
+              />
+
+              <span>
+                El representante legal también es accionista
+              </span>
+            </label>
+
+            {pmRepEsAccionista ? (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">
+                    Porcentaje accionario del representante *
+                  </label>
+
+                  <input
+                    value={pmAccPct}
+                    onChange={(event) =>
+                      setPmAccPct(event.target.value)
+                    }
+                    onBlur={validatePmAccPorcentajeOnBlur}
+                    className={classInput(
+                      !!errors['accionista.porcentaje']
+                    )}
+                    placeholder="25"
+                  />
+
+                  {errText(errors['accionista.porcentaje'])}
+                </div>
+
+                <div className="space-y-1 md:col-span-2">
+                  <label className="text-sm font-medium">
+                    Relación del representante con la sociedad *
+                  </label>
+
+                  <input
+                    value={pmAccRelacion}
+                    onChange={(event) =>
+                      setPmAccRelacion(event.target.value)
+                    }
+                    onBlur={validatePmAccRelacionOnBlur}
+                    className={classInput(
+                      !!errors['accionista.relacion']
+                    )}
+                  />
+
+                  {errText(errors['accionista.relacion'])}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
               <h4 className="font-medium">Identificación / Acreditación del representante legal</h4>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div className="space-y-1">
