@@ -13,7 +13,11 @@ import {
   type CodigoPostalMx,
 } from "@/lib/codigosPostalesMx";
 
-import { createRegistrarClienteValidator } from "./validate";
+import {
+  buildBeneficiariosControladoresContract,
+  createRegistrarClienteValidator,
+  validateBeneficiariosControladores,
+} from "./validate";
 
 export default function ClientPage() {
   type TipoCliente = "persona_fisica" | "persona_moral" | "fideicomiso";
@@ -43,6 +47,7 @@ export default function ClientPage() {
     rfc: string;
     curp: string;
     porcentaje_participacion: string;
+    sin_documentacion: boolean;
     observaciones: string;
   };
 
@@ -75,12 +80,12 @@ export default function ClientPage() {
     datos_completos: RelatedPFData | RelatedPMData | RelatedFIDData;
   };
 
-  type RelatedDuenoRow = {
-    tipo_entidad: "persona_fisica";
+  type BeneficiarioControladorRow = {
     nombre_entidad: string;
     nacionalidad: string;
     relacion_con_cliente: string;
     porcentaje_participacion: string;
+    sin_documentacion: boolean;
     observaciones: string;
     datos_completos: RelatedPFData;
   };
@@ -164,7 +169,7 @@ export default function ClientPage() {
     return `${i.descripcion} (${i.clave})`;
   }
 
-  
+
 const MEXICO_CATALOGO_KEY = 'mexico-mx';
 
 type TipoNacionalidad = '' | 'nacional' | 'extranjero';
@@ -579,12 +584,56 @@ function valueToCatalogKey(v: string) {
 
   const [relatedRecursosAplica, setRelatedRecursosAplica] = useState(false);
   const [relatedRecursos, setRelatedRecursos] = useState<RelatedRecursoRow[]>([]);
-  const [relatedDuenosAplica, setRelatedDuenosAplica] = useState(false);
-  const [relatedDuenos, setRelatedDuenos] = useState<RelatedDuenoRow[]>([]);
+  const [beneficiariosControladoresAplica, setBeneficiariosControladoresAplica] = useState(false);
+  const [beneficiariosControladores, setBeneficiariosControladores] = useState<BeneficiarioControladorRow[]>([]);
+
+  function clearBeneficiariosControladoresErrors() {
+    setErrors((prev) =>
+      Object.fromEntries(
+        Object.entries(prev).filter(
+          ([key]) => !key.startsWith("beneficiarios_controladores"),
+        ),
+      ),
+    );
+  }
+
+  function handleTipoClienteChange(nextTipo: TipoCliente) {
+    setTipo(nextTipo);
+    setErrors({});
+    setFatal(null);
+
+    if (nextTipo === "persona_fisica") {
+      setBeneficiariosControladoresAplica(false);
+      setBeneficiariosControladores([]);
+      return;
+    }
+
+    setBeneficiariosControladoresAplica(true);
+    setBeneficiariosControladores([createEmptyBeneficiarioControlador()]);
+  }
+
+  function validateBeneficiariosControladoresBeforeSubmit(): boolean {
+    const aplica =
+      tipo === "persona_fisica" ? beneficiariosControladoresAplica : true;
+    const result = validateBeneficiariosControladores({
+      tipoCliente: tipo,
+      aplica,
+      beneficiarios: aplica ? buildBeneficiariosControladoresPayload() : [],
+      clientePfRfc: pfRfc,
+      clientePfCurp: pfCurp,
+    });
+
+    clearBeneficiariosControladoresErrors();
+
+    if (result.ok) return true;
+
+    setErrors((prev) => ({ ...prev, ...result.errors }));
+    setFatal("Completa la sección de Beneficiario Controlador para continuar.");
+    return false;
+  }
 
   // PM: representante legal accionista
   const [pmRepEsAccionista, setPmRepEsAccionista] = useState(false);
-  const pmBcDefaultAppliedRef = useRef(false);
   const [pmAccPct, setPmAccPct] = useState("");
   const [pmAccRelacion, setPmAccRelacion] = useState("");
 
@@ -889,14 +938,14 @@ function valueToCatalogKey(v: string) {
     };
   }
 
-  function createEmptyRelatedDueno(): RelatedDuenoRow {
+  function createEmptyBeneficiarioControlador(): BeneficiarioControladorRow {
     const datos_completos = createEmptyRelatedPFData();
     return {
-      tipo_entidad: "persona_fisica",
       nombre_entidad: deriveRelatedNombreEntidad("persona_fisica", datos_completos),
       nacionalidad: "MEX",
       relacion_con_cliente: "",
       porcentaje_participacion: "",
+      sin_documentacion: false,
       observaciones: "",
       datos_completos,
     };
@@ -1145,12 +1194,11 @@ function valueToCatalogKey(v: string) {
     };
   }
 
-  function buildCanonicalDuenoRowFromRelated(row: RelatedDuenoRow) {
+  function buildBeneficiarioControladorPayloadRow(row: BeneficiarioControladorRow) {
     const datos_completos = buildCanonicalPFPayloadData(row.datos_completos);
     const persona = datos_completos.persona || {};
 
     return {
-      tipo_entidad: "persona_fisica" as const,
       nombre_entidad:
         deriveRelatedNombreEntidad("persona_fisica", datos_completos) ||
         safeInput(row.nombre_entidad).trim(),
@@ -1160,11 +1208,12 @@ function valueToCatalogKey(v: string) {
       fecha_nacimiento:
         normalizeToYYYYMMDD(persona.fecha_nacimiento) ??
         safeInput(persona.fecha_nacimiento).trim(),
-      rfc: safeInput(persona.rfc).trim().toUpperCase(),
-      curp: safeInput(persona.curp).trim().toUpperCase(),
+      rfc: safeInput(persona.rfc).replace(/\s+/g, "").toUpperCase(),
+      curp: safeInput(persona.curp).replace(/\s+/g, "").toUpperCase(),
       nacionalidad: valueToCatalogKey(row.nacionalidad) || safeInput(row.nacionalidad).trim() || "MEX",
       relacion_con_cliente: safeInput(row.relacion_con_cliente).trim(),
       porcentaje_participacion: safeInput(row.porcentaje_participacion).trim(),
+      sin_documentacion: !!row.sin_documentacion,
       observaciones: safeInput(row.observaciones).trim(),
       datos_completos,
     };
@@ -1195,6 +1244,7 @@ function valueToCatalogKey(v: string) {
       nacionalidad: valueToCatalogKey(row.nacionalidad) || safeInput(row.nacionalidad).trim() || "MEX",
       relacion_con_cliente: safeInput(row.relacion_con_cliente).trim(),
       porcentaje_participacion: safeInput(row.porcentaje_participacion).trim(),
+      sin_documentacion: !!row.sin_documentacion,
       observaciones: safeInput(row.observaciones).trim(),
       datos_completos,
     };
@@ -1231,33 +1281,8 @@ function valueToCatalogKey(v: string) {
     return [];
   }
 
-  function buildCanonicalDuenosPayload() {
-    if (relatedDuenos.length > 0) {
-      return relatedDuenos.map(buildCanonicalDuenoRowFromRelated);
-    }
-
-    if (duenosBeneficiarios.length > 0) {
-      return duenosBeneficiarios.map(buildCanonicalDuenoRowFromLegacy);
-    }
-
-    if (pmBeneficiarioControlador === "si") {
-      return [
-        buildCanonicalDuenoRowFromLegacy({
-          nombres: pmBcNombres.trim(),
-          apellido_paterno: pmBcApPat.trim(),
-          apellido_materno: pmBcApMat.trim(),
-          fecha_nacimiento: "",
-          nacionalidad: "MEX",
-          relacion_con_cliente: "",
-          rfc: "",
-          curp: "",
-          porcentaje_participacion: "",
-          observaciones: "",
-        }),
-      ];
-    }
-
-    return [];
+  function buildBeneficiariosControladoresPayload() {
+    return beneficiariosControladores.map(buildBeneficiarioControladorPayloadRow);
   }
 
   function addRelatedRecursoRow(tipo_entidad: RelatedTipoEntidad = "persona_fisica") {
@@ -1725,19 +1750,19 @@ function valueToCatalogKey(v: string) {
     return String(value ?? "").replace(/\D+/g, "");
   }
 
-  function addRelatedDuenoRow() {
-    setRelatedDuenos((prev) => [...prev, createEmptyRelatedDueno()]);
+  function addBeneficiarioControlador() {
+    setBeneficiariosControladores((prev) => [...prev, createEmptyBeneficiarioControlador()]);
   }
 
-  function removeRelatedDuenoRow(index: number) {
-    setRelatedDuenos((prev) => prev.filter((_, i) => i !== index));
+  function removeBeneficiarioControlador(index: number) {
+    setBeneficiariosControladores((prev) => prev.filter((_, i) => i !== index));
   }
 
-  function updateRelatedDuenoRow(
+  function updateBeneficiarioControlador(
     index: number,
-    updater: (row: RelatedDuenoRow) => RelatedDuenoRow,
+    updater: (row: BeneficiarioControladorRow) => BeneficiarioControladorRow,
   ) {
-    setRelatedDuenos((prev) =>
+    setBeneficiariosControladores((prev) =>
       prev.map((row, i) => {
         if (i !== index) return row;
         const next = updater(row);
@@ -1751,28 +1776,29 @@ function valueToCatalogKey(v: string) {
     );
   }
 
-  function updateRelatedDuenoCommonField(
+  function updateBeneficiarioControladorCommonField(
     index: number,
     key:
       | "nacionalidad"
       | "relacion_con_cliente"
       | "porcentaje_participacion"
+      | "sin_documentacion"
       | "observaciones",
-    value: string,
+    value: string | boolean,
   ) {
-    updateRelatedDuenoRow(index, (row) => ({
+    updateBeneficiarioControlador(index, (row) => ({
       ...row,
       [key]: value,
     }));
   }
 
-  function updateRelatedDuenoDataField(
+  function updateBeneficiarioControladorDataField(
     index: number,
     section: "persona" | "contacto",
     key: string,
     value: string,
   ) {
-    updateRelatedDuenoRow(index, (row) => ({
+    updateBeneficiarioControlador(index, (row) => ({
       ...row,
       datos_completos: {
         ...(row.datos_completos as Record<string, any>),
@@ -1784,8 +1810,8 @@ function valueToCatalogKey(v: string) {
     }));
   }
 
-  function updateRelatedDuenoDomicilioField(index: number, key: string, value: string) {
-    updateRelatedDuenoRow(index, (row) => {
+  function updateBeneficiarioControladorDomicilioField(index: number, key: string, value: string) {
+    updateBeneficiarioControlador(index, (row) => {
       const contacto = (((row.datos_completos as Record<string, any>).contacto || {}) as Record<string, any>);
       const domicilio = ((contacto.domicilio || {}) as Record<string, any>);
 
@@ -1805,7 +1831,7 @@ function valueToCatalogKey(v: string) {
     });
   }
 
-  function renderRelatedDuenoContactoFields(row: RelatedDuenoRow, index: number) {
+  function renderBeneficiarioControladorContactoFields(row: BeneficiarioControladorRow, index: number) {
     const contacto = (((row.datos_completos as Record<string, any>).contacto || {}) as Record<string, any>);
     const domicilio = ((contacto.domicilio || {}) as Record<string, any>);
 
@@ -1817,7 +1843,7 @@ function valueToCatalogKey(v: string) {
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(contacto.pais)}
-              onChange={(e) => updateRelatedDuenoDataField(index, "contacto", "pais", e.target.value)}
+              onChange={(e) => updateBeneficiarioControladorDataField(index, "contacto", "pais", e.target.value)}
             />
           </div>
 
@@ -1826,7 +1852,7 @@ function valueToCatalogKey(v: string) {
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(contacto.email)}
-              onChange={(e) => updateRelatedDuenoDataField(index, "contacto", "email", e.target.value)}
+              onChange={(e) => updateBeneficiarioControladorDataField(index, "contacto", "email", e.target.value)}
             />
           </div>
 
@@ -1835,7 +1861,7 @@ function valueToCatalogKey(v: string) {
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(contacto.telefono)}
-              onChange={(e) => updateRelatedDuenoDataField(index, "contacto", "telefono", e.target.value)}
+              onChange={(e) => updateBeneficiarioControladorDataField(index, "contacto", "telefono", e.target.value)}
             />
           </div>
         </div>
@@ -1846,7 +1872,7 @@ function valueToCatalogKey(v: string) {
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(domicilio.calle)}
-              onChange={(e) => updateRelatedDuenoDomicilioField(index, "calle", e.target.value)}
+              onChange={(e) => updateBeneficiarioControladorDomicilioField(index, "calle", e.target.value)}
             />
           </div>
 
@@ -1855,7 +1881,7 @@ function valueToCatalogKey(v: string) {
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(domicilio.numero)}
-              onChange={(e) => updateRelatedDuenoDomicilioField(index, "numero", e.target.value)}
+              onChange={(e) => updateBeneficiarioControladorDomicilioField(index, "numero", e.target.value)}
             />
           </div>
 
@@ -1864,7 +1890,7 @@ function valueToCatalogKey(v: string) {
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(domicilio.colonia)}
-              onChange={(e) => updateRelatedDuenoDomicilioField(index, "colonia", e.target.value)}
+              onChange={(e) => updateBeneficiarioControladorDomicilioField(index, "colonia", e.target.value)}
             />
           </div>
 
@@ -1873,7 +1899,7 @@ function valueToCatalogKey(v: string) {
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(domicilio.municipio)}
-              onChange={(e) => updateRelatedDuenoDomicilioField(index, "municipio", e.target.value)}
+              onChange={(e) => updateBeneficiarioControladorDomicilioField(index, "municipio", e.target.value)}
             />
           </div>
 
@@ -1882,7 +1908,7 @@ function valueToCatalogKey(v: string) {
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(domicilio.ciudad_delegacion)}
-              onChange={(e) => updateRelatedDuenoDomicilioField(index, "ciudad_delegacion", e.target.value)}
+              onChange={(e) => updateBeneficiarioControladorDomicilioField(index, "ciudad_delegacion", e.target.value)}
             />
           </div>
 
@@ -1891,7 +1917,7 @@ function valueToCatalogKey(v: string) {
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(domicilio.codigo_postal)}
-              onChange={(e) => updateRelatedDuenoDomicilioField(index, "codigo_postal", e.target.value)}
+              onChange={(e) => updateBeneficiarioControladorDomicilioField(index, "codigo_postal", e.target.value)}
             />
           </div>
 
@@ -1900,7 +1926,7 @@ function valueToCatalogKey(v: string) {
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(domicilio.estado)}
-              onChange={(e) => updateRelatedDuenoDomicilioField(index, "estado", e.target.value)}
+              onChange={(e) => updateBeneficiarioControladorDomicilioField(index, "estado", e.target.value)}
             />
           </div>
 
@@ -1909,7 +1935,7 @@ function valueToCatalogKey(v: string) {
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(domicilio.pais)}
-              onChange={(e) => updateRelatedDuenoDomicilioField(index, "pais", e.target.value)}
+              onChange={(e) => updateBeneficiarioControladorDomicilioField(index, "pais", e.target.value)}
             />
           </div>
         </div>
@@ -1917,7 +1943,7 @@ function valueToCatalogKey(v: string) {
     );
   }
 
-  function renderRelatedDuenoPFFields(row: RelatedDuenoRow, index: number) {
+  function renderBeneficiarioControladorPFFields(row: BeneficiarioControladorRow, index: number) {
     const persona = ((((row.datos_completos as Record<string, any>).persona) || {}) as Record<string, any>);
 
     return (
@@ -1928,7 +1954,7 @@ function valueToCatalogKey(v: string) {
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(persona.nombres)}
-              onChange={(e) => updateRelatedDuenoDataField(index, "persona", "nombres", e.target.value)}
+              onChange={(e) => updateBeneficiarioControladorDataField(index, "persona", "nombres", e.target.value)}
             />
           </div>
 
@@ -1937,7 +1963,7 @@ function valueToCatalogKey(v: string) {
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(persona.apellido_paterno)}
-              onChange={(e) => updateRelatedDuenoDataField(index, "persona", "apellido_paterno", e.target.value)}
+              onChange={(e) => updateBeneficiarioControladorDataField(index, "persona", "apellido_paterno", e.target.value)}
             />
           </div>
 
@@ -1946,7 +1972,7 @@ function valueToCatalogKey(v: string) {
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(persona.apellido_materno)}
-              onChange={(e) => updateRelatedDuenoDataField(index, "persona", "apellido_materno", e.target.value)}
+              onChange={(e) => updateBeneficiarioControladorDataField(index, "persona", "apellido_materno", e.target.value)}
             />
           </div>
 
@@ -1955,7 +1981,7 @@ function valueToCatalogKey(v: string) {
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(persona.fecha_nacimiento)}
-              onChange={(e) => updateRelatedDuenoDataField(index, "persona", "fecha_nacimiento", onlyDigits(e.target.value).slice(0, 8))}
+              onChange={(e) => updateBeneficiarioControladorDataField(index, "persona", "fecha_nacimiento", onlyDigits(e.target.value).slice(0, 8))}
             />
           </div>
 
@@ -1964,7 +1990,7 @@ function valueToCatalogKey(v: string) {
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(persona.rfc)}
-              onChange={(e) => updateRelatedDuenoDataField(index, "persona", "rfc", e.target.value)}
+              onChange={(e) => updateBeneficiarioControladorDataField(index, "persona", "rfc", e.target.value)}
             />
           </div>
 
@@ -1973,7 +1999,7 @@ function valueToCatalogKey(v: string) {
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(persona.curp)}
-              onChange={(e) => updateRelatedDuenoDataField(index, "persona", "curp", e.target.value)}
+              onChange={(e) => updateBeneficiarioControladorDataField(index, "persona", "curp", e.target.value)}
             />
           </div>
 
@@ -1982,17 +2008,17 @@ function valueToCatalogKey(v: string) {
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(persona.actividad_economica)}
-              onChange={(e) => updateRelatedDuenoDataField(index, "persona", "actividad_economica", e.target.value)}
+              onChange={(e) => updateBeneficiarioControladorDataField(index, "persona", "actividad_economica", e.target.value)}
             />
           </div>
         </div>
 
-        {renderRelatedDuenoContactoFields(row, index)}
+        {renderBeneficiarioControladorContactoFields(row, index)}
       </div>
     );
   }
 
-  function renderRelatedDuenosList() {
+  function renderBeneficiariosControladoresList() {
     return (
       <div className="rounded border border-gray-200 p-4 space-y-4">
         <div className="flex items-center justify-between">
@@ -2000,13 +2026,19 @@ function valueToCatalogKey(v: string) {
           <button
             type="button"
             className="rounded border border-gray-300 px-3 py-1 text-sm"
-            onClick={() => addRelatedDuenoRow()}
+            onClick={() => addBeneficiarioControlador()}
           >
             Agregar
           </button>
         </div>
 
-        {relatedDuenos.map((row, index) => (
+        {errors["beneficiarios_controladores"] ? (
+          <p className="text-xs text-red-600">
+            {errors["beneficiarios_controladores"]}
+          </p>
+        ) : null}
+
+        {beneficiariosControladores.map((row, index) => (
           <div key={index} className="rounded border border-gray-200 p-4 space-y-4">
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium">
@@ -2015,7 +2047,7 @@ function valueToCatalogKey(v: string) {
               <button
                 type="button"
                 className="rounded border border-red-300 px-3 py-1 text-sm text-red-700"
-                onClick={() => removeRelatedDuenoRow(index)}
+                onClick={() => removeBeneficiarioControlador(index)}
               >
                 Eliminar
               </button>
@@ -2028,7 +2060,7 @@ function valueToCatalogKey(v: string) {
                   className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
                   value={row.relacion_con_cliente}
                   onChange={(e) =>
-                    updateRelatedDuenoCommonField(
+                    updateBeneficiarioControladorCommonField(
                       index,
                       "relacion_con_cliente",
                       e.target.value,
@@ -2043,7 +2075,7 @@ function valueToCatalogKey(v: string) {
                   className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
                   value={row.nacionalidad}
                   onChange={(e) =>
-                    updateRelatedDuenoCommonField(
+                    updateBeneficiarioControladorCommonField(
                       index,
                       "nacionalidad",
                       e.target.value,
@@ -2058,7 +2090,7 @@ function valueToCatalogKey(v: string) {
                   className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
                   value={row.porcentaje_participacion}
                   onChange={(e) =>
-                    updateRelatedDuenoCommonField(
+                    updateBeneficiarioControladorCommonField(
                       index,
                       "porcentaje_participacion",
                       e.target.value,
@@ -2069,7 +2101,23 @@ function valueToCatalogKey(v: string) {
 
             </div>
 
-            {renderRelatedDuenoPFFields(row, index)}
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={row.sin_documentacion}
+                onChange={(e) =>
+                  updateBeneficiarioControladorCommonField(
+                    index,
+                    "sin_documentacion",
+                    e.target.checked,
+                  )
+                }
+              />
+              <span>Sin documentación</span>
+            </label>
+
+            {renderBeneficiarioControladorPFFields(row, index)}
           </div>
         ))}
       </div>
@@ -2161,9 +2209,9 @@ function valueToCatalogKey(v: string) {
     };
   }
 
-  function hydrateRelatedDuenoRow(row: any): RelatedDuenoRow {
+  function hydrateBeneficiarioControladorRow(row: any): BeneficiarioControladorRow {
     if (!isPlainObject(row)) {
-      return createEmptyRelatedDueno();
+      return createEmptyBeneficiarioControlador();
     }
 
     if (!isPlainObject(row?.datos_completos) && ("nombres" in row || "apellido_paterno" in row || "apellido_materno" in row)) {
@@ -2173,13 +2221,13 @@ function valueToCatalogKey(v: string) {
     const datos_completos = hydrateRelatedPFData(row?.datos_completos);
 
     return {
-      tipo_entidad: "persona_fisica",
       nombre_entidad:
         deriveRelatedNombreEntidad("persona_fisica", datos_completos) ||
         safeInput(row?.nombre_entidad).trim(),
       nacionalidad: safeInput(row?.nacionalidad || "MEX").trim() || "MEX",
       relacion_con_cliente: safeInput(row?.relacion_con_cliente).trim(),
       porcentaje_participacion: safeInput(row?.porcentaje_participacion).trim(),
+      sin_documentacion: !!row?.sin_documentacion,
       observaciones: safeInput(row?.observaciones).trim(),
       datos_completos,
     };
@@ -2196,15 +2244,15 @@ function valueToCatalogKey(v: string) {
       : [];
 
     const relatedRecursos = recursosRaw.map(hydrateRelatedRecursoRow);
-    const relatedDuenos = duenosRaw.map(hydrateRelatedDuenoRow);
+    const beneficiariosControladores = duenosRaw.map(hydrateBeneficiarioControladorRow);
 
     return {
       relatedRecursosAplica:
         !!safeDatos?.recursos_terceros_aplica || relatedRecursos.length > 0,
       relatedRecursos,
-      relatedDuenosAplica:
-        !!safeDatos?.duenos_beneficiarios_aplica || relatedDuenos.length > 0,
-      relatedDuenos,
+      beneficiariosControladoresAplica:
+        !!safeDatos?.duenos_beneficiarios_aplica || beneficiariosControladores.length > 0,
+      beneficiariosControladores,
     };
   }
 
@@ -2243,6 +2291,7 @@ function valueToCatalogKey(v: string) {
       rfc: "",
       curp: "",
       porcentaje_participacion: "",
+      sin_documentacion: false,
       observaciones: "",
     };
   }
@@ -2273,6 +2322,7 @@ function valueToCatalogKey(v: string) {
       rfc: safeInput(row?.rfc),
       curp: safeInput(row?.curp),
       porcentaje_participacion: safeInput(row?.porcentaje_participacion),
+      sin_documentacion: safeBool(row?.sin_documentacion),
       observaciones: safeInput(row?.observaciones),
     };
   }
@@ -2361,6 +2411,15 @@ function valueToCatalogKey(v: string) {
           : "persona_fisica";
 
     const contacto = buildContacto();
+    const beneficiariosControladoresContract =
+      buildBeneficiariosControladoresContract({
+        tipoCliente,
+        aplica:
+          tipoCliente === "persona_fisica"
+            ? beneficiariosControladoresAplica
+            : true,
+        beneficiarios: buildBeneficiariosControladoresPayload(),
+      });
 
     const empresa_id = Number(empresaId);
 
@@ -2431,16 +2490,14 @@ persona: {
             previo: pfCargoPublicoPrevio.trim(),
             familiar: pfCargoPublicoFamiliar.trim(),
           },
-            recursos_terceros_aplica:
-              relatedRecursosAplica || recursosTercerosAplica || pfManifiestaTerceros,
-            recursos_terceros: buildCanonicalRecursosPayload(),
+          ...beneficiariosControladoresContract,
         },
 
       };
       return payload;
     }
 
-    
+
     if (tipoCliente === "persona_moral") {
       const giro = giros.find((x) => x.clave === pmGiro);
       const repExp =
@@ -2460,9 +2517,7 @@ persona: {
         datos_completos: {
           contacto,
 
-          duenos_beneficiarios_aplica:
-            relatedDuenosAplica || duenosBeneficiariosAplica || pmBeneficiarioControlador === "si",
-          duenos_beneficiarios: buildCanonicalDuenosPayload(),
+          ...beneficiariosControladoresContract,
           representante_es_accionista: pmRepEsAccionista,
           accionista_tercero: pmRepEsAccionista
             ? {
@@ -2548,21 +2603,7 @@ persona: {
               fidRepIdExpiracion.trim(),
           },
         },
-          duenos_beneficiarios_aplica: duenosBeneficiariosAplica,
-          duenos_beneficiarios: duenosBeneficiarios.map((row) => ({
-            nombres: row.nombres.trim(),
-            apellido_paterno: row.apellido_paterno.trim(),
-            apellido_materno: row.apellido_materno.trim(),
-            fecha_nacimiento:
-              normalizeToYYYYMMDD(row.fecha_nacimiento) ??
-              row.fecha_nacimiento.trim(),
-            nacionalidad: valueToCatalogKey(row.nacionalidad) || "MEX",
-            relacion_con_cliente: row.relacion_con_cliente.trim(),
-            rfc: row.rfc.trim().toUpperCase(),
-            curp: row.curp.trim().toUpperCase(),
-            porcentaje_participacion: row.porcentaje_participacion.trim(),
-            observaciones: row.observaciones.trim(),
-          })),
+        ...beneficiariosControladoresContract,
       },
     };
   }
@@ -2582,8 +2623,6 @@ persona: {
       return;
     }
 
-      // P1-2 (PM BC): si Beneficiario Controlador = SÍ, exigir mínimos
-  
     if (tipo === "fideicomiso") {
       let ok = true;
 
@@ -2621,70 +2660,9 @@ persona: {
       }
     }
 
-    if (tipo === "persona_moral" && pmBeneficiarioControlador === "si") {
-      let ok = true;
-
-      if (relatedDuenos.length > 0) {
-        const firstRelatedDueno = relatedDuenos[0];
-        const persona = (((firstRelatedDueno.datos_completos as Record<string, any>).persona || {}) as Record<string, any>);
-
-        const n = safeInput(persona.nombres).trim();
-        const ap = safeInput(persona.apellido_paterno).trim();
-        const am = safeInput(persona.apellido_materno).trim();
-
-        if (!n) { setErr("duenos_beneficiarios.0.nombres", "Nombres del beneficiario controlador es obligatorio"); ok = false; }
-        if (!ap) { setErr("duenos_beneficiarios.0.apellido_paterno", "Apellido paterno del beneficiario controlador es obligatorio"); ok = false; }
-        if (!am) { setErr("duenos_beneficiarios.0.apellido_materno", "Apellido materno del beneficiario controlador es obligatorio"); ok = false; }
-      } else if (duenosBeneficiarios.length > 0) {
-        const firstLegacyDueno = duenosBeneficiarios[0];
-
-        const n = safeInput(firstLegacyDueno.nombres).trim();
-        const ap = safeInput(firstLegacyDueno.apellido_paterno).trim();
-        const am = safeInput(firstLegacyDueno.apellido_materno).trim();
-
-        if (!n) { setErr("duenos_beneficiarios.0.nombres", "Nombres del beneficiario controlador es obligatorio"); ok = false; }
-        if (!ap) { setErr("duenos_beneficiarios.0.apellido_paterno", "Apellido paterno del beneficiario controlador es obligatorio"); ok = false; }
-        if (!am) { setErr("duenos_beneficiarios.0.apellido_materno", "Apellido materno del beneficiario controlador es obligatorio"); ok = false; }
-      } else {
-        setErr("duenos_beneficiarios", "Agrega al menos un Beneficiario Controlador");
-        ok = false;
-      }
-
-      if (!ok) {
-        setFatal("Completa la sección de Beneficiario Controlador para continuar.");
-        return;
-      }
+    if (!validateBeneficiariosControladoresBeforeSubmit()) {
+      return;
     }
-      // P1-1 PF Terceros: si manifiesta terceros, exigir minimos y no enviar placeholders
-      if (tipo === "persona_fisica" && pfManifiestaTerceros) {
-        let ok = true;
-
-        const n = (pfTerceroNombreCompleto || "").trim();
-        const ag = (pfTerceroActividadGiro || "").trim();
-        const rel = (pfTerceroRelacion || "").trim();
-
-        if (!n) { setErr("persona.terceros.nombre_completo", "Nombre completo del tercero es obligatorio"); ok = false; }
-        if (!ag) { setErr("persona.terceros.actividad_giro", "Actividad o giro del tercero es obligatorio"); ok = false; }
-        if (!rel) { setErr("persona.terceros.relacion", "Relacion con el tercero es obligatoria"); ok = false; }
-
-        if (!pfNoDocumentacionTercero) {
-          const r = (pfTerceroRfc || "").trim().toUpperCase();
-          const c = (pfTerceroCurp || "").trim().toUpperCase();
-          const f = (pfTerceroFechaNac || "").trim();
-
-          if (r && !isRFC(r)) { setErr("persona.terceros.rfc", "RFC del tercero invalido"); ok = false; }
-          if (c && !isCURP(c)) { setErr("persona.terceros.curp", "CURP del tercero invalido"); ok = false; }
-
-          const fNorm = normalizeToYYYYMMDD(f) ?? f;
-          if (f && !isYYYYMMDD(fNorm)) { setErr("persona.terceros.fecha_nacimiento", "Fecha nacimiento del tercero invalida (AAAAMMDD)"); ok = false; }
-        }
-
-        if (!ok) {
-          setFatal("Completa la seccion de Terceros para continuar.");
-          return;
-        }
-      }
-
 
     const token = localStorage.getItem("token");
     if (!token) {
@@ -2788,21 +2766,6 @@ persona: {
     }
   }, [tipo, pfNombres, pfApPat, pfApMat, pmRazonSocial, fidNombre]);
 
-    useEffect(() => {
-    if (tipo === "persona_moral") {
-      if (!pmBcDefaultAppliedRef.current) {
-        setPmBeneficiarioControlador("si");
-        setRelatedDuenosAplica(true);
-        if (relatedDuenos.length === 0) {
-          setRelatedDuenos([createEmptyRelatedDueno()]);
-        }
-        pmBcDefaultAppliedRef.current = true;
-      }
-    } else {
-      pmBcDefaultAppliedRef.current = false;
-      setRelatedDuenosAplica(false);
-    }
-  }, [tipo]);
 
   const showAviso = tipo === "persona_fisica" || tipo === "persona_moral" || tipo === "fideicomiso";
 
@@ -2834,11 +2797,9 @@ persona: {
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               ref={tipoRef}
               value={tipo}
-              onChange={(e) => {
-                setTipo(e.target.value as TipoCliente);
-                setErrors({});
-                setFatal(null);
-              }}
+              onChange={(e) =>
+                handleTipoClienteChange(e.target.value as TipoCliente)
+              }
             >
               <option value="persona_fisica">Persona Física</option>
               <option value="persona_moral">Persona Moral</option>
@@ -3360,7 +3321,7 @@ persona: {
                   validator.validateField("persona.actividad_economica")
                 }
               />
-              
+
 
               <div className="space-y-1">
                 <label className="text-sm font-medium">
@@ -3609,15 +3570,19 @@ persona: {
                   <input
                     type="checkbox"
                     className="mt-1"
-                    checked={relatedRecursosAplica}
+                    checked={beneficiariosControladoresAplica}
                     onChange={(e) => {
-                      const v = e.target.checked;
-                      setRelatedRecursosAplica(v);
+                      const checked = e.target.checked;
+                      setBeneficiariosControladoresAplica(checked);
+                      clearBeneficiariosControladoresErrors();
+                      setFatal(null);
 
-                      if (!v) {
-                        setRelatedRecursos([]);
-                      } else if (relatedRecursos.length === 0) {
-                        setRelatedRecursos([createEmptyRelatedRecurso()]);
+                      if (!checked) {
+                        setBeneficiariosControladores([]);
+                      } else if (beneficiariosControladores.length === 0) {
+                        setBeneficiariosControladores([
+                          createEmptyBeneficiarioControlador(),
+                        ]);
                       }
                     }}
                   />
@@ -3627,109 +3592,9 @@ persona: {
                   </span>
                 </label>
 
-                {relatedRecursosAplica ? (
-                  <div className="rounded border border-gray-200 p-3 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs text-gray-600">
-                        En caso de responder que sí, captura uno o más registros.
-                      </p>
-                      <button
-                        type="button"
-                        className="rounded border border-gray-300 px-3 py-1 text-sm"
-                        onClick={() => addRelatedRecursoRow()}
-                      >
-                        Agregar
-                      </button>
-                    </div>
-
-                    {relatedRecursos.map((row, index) => (
-                      <div key={index} className="rounded border border-gray-200 p-4 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-medium">
-                            Beneficiario Controlador #{index + 1}
-                          </p>
-                          <button
-                            type="button"
-                            className="rounded border border-red-300 px-3 py-1 text-sm text-red-700"
-                            onClick={() => removeRelatedRecursoRow(index)}
-                          >
-                            Eliminar
-                          </button>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium">Tipo entidad</label>
-                            <select
-                              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                              value={row.tipo_entidad}
-                              onChange={(e) =>
-                                updateRelatedRecursoSubtype(
-                                  index,
-                                  e.target.value as RelatedTipoEntidad,
-                                )
-                              }
-                            >
-                              <option value="persona_fisica">Persona física</option>
-                              <option value="persona_moral">Persona moral</option>
-                              <option value="fideicomiso">Fideicomiso</option>
-                            </select>
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium">Relación con cliente</label>
-                            <input
-                              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                              value={row.relacion_con_cliente}
-                              onChange={(e) =>
-                                updateRelatedRecursoCommonField(
-                                  index,
-                                  "relacion_con_cliente",
-                                  e.target.value,
-                                )
-                              }
-                            />
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium">Nacionalidad</label>
-                            <input
-                              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                              value={row.nacionalidad}
-                              onChange={(e) =>
-                                updateRelatedRecursoCommonField(
-                                  index,
-                                  "nacionalidad",
-                                  e.target.value,
-                                )
-                              }
-                            />
-                          </div>
-
-
-                        </div>
-
-                        <label className="flex items-start gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            className="mt-1"
-                            checked={row.sin_documentacion}
-                            onChange={(e) =>
-                              updateRelatedRecursoCommonField(
-                                index,
-                                "sin_documentacion",
-                                e.target.checked,
-                              )
-                            }
-                          />
-                          <span>Sin documentación</span>
-                        </label>
-
-                        {renderRelatedRecursoSubtypeFields(row, index)}
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
+                {beneficiariosControladoresAplica
+                  ? renderBeneficiariosControladoresList()
+                  : null}
               </div>
 
 
@@ -4234,7 +4099,7 @@ persona: {
                         Identificar al Beneficiario Controlador (CFF 32-B Ter)
                       </p>
 
-                      {relatedDuenosAplica ? renderRelatedDuenosList() : null}
+                      {renderBeneficiariosControladoresList()}
                     </div>
 
                     <div className="rounded border border-gray-200 p-3 space-y-3">
@@ -5054,64 +4919,10 @@ persona: {
 
 
                       <div className="space-y-2">
-
-
-                        <label className="flex items-start gap-2 text-sm">
-
-
-                          <input
-
-
-                            type="checkbox"
-
-
-                            className="mt-1"
-
-
-                            checked={relatedDuenosAplica}
-
-
-                            onChange={(e) => {
-
-
-                              const v = e.target.checked;
-
-
-                              setRelatedDuenosAplica(v);
-
-
-
-                              if (!v) {
-
-
-                                setRelatedDuenos([]);
-
-
-                              } else if (relatedDuenos.length === 0) {
-
-
-                                setRelatedDuenos([createEmptyRelatedDueno()]);
-
-
-                              }
-
-
-                            }}
-
-
-                          />
-
-
-                          <span>El fideicomiso cuenta con Beneficiario Controlador.</span>
-
-
-                        </label>
-
-
-
-                      {relatedDuenosAplica ? renderRelatedDuenosList() : null}
-
-
+                        <p className="text-sm font-medium">
+                          Identificar al Beneficiario Controlador
+                        </p>
+                        {renderBeneficiariosControladoresList()}
                       </div>
 
 
