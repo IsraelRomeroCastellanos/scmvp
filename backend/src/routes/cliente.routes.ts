@@ -110,6 +110,51 @@ function numberOrNull(v: any): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function normalizeIdentityValue(v: any): string | null {
+  if (!isNonEmptyString(v)) return null;
+  return v.replace(/\s+/g, '').toUpperCase();
+}
+
+function canonicalPersonaSource(item: any): any {
+  const nestedPersona = item?.datos_completos?.persona;
+  if (!isPlainObject(nestedPersona)) return item ?? {};
+
+  return {
+    ...(isPlainObject(item) ? item : {}),
+    ...nestedPersona,
+    relacion_con_cliente:
+      nestedPersona?.relacion_con_cliente ??
+      nestedPersona?.relacion ??
+      item?.relacion_con_cliente ??
+      item?.relacion,
+    porcentaje_participacion:
+      nestedPersona?.porcentaje_participacion ?? item?.porcentaje_participacion,
+  };
+}
+
+function canonicalBeneficiarioEntityError(item: any, idx: number): string | null {
+  const prefix = `beneficiarios_controladores[${idx}]`;
+  const explicitType = String(
+    item?.tipo_entidad ?? item?.tipo_tercero ?? item?.tipo ?? '',
+  )
+    .trim()
+    .toLowerCase();
+
+  if (explicitType && explicitType !== 'persona_fisica') {
+    return `${prefix} debe ser Persona Física`;
+  }
+
+  if (isPlainObject(item?.empresa) || isPlainObject(item?.fideicomiso)) {
+    return `${prefix} debe ser Persona Física`;
+  }
+
+  if (isPlainObject(item?.datos_completos?.empresa) || isPlainObject(item?.datos_completos?.fideicomiso)) {
+    return `${prefix} debe ser Persona Física`;
+  }
+
+  return null;
+}
+
 function extractRfcPrincipal(tipo: any, datos_completos: any): string | null {
   const t = String(tipo || '').trim();
   const dc = datos_completos ?? {};
@@ -221,49 +266,179 @@ function extractChildState(tipo: string, datos_completos: any) {
   };
 }
 
+function duenoBeneficiarioValidationError(
+  item: any,
+  idx: number,
+  mode: 'canonical' | 'legacy',
+  prefixBase = 'duenos_beneficiarios',
+): string | null {
+  const prefix = `${prefixBase}[${idx}]`;
+
+  if (!isNonEmptyString(item?.nombres)) return `${prefix}.nombres es obligatorio`;
+  if (!isNonEmptyString(item?.apellido_paterno)) return `${prefix}.apellido_paterno es obligatorio`;
+  if (!isNonEmptyString(item?.apellido_materno)) return `${prefix}.apellido_materno es obligatorio`;
+
+  if (mode === 'canonical') {
+    if (!isNonEmptyString(item?.fecha_nacimiento)) return `${prefix}.fecha_nacimiento es obligatoria`;
+    if (!isYYYYMMDD(item?.fecha_nacimiento)) return `${prefix}.fecha_nacimiento inválida (AAAAMMDD)`;
+    if (!isNonEmptyString(item?.nacionalidad)) return `${prefix}.nacionalidad es obligatoria`;
+    if (!isNonEmptyString(item?.relacion_con_cliente)) return `${prefix}.relacion_con_cliente es obligatoria`;
+  } else {
+    if (isNonEmptyString(item?.fecha_nacimiento) && !isYYYYMMDD(item?.fecha_nacimiento))
+      return `${prefix}.fecha_nacimiento inválida (AAAAMMDD)`;
+    if (item?.relacion_con_cliente && !isNonEmptyString(item?.relacion_con_cliente))
+      return `${prefix}.relacion_con_cliente inválida`;
+  }
+
+  if (isNonEmptyString(item?.rfc) && !isRFC(item?.rfc)) return `${prefix}.rfc inválido`;
+  if (isNonEmptyString(item?.curp) && !isCURP(item?.curp)) return `${prefix}.curp inválido`;
+
+  if (item?.porcentaje_participacion !== null && item?.porcentaje_participacion !== undefined) {
+    const n = Number(item?.porcentaje_participacion);
+    if (!Number.isFinite(n) || n <= 0 || n > 100)
+      return `${prefix}.porcentaje_participacion inválido`;
+  }
+
+  return null;
+}
+
 function validateDuenoBeneficiarioOr400(
   res: Response,
   item: any,
   idx: number,
   mode: 'canonical' | 'legacy',
 ): boolean {
-  const prefix = `duenos_beneficiarios[${idx}]`;
-
-  if (!isNonEmptyString(item?.nombres)) return (badRequest(res, `${prefix}.nombres es obligatorio`), false);
-  if (!isNonEmptyString(item?.apellido_paterno))
-    return (badRequest(res, `${prefix}.apellido_paterno es obligatorio`), false);
-  if (!isNonEmptyString(item?.apellido_materno))
-    return (badRequest(res, `${prefix}.apellido_materno es obligatorio`), false);
-
-  if (mode === 'canonical') {
-    if (!isNonEmptyString(item?.fecha_nacimiento))
-      return (badRequest(res, `${prefix}.fecha_nacimiento es obligatoria`), false);
-    if (!isYYYYMMDD(item?.fecha_nacimiento))
-      return (badRequest(res, `${prefix}.fecha_nacimiento inválida (AAAAMMDD)`), false);
-    if (!isNonEmptyString(item?.nacionalidad))
-      return (badRequest(res, `${prefix}.nacionalidad es obligatoria`), false);
-    if (!isNonEmptyString(item?.relacion_con_cliente))
-      return (badRequest(res, `${prefix}.relacion_con_cliente es obligatoria`), false);
-  } else {
-    if (isNonEmptyString(item?.fecha_nacimiento) && !isYYYYMMDD(item?.fecha_nacimiento))
-      return (badRequest(res, `${prefix}.fecha_nacimiento inválida (AAAAMMDD)`), false);
-    if (item?.relacion_con_cliente && !isNonEmptyString(item?.relacion_con_cliente))
-      return (badRequest(res, `${prefix}.relacion_con_cliente inválida`), false);
-  }
-
-  if (isNonEmptyString(item?.rfc) && !isRFC(item?.rfc))
-    return (badRequest(res, `${prefix}.rfc inválido`), false);
-
-  if (isNonEmptyString(item?.curp) && !isCURP(item?.curp))
-    return (badRequest(res, `${prefix}.curp inválido`), false);
-
-  if (item?.porcentaje_participacion !== null && item?.porcentaje_participacion !== undefined) {
-    const n = Number(item?.porcentaje_participacion);
-    if (!Number.isFinite(n) || n <= 0 || n > 100)
-      return (badRequest(res, `${prefix}.porcentaje_participacion inválido`), false);
-  }
-
+  const error = duenoBeneficiarioValidationError(item, idx, mode);
+  if (error) return (badRequest(res, error), false);
   return true;
+}
+
+type CanonicalBeneficiariosPreparation = {
+  isCanonical: boolean;
+  ok: boolean;
+  error: string | null;
+  datosCompletos: any;
+};
+
+export function prepareCanonicalBeneficiarios(
+  tipo: string,
+  datosCompletos: any,
+  identityContext?: any,
+): CanonicalBeneficiariosPreparation {
+  const dc = isPlainObject(datosCompletos) ? { ...datosCompletos } : {};
+
+  if (!hasOwn(dc, 'beneficiarios_controladores_aplica')) {
+    return { isCanonical: false, ok: true, error: null, datosCompletos: dc };
+  }
+
+  const aplica = parseBooleanLike(dc.beneficiarios_controladores_aplica);
+  if (aplica === null) {
+    return {
+      isCanonical: true,
+      ok: false,
+      error: 'beneficiarios_controladores_aplica debe ser booleano',
+      datosCompletos: dc,
+    };
+  }
+
+  const hasList = hasOwn(dc, 'beneficiarios_controladores');
+  const rawList = dc.beneficiarios_controladores;
+
+  if (aplica && (!hasList || !Array.isArray(rawList) || rawList.length < 1)) {
+    return {
+      isCanonical: true,
+      ok: false,
+      error: 'beneficiarios_controladores requiere al menos un registro',
+      datosCompletos: dc,
+    };
+  }
+
+  if (!aplica && hasList && (!Array.isArray(rawList) || rawList.length > 0)) {
+    return {
+      isCanonical: true,
+      ok: false,
+      error: 'beneficiarios_controladores debe ser un arreglo vacío cuando no aplica',
+      datosCompletos: dc,
+    };
+  }
+
+  if ((tipo === 'persona_moral' || tipo === 'fideicomiso') && aplica !== true) {
+    return {
+      isCanonical: true,
+      ok: false,
+      error: 'beneficiarios_controladores_aplica debe ser true para Persona Moral y Fideicomiso',
+      datosCompletos: dc,
+    };
+  }
+
+  const normalizedList = aplica
+    ? (rawList as any[]).map((item) => normalizeDuenoBeneficiarioItem(canonicalPersonaSource(item)))
+    : [];
+
+  if (aplica) {
+    for (let i = 0; i < (rawList as any[]).length; i += 1) {
+      const entityError = canonicalBeneficiarioEntityError((rawList as any[])[i], i);
+      if (entityError) {
+        return { isCanonical: true, ok: false, error: entityError, datosCompletos: dc };
+      }
+    }
+  }
+
+  if (tipo === 'persona_fisica' && aplica) {
+    const persona = identityContext?.persona ?? dc?.persona ?? {};
+    const clientRfc = normalizeIdentityValue(persona?.rfc);
+    const clientCurp = normalizeIdentityValue(persona?.curp);
+
+    for (let i = 0; i < normalizedList.length; i += 1) {
+      const bcRfc = normalizeIdentityValue(normalizedList[i]?.rfc);
+      const bcCurp = normalizeIdentityValue(normalizedList[i]?.curp);
+
+      if (clientRfc && bcRfc && clientRfc === bcRfc) {
+        return {
+          isCanonical: true,
+          ok: false,
+          error: `beneficiarios_controladores[${i}].rfc no puede coincidir con el RFC del cliente`,
+          datosCompletos: dc,
+        };
+      }
+
+      if (clientCurp && bcCurp && clientCurp === bcCurp) {
+        return {
+          isCanonical: true,
+          ok: false,
+          error: `beneficiarios_controladores[${i}].curp no puede coincidir con la CURP del cliente`,
+          datosCompletos: dc,
+        };
+      }
+    }
+  }
+
+  if (aplica) {
+    for (let i = 0; i < normalizedList.length; i += 1) {
+      const validationError = duenoBeneficiarioValidationError(
+        normalizedList[i],
+        i,
+        'canonical',
+        'beneficiarios_controladores',
+      );
+      if (validationError) {
+        return { isCanonical: true, ok: false, error: validationError, datosCompletos: dc };
+      }
+    }
+  }
+
+  const prepared: Record<string, any> = {
+    ...dc,
+    beneficiarios_controladores_aplica: aplica,
+    beneficiarios_controladores: normalizedList,
+  };
+
+  if (tipo === 'persona_moral' || tipo === 'fideicomiso') {
+    prepared.duenos_beneficiarios_aplica = aplica;
+    prepared.duenos_beneficiarios = normalizedList;
+  }
+
+  return { isCanonical: true, ok: true, error: null, datosCompletos: prepared };
 }
 
 function validateRecursoTerceroOr400(
@@ -742,6 +917,87 @@ async function assertRelacionadosPersistedForTipo(
   }
 }
 
+function safeLegacyPfBeneficiario(item: any, clientePersona: any): any | null {
+  const explicitType = String(item?.tipo_tercero ?? item?.tipo_entidad ?? '').trim().toLowerCase();
+  if (explicitType !== 'persona_fisica') return null;
+
+  const source = canonicalPersonaSource(item);
+  const normalized = normalizeDuenoBeneficiarioItem(source);
+
+  if (duenoBeneficiarioValidationError(normalized, 0, 'canonical', 'beneficiarios_controladores')) {
+    return null;
+  }
+
+  const clientRfc = normalizeIdentityValue(clientePersona?.rfc);
+  const clientCurp = normalizeIdentityValue(clientePersona?.curp);
+  const bcRfc = normalizeIdentityValue(normalized?.rfc);
+  const bcCurp = normalizeIdentityValue(normalized?.curp);
+
+  if (clientRfc && bcRfc && clientRfc === bcRfc) return null;
+  if (clientCurp && bcCurp && clientCurp === bcCurp) return null;
+
+  return normalized;
+}
+
+export function exposeCanonicalBeneficiarios(tipo: string, datosCompletos: any) {
+  const dc = isPlainObject(datosCompletos) ? { ...datosCompletos } : {};
+  const markerPresent = hasOwn(dc, 'beneficiarios_controladores_aplica');
+
+  if (tipo === 'persona_fisica') {
+    if (markerPresent) {
+      const aplica = parseBooleanLike(dc.beneficiarios_controladores_aplica) === true;
+      const list = aplica && Array.isArray(dc.beneficiarios_controladores)
+        ? dc.beneficiarios_controladores.map((item: any) =>
+            normalizeDuenoBeneficiarioItem(canonicalPersonaSource(item)),
+          )
+        : [];
+
+      return {
+        ...dc,
+        beneficiarios_controladores_aplica: aplica,
+        beneficiarios_controladores: list,
+      };
+    }
+
+    const legacyResources = Array.isArray(dc.recursos_terceros) ? dc.recursos_terceros : [];
+    const safeList = legacyResources
+      .map((item: any) => safeLegacyPfBeneficiario(item, dc?.persona ?? {}))
+      .filter((item: any) => item !== null);
+
+    return {
+      ...dc,
+      beneficiarios_controladores_aplica: safeList.length > 0,
+      beneficiarios_controladores: safeList,
+    };
+  }
+
+  if (tipo === 'persona_moral' || tipo === 'fideicomiso') {
+    const sourceList = Array.isArray(dc.duenos_beneficiarios) && dc.duenos_beneficiarios.length > 0
+      ? dc.duenos_beneficiarios
+      : Array.isArray(dc.beneficiarios_controladores)
+        ? dc.beneficiarios_controladores
+        : [];
+
+    const normalizedList = sourceList.map((item: any) =>
+      normalizeDuenoBeneficiarioItem(canonicalPersonaSource(item)),
+    );
+
+    const aplica = markerPresent
+      ? parseBooleanLike(dc.beneficiarios_controladores_aplica) === true
+      : (parseBooleanLike(dc.duenos_beneficiarios_aplica) ??
+        parseBooleanLike(dc.BeneficiarioControlador) ??
+        (normalizedList.length > 0));
+
+    return {
+      ...dc,
+      beneficiarios_controladores_aplica: aplica,
+      beneficiarios_controladores: aplica ? normalizedList : [],
+    };
+  }
+
+  return dc;
+}
+
 async function materializeChildren(clienteId: number, tipo: string, datos_completos: any) {
   const baseDatos = isPlainObject(datos_completos) ? { ...datos_completos } : {};
 
@@ -825,7 +1081,12 @@ async function materializeChildren(clienteId: number, tipo: string, datos_comple
 /**
  * Validación por tipo (reusada por POST y PUT)
  */
-function validateDatosCompletosOr400(res: Response, tipo: any, datos_completos: any): boolean {
+function validateDatosCompletosOr400(
+  res: Response,
+  tipo: any,
+  datos_completos: any,
+  options: { validateChildLists?: boolean } = {},
+): boolean {
   // contacto común
   const contacto = datos_completos?.contacto ?? {};
   if (!isNonEmptyString(contacto?.pais)) return (badRequest(res, 'contacto.pais es obligatorio'), false);
@@ -922,6 +1183,7 @@ function validateDatosCompletosOr400(res: Response, tipo: any, datos_completos: 
       return (badRequest(res, 'representante.fecha_nacimiento inválida (AAAAMMDD)'), false);
   }
 
+  if (options.validateChildLists === false) return true;
   return validateChildListsOr400(res, tipo, datos_completos);
 }
 
@@ -971,10 +1233,13 @@ router.get('/clientes/:id', authenticate, async (req: Request, res: Response) =>
     if (result.rows.length === 0) return res.status(404).json({ error: 'Cliente no encontrado' });
 
     const row = result.rows[0];
-    row.datos_completos = await materializeChildren(
-      row.id,
+    row.datos_completos = exposeCanonicalBeneficiarios(
       row.tipo_cliente,
-      stripEmbeddedChildCollections(row.tipo_cliente, row.datos_completos),
+      await materializeChildren(
+        row.id,
+        row.tipo_cliente,
+        stripEmbeddedChildCollections(row.tipo_cliente, row.datos_completos),
+      ),
     );
 
     return res.json({ cliente: row });
@@ -1003,9 +1268,13 @@ router.post('/registrar-cliente', authenticate, async (req: Request, res: Respon
     if (!isNonEmptyString(nombre_entidad)) return badRequest(res, 'nombre_entidad es obligatorio');
     if (!isNonEmptyString(nacionalidad)) return badRequest(res, 'nacionalidad es obligatoria');
 
-    if (!validateDatosCompletosOr400(res, tipo, datos_completos)) return;
+    const canonicalPreparation = prepareCanonicalBeneficiarios(tipo, datos_completos);
+    if (!canonicalPreparation.ok) return badRequest(res, canonicalPreparation.error || 'Contrato canónico inválido');
 
-    const rfc_principal = extractRfcPrincipal(tipo, datos_completos);
+    const preparedDatos = canonicalPreparation.datosCompletos;
+    if (!validateDatosCompletosOr400(res, tipo, preparedDatos)) return;
+
+    const rfc_principal = extractRfcPrincipal(tipo, preparedDatos);
 
     await client.query('BEGIN');
 
@@ -1029,7 +1298,7 @@ router.post('/registrar-cliente', authenticate, async (req: Request, res: Respon
       return res.status(409).json({ error: 'Cliente duplicado para esa empresa' });
     }
 
-    const storedDatos = stripEmbeddedChildCollections(tipo, datos_completos);
+    const storedDatos = stripEmbeddedChildCollections(tipo, preparedDatos);
 
     const insert = await client.query(
       `INSERT INTO clientes (empresa_id, nombre_entidad, tipo_cliente, nacionalidad, estado, datos_completos, rfc_principal)
@@ -1038,8 +1307,8 @@ router.post('/registrar-cliente', authenticate, async (req: Request, res: Respon
       [empresa_id, nombre_entidad, tipo, nacionalidad, storedDatos, rfc_principal]
     );
 
-    const childSync = await replaceChildCollectionsForTipo(client, insert.rows[0].id, tipo, datos_completos);
-    await assertRelacionadosPersistedForTipo(client, insert.rows[0].id, tipo, datos_completos, childSync);
+    const childSync = await replaceChildCollectionsForTipo(client, insert.rows[0].id, tipo, preparedDatos);
+    await assertRelacionadosPersistedForTipo(client, insert.rows[0].id, tipo, preparedDatos, childSync);
 
     await client.query('COMMIT');
     return res.status(201).json({ ok: true, cliente: insert.rows[0] });
@@ -1090,9 +1359,27 @@ router.put('/clientes/:id', authenticate, async (req: Request, res: Response) =>
     let nextDatos: any = null;
     let nextRfcPrincipal: string | null = null;
 
+    let preparedPatchDatos: any = null;
+
     if (req.body.datos_completos !== undefined) {
-      nextDatos = deepMerge(currentDatos, req.body.datos_completos);
-      if (!validateDatosCompletosOr400(res, tipo, nextDatos)) {
+      const canonicalPreparation = prepareCanonicalBeneficiarios(
+        tipo,
+        req.body.datos_completos,
+        deepMerge(currentDatos, req.body.datos_completos),
+      );
+      if (!canonicalPreparation.ok) {
+        await client.query('ROLLBACK');
+        return badRequest(res, canonicalPreparation.error || 'Contrato canónico inválido');
+      }
+
+      preparedPatchDatos = canonicalPreparation.datosCompletos;
+      nextDatos = deepMerge(currentDatos, preparedPatchDatos);
+      if (!validateDatosCompletosOr400(res, tipo, nextDatos, { validateChildLists: false })) {
+        await client.query('ROLLBACK');
+        return;
+      }
+
+      if (hasChildPatchForTipo(tipo, preparedPatchDatos) && !validateChildListsOr400(res, tipo, nextDatos)) {
         await client.query('ROLLBACK');
         return;
       }
@@ -1125,7 +1412,7 @@ router.put('/clientes/:id', authenticate, async (req: Request, res: Response) =>
       [nombre_entidad, nacionalidad, storedNextDatos, estado, nextRfcPrincipal, id]
     );
 
-    if (req.body.datos_completos !== undefined && hasChildPatchForTipo(tipo, req.body.datos_completos)) {
+    if (preparedPatchDatos !== null && hasChildPatchForTipo(tipo, preparedPatchDatos)) {
       const childSync = await replaceChildCollectionsForTipo(client, id, tipo, nextDatos);
       await assertRelacionadosPersistedForTipo(client, id, tipo, nextDatos, childSync);
     }
