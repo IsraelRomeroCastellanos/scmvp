@@ -10,22 +10,13 @@ import {
   normalizeCodigoPostalMx,
   type CodigoPostalMx,
 } from '@/lib/codigosPostalesMx';
+import {
+  buildBeneficiariosControladoresContract,
+  validateBeneficiariosControladores,
+} from '../../registrar-cliente/validate';
 
 type TipoCliente = 'persona_fisica' | 'persona_moral' | 'fideicomiso';
 type Errors = Record<string, string>;
-
-type RecursoTerceroItem = {
-  tipo_tercero: string;
-  nombre_razon_social: string;
-  relacion_con_cliente: string;
-  actividad_giro: string;
-  nacionalidad: string;
-  sin_documentacion: boolean;
-  rfc: string;
-  curp: string;
-  fecha_nacimiento: string;
-  observaciones: string;
-};
 
 type DuenoBeneficiarioItem = {
   nombres: string;
@@ -48,6 +39,7 @@ function createEmptyRelatedDueno(): RelatedDuenoRow {
     nacionalidad: "MEX",
     relacion_con_cliente: "",
     porcentaje_participacion: "",
+    sin_documentacion: false,
     observaciones: "",
     datos_completos: {
       persona: {
@@ -108,6 +100,7 @@ function normalizeRelatedDuenoRow(row: any): RelatedDuenoRow {
     nacionalidad,
     relacion_con_cliente: relacion,
     porcentaje_participacion: porcentaje,
+    sin_documentacion: !!row?.sin_documentacion,
     observaciones,
     datos_completos: {
       persona: {
@@ -162,22 +155,13 @@ type RelatedFIDData = {
   representante: Record<string, any>;
 };
 
-type RelatedRecursoRow = {
-  tipo_entidad: RelatedTipoEntidad;
-  nombre_entidad: string;
-  nacionalidad: string;
-  relacion_con_cliente: string;
-  sin_documentacion: boolean;
-  observaciones: string;
-  datos_completos: RelatedPFData | RelatedPMData | RelatedFIDData;
-};
-
 type RelatedDuenoRow = {
   tipo_entidad: 'persona_fisica';
   nombre_entidad: string;
   nacionalidad: string;
   relacion_con_cliente: string;
   porcentaje_participacion: string;
+  sin_documentacion: boolean;
   observaciones: string;
   datos_completos: RelatedPFData;
 };
@@ -578,81 +562,6 @@ function hydrateRelatedFIDData(data: any): RelatedFIDData {
   };
 }
 
-function hydrateRelatedRecursoRow(row: any): RelatedRecursoRow {
-  if (!isPlainObject(row)) {
-    const datos_completos = createEmptyRelatedPFData();
-    return {
-      tipo_entidad: 'persona_fisica',
-      nombre_entidad: '',
-      nacionalidad: 'MEX',
-      relacion_con_cliente: '',
-      sin_documentacion: false,
-      observaciones: '',
-      datos_completos,
-    };
-  }
-
-  const tipo_entidad = detectRelatedTipoEntidad(row);
-  const legacy = !isPlainObject(row?.datos_completos) && ('tipo_tercero' in row || 'nombre_razon_social' in row);
-
-  let datos_completos: RelatedPFData | RelatedPMData | RelatedFIDData;
-  if (legacy) {
-    if (tipo_entidad === 'persona_moral') {
-      datos_completos = hydrateRelatedPMData({
-        contacto: { pais: row?.nacionalidad || 'MEX', email: '', telefono: '', domicilio: {} },
-        empresa: {
-          nombre_entidad: row?.nombre_razon_social,
-          razon_social: row?.nombre_razon_social,
-          rfc: row?.rfc,
-          fecha_constitucion: '',
-          giro_mercantil: row?.actividad_giro,
-        },
-        representante: {},
-      });
-    } else if (tipo_entidad === 'fideicomiso') {
-      datos_completos = hydrateRelatedFIDData({
-        contacto: { pais: row?.nacionalidad || 'MEX', email: '', telefono: '', domicilio: {} },
-        fideicomiso: {
-          nombre_entidad: row?.nombre_razon_social,
-          denominacion: row?.nombre_razon_social,
-          nombre_fideicomiso: row?.nombre_razon_social,
-        },
-        representante: {},
-      });
-    } else {
-      datos_completos = hydrateRelatedPFData({
-        contacto: { pais: row?.nacionalidad || 'MEX', email: '', telefono: '', domicilio: {} },
-        persona: {
-          nombres: row?.nombre_razon_social,
-          apellido_paterno: '',
-          apellido_materno: '',
-          fecha_nacimiento: row?.fecha_nacimiento,
-          rfc: row?.rfc,
-          curp: row?.curp,
-          actividad_economica: row?.actividad_giro,
-        },
-      });
-    }
-  } else {
-    datos_completos =
-      tipo_entidad === 'persona_fisica'
-        ? hydrateRelatedPFData(row?.datos_completos)
-        : tipo_entidad === 'persona_moral'
-          ? hydrateRelatedPMData(row?.datos_completos)
-          : hydrateRelatedFIDData(row?.datos_completos);
-  }
-
-  return {
-    tipo_entidad,
-    nombre_entidad: deriveRelatedNombreEntidad(tipo_entidad, datos_completos) || safeInput(row?.nombre_entidad).trim(),
-    nacionalidad: safeInput(row?.nacionalidad || 'MEX').trim() || 'MEX',
-    relacion_con_cliente: safeInput(row?.relacion_con_cliente).trim(),
-    sin_documentacion: !!row?.sin_documentacion,
-    observaciones: safeInput(row?.observaciones).trim(),
-    datos_completos,
-  };
-}
-
 function hydrateRelatedDuenoRow(row: any): RelatedDuenoRow {
   if (!isPlainObject(row)) {
     const datos_completos = createEmptyRelatedPFData();
@@ -662,6 +571,7 @@ function hydrateRelatedDuenoRow(row: any): RelatedDuenoRow {
       nacionalidad: 'MEX',
       relacion_con_cliente: '',
       porcentaje_participacion: '',
+      sin_documentacion: false,
       observaciones: '',
       datos_completos,
     };
@@ -689,25 +599,96 @@ function hydrateRelatedDuenoRow(row: any): RelatedDuenoRow {
     nombre_entidad: deriveRelatedNombreEntidad('persona_fisica', datos_completos) || safeInput(row?.nombre_entidad).trim(),
     nacionalidad: safeInput(row?.nacionalidad || 'MEX').trim() || 'MEX',
     relacion_con_cliente: safeInput(row?.relacion_con_cliente).trim(),
-    porcentaje_participacion: safeInput(row?.porcentaje_participacion).trim(),
-    observaciones: safeInput(row?.observaciones).trim(),
+    porcentaje_participacion: safeInput(
+      row?.porcentaje_participacion ?? datos_completos.persona?.porcentaje_participacion
+    ).trim(),
+    sin_documentacion: !!row?.sin_documentacion,
+    observaciones: safeInput(row?.observaciones ?? datos_completos.persona?.observaciones).trim(),
     datos_completos,
+  };
+}
+
+function buildBeneficiarioControladorPayloadRow(row: RelatedDuenoRow) {
+  const datos_completos = hydrateRelatedPFData(row?.datos_completos);
+  const persona = {
+    ...(isPlainObject(datos_completos?.persona)
+      ? datos_completos.persona
+      : {}),
+  };
+  delete persona.observaciones;
+  const nacionalidad =
+    safeInput(persona?.nacionalidad ?? row?.nacionalidad).trim() || 'MEX';
+  const relacion = safeInput(
+    persona?.relacion_con_cliente ?? row?.relacion_con_cliente
+  ).trim();
+  const porcentaje = safeInput(
+    persona?.porcentaje_participacion ?? row?.porcentaje_participacion
+  ).trim();
+  const nombres = safeInput(persona?.nombres).trim();
+  const apellido_paterno = safeInput(persona?.apellido_paterno).trim();
+  const apellido_materno = safeInput(persona?.apellido_materno).trim();
+  const fecha_nacimiento = onlyDigits(
+    safeInput(persona?.fecha_nacimiento)
+  ).slice(0, 8);
+  const rfc = normalizeUpper(safeInput(persona?.rfc)).replace(/\s+/g, '');
+  const curp = normalizeUpper(safeInput(persona?.curp)).replace(/\s+/g, '');
+
+  const datosCanonicos: RelatedPFData = {
+    ...datos_completos,
+    persona: {
+      ...persona,
+      nombres,
+      apellido_paterno,
+      apellido_materno,
+      fecha_nacimiento,
+      rfc,
+      curp,
+      nacionalidad,
+      relacion_con_cliente: relacion,
+      porcentaje_participacion: porcentaje,
+    },
+  };
+
+  return {
+    nombre_entidad:
+      deriveRelatedNombreEntidad('persona_fisica', datosCanonicos) ||
+      safeInput(row?.nombre_entidad).trim(),
+    nombres,
+    apellido_paterno,
+    apellido_materno,
+    fecha_nacimiento,
+    rfc,
+    curp,
+    nacionalidad,
+    relacion_con_cliente: relacion,
+    porcentaje_participacion: porcentaje,
+    sin_documentacion: !!row?.sin_documentacion,
+    datos_completos: datosCanonicos,
   };
 }
 
 function hydrateRelatedCollectionsFromDatos(datos: any) {
   const safeDatos = isPlainObject(datos) ? datos : {};
 
-  const recursosRaw = Array.isArray(safeDatos?.recursos_terceros) ? safeDatos.recursos_terceros : [];
-  const duenosRaw = Array.isArray(safeDatos?.duenos_beneficiarios) ? safeDatos.duenos_beneficiarios : [];
+  const hasCanonicalBeneficiarios = Array.isArray(
+    safeDatos?.beneficiarios_controladores
+  );
+  const beneficiariosRaw = hasCanonicalBeneficiarios
+    ? safeDatos.beneficiarios_controladores
+    : Array.isArray(safeDatos?.duenos_beneficiarios)
+      ? safeDatos.duenos_beneficiarios
+      : [];
 
-  const relatedRecursos = recursosRaw.map(hydrateRelatedRecursoRow);
-  const relatedDuenos = duenosRaw.map(hydrateRelatedDuenoRow);
+  const relatedDuenos = beneficiariosRaw.map(hydrateRelatedDuenoRow);
+  const canonicalAplica =
+    typeof safeDatos?.beneficiarios_controladores_aplica === 'boolean'
+      ? safeDatos.beneficiarios_controladores_aplica
+      : null;
 
   return {
-    relatedRecursosAplica: !!safeDatos?.recursos_terceros_aplica || relatedRecursos.length > 0,
-    relatedRecursos,
-    relatedDuenosAplica: !!safeDatos?.duenos_beneficiarios_aplica || relatedDuenos.length > 0,
+    relatedDuenosAplica:
+      canonicalAplica ??
+      (!!safeDatos?.duenos_beneficiarios_aplica || relatedDuenos.length > 0),
     relatedDuenos,
   };
 }
@@ -740,21 +721,6 @@ function safeBool(value: any): boolean {
   return value === true;
 }
 
-function createEmptyRecursoTercero(): RecursoTerceroItem {
-  return {
-    tipo_tercero: 'persona_fisica',
-    nombre_razon_social: '',
-    relacion_con_cliente: '',
-    actividad_giro: '',
-    nacionalidad: 'MEX',
-    sin_documentacion: false,
-    rfc: '',
-    curp: '',
-    fecha_nacimiento: '',
-    observaciones: ''
-  };
-}
-
 function createEmptyDuenoBeneficiario(): DuenoBeneficiarioItem {
   return {
     nombres: '',
@@ -767,21 +733,6 @@ function createEmptyDuenoBeneficiario(): DuenoBeneficiarioItem {
     curp: '',
     porcentaje_participacion: '',
     observaciones: ''
-  };
-}
-
-function normalizeRecursoTerceroRow(row: any): RecursoTerceroItem {
-  return {
-    tipo_tercero: safeInput(row?.tipo_tercero || 'persona_fisica'),
-    nombre_razon_social: safeInput(row?.nombre_razon_social ?? row?.nombre_completo),
-    relacion_con_cliente: safeInput(row?.relacion_con_cliente ?? row?.relacion),
-    actividad_giro: safeInput(row?.actividad_giro),
-    nacionalidad: safeInput(row?.nacionalidad || 'MEX'),
-    sin_documentacion: safeBool(row?.sin_documentacion),
-    rfc: safeInput(row?.rfc),
-    curp: safeInput(row?.curp),
-    fecha_nacimiento: safeInput(row?.fecha_nacimiento),
-    observaciones: safeInput(row?.observaciones)
   };
 }
 
@@ -798,30 +749,6 @@ function normalizeDuenoBeneficiarioRow(row: any): DuenoBeneficiarioItem {
     porcentaje_participacion: safeInput(row?.porcentaje_participacion),
     observaciones: safeInput(row?.observaciones)
   };
-}
-
-function addRecursoTerceroRow(
-  setRecursosTerceros: React.Dispatch<React.SetStateAction<RecursoTerceroItem[]>>
-) {
-  setRecursosTerceros((prev) => [...prev, createEmptyRecursoTercero()]);
-}
-
-function updateRecursoTerceroRow(
-  setRecursosTerceros: React.Dispatch<React.SetStateAction<RecursoTerceroItem[]>>,
-  index: number,
-  key: keyof RecursoTerceroItem,
-  value: RecursoTerceroItem[keyof RecursoTerceroItem]
-) {
-  setRecursosTerceros((prev) =>
-    prev.map((row, i) => (i === index ? { ...row, [key]: value } : row))
-  );
-}
-
-function removeRecursoTerceroRow(
-  setRecursosTerceros: React.Dispatch<React.SetStateAction<RecursoTerceroItem[]>>,
-  index: number
-) {
-  setRecursosTerceros((prev) => prev.filter((_, i) => i !== index));
 }
 
 function addDuenoBeneficiarioRow(
@@ -853,10 +780,12 @@ function renderRelatedDuenosList({
   relatedDuenos,
   setRelatedDuenos,
   syncLegacyFromRelated,
+  errors,
 }: {
   relatedDuenos: RelatedDuenoRow[];
   setRelatedDuenos: React.Dispatch<React.SetStateAction<RelatedDuenoRow[]>>;
   syncLegacyFromRelated: (next: RelatedDuenoRow[]) => void;
+  errors: Errors;
 }) {
   const updatePersonaField = (
     index: number,
@@ -892,6 +821,20 @@ function renderRelatedDuenosList({
     });
   };
 
+  const updateRowField = (
+    index: number,
+    key: 'sin_documentacion',
+    value: boolean
+  ) => {
+    setRelatedDuenos((prev) => {
+      const next = prev.map((row, i) =>
+        i === index ? { ...row, [key]: value } : row
+      );
+      syncLegacyFromRelated(next);
+      return next;
+    });
+  };
+
   const addRow = () => {
     setRelatedDuenos((prev) => {
       const next = [...prev, createEmptyRelatedDueno()];
@@ -921,6 +864,12 @@ function renderRelatedDuenosList({
         </button>
       </div>
 
+      {errors['beneficiarios_controladores'] ? (
+        <p className="text-xs text-red-600">
+          {errors['beneficiarios_controladores']}
+        </p>
+      ) : null}
+
       {relatedDuenos.map((row, index) => {
         const persona = row.datos_completos.persona;
         return (
@@ -938,41 +887,58 @@ function renderRelatedDuenosList({
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1">
-                <label className="text-sm font-medium">Nombres</label>
-                <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={persona.nombres} onChange={(e) => updatePersonaField(index, "nombres", e.target.value)} />
+                <label className="text-sm font-medium">Nombres *</label>
+                <input className={classInput(!!errors[`beneficiarios_controladores.${index}.nombres`])} value={safeInput(persona.nombres)} onChange={(e) => updatePersonaField(index, "nombres", e.target.value)} />
+                {errText(errors[`beneficiarios_controladores.${index}.nombres`])}
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-medium">Apellido paterno</label>
-                <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={persona.apellido_paterno} onChange={(e) => updatePersonaField(index, "apellido_paterno", e.target.value)} />
+                <label className="text-sm font-medium">Apellido paterno *</label>
+                <input className={classInput(!!errors[`beneficiarios_controladores.${index}.apellido_paterno`])} value={safeInput(persona.apellido_paterno)} onChange={(e) => updatePersonaField(index, "apellido_paterno", e.target.value)} />
+                {errText(errors[`beneficiarios_controladores.${index}.apellido_paterno`])}
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-medium">Apellido materno</label>
-                <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={persona.apellido_materno} onChange={(e) => updatePersonaField(index, "apellido_materno", e.target.value)} />
+                <label className="text-sm font-medium">Apellido materno *</label>
+                <input className={classInput(!!errors[`beneficiarios_controladores.${index}.apellido_materno`])} value={safeInput(persona.apellido_materno)} onChange={(e) => updatePersonaField(index, "apellido_materno", e.target.value)} />
+                {errText(errors[`beneficiarios_controladores.${index}.apellido_materno`])}
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-medium">Fecha nacimiento</label>
-                <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={persona.fecha_nacimiento} onChange={(e) => updatePersonaField(index, "fecha_nacimiento", e.target.value)} />
+                <label className="text-sm font-medium">Fecha nacimiento (AAAAMMDD) *</label>
+                <input className={classInput(!!errors[`beneficiarios_controladores.${index}.fecha_nacimiento`])} value={safeInput(persona.fecha_nacimiento)} onChange={(e) => updatePersonaField(index, "fecha_nacimiento", onlyDigits(e.target.value).slice(0, 8))} />
+                {errText(errors[`beneficiarios_controladores.${index}.fecha_nacimiento`])}
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-medium">Nacionalidad</label>
-                <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={persona.nacionalidad} onChange={(e) => updatePersonaField(index, "nacionalidad", e.target.value)} />
+                <label className="text-sm font-medium">Nacionalidad *</label>
+                <input className={classInput(!!errors[`beneficiarios_controladores.${index}.nacionalidad`])} value={safeInput(persona.nacionalidad)} onChange={(e) => updatePersonaField(index, "nacionalidad", e.target.value)} />
+                {errText(errors[`beneficiarios_controladores.${index}.nacionalidad`])}
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-medium">Relación con el cliente</label>
-                <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={persona.relacion_con_cliente} onChange={(e) => updatePersonaField(index, "relacion_con_cliente", e.target.value)} />
+                <label className="text-sm font-medium">Relación con el cliente *</label>
+                <input className={classInput(!!errors[`beneficiarios_controladores.${index}.relacion_con_cliente`])} value={safeInput(persona.relacion_con_cliente)} onChange={(e) => updatePersonaField(index, "relacion_con_cliente", e.target.value)} />
+                {errText(errors[`beneficiarios_controladores.${index}.relacion_con_cliente`])}
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">RFC</label>
-                <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={persona.rfc} onChange={(e) => updatePersonaField(index, "rfc", e.target.value)} />
+                <input className={classInput(!!errors[`beneficiarios_controladores.${index}.rfc`])} value={safeInput(persona.rfc)} onChange={(e) => updatePersonaField(index, "rfc", e.target.value)} />
+                {errText(errors[`beneficiarios_controladores.${index}.rfc`])}
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">CURP</label>
-                <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={persona.curp} onChange={(e) => updatePersonaField(index, "curp", e.target.value)} />
+                <input className={classInput(!!errors[`beneficiarios_controladores.${index}.curp`])} value={safeInput(persona.curp)} onChange={(e) => updatePersonaField(index, "curp", e.target.value)} />
+                {errText(errors[`beneficiarios_controladores.${index}.curp`])}
               </div>
-              <div className="space-y-1 md:col-span-3">
-                <label className="text-sm font-medium">Observaciones</label>
-                <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={persona.observaciones} onChange={(e) => updatePersonaField(index, "observaciones", e.target.value)} />
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Porcentaje accionario</label>
+                <input className={classInput(!!errors[`beneficiarios_controladores.${index}.porcentaje_participacion`])} value={safeInput(persona.porcentaje_participacion ?? row.porcentaje_participacion)} onChange={(e) => updatePersonaField(index, "porcentaje_participacion", e.target.value)} />
+                {errText(errors[`beneficiarios_controladores.${index}.porcentaje_participacion`])}
               </div>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={row.sin_documentacion}
+                  onChange={(e) => updateRowField(index, 'sin_documentacion', e.target.checked)}
+                />
+                Sin documentación
+              </label>
             </div>
           </div>
         );
@@ -1179,6 +1145,8 @@ export default function Page() {
   // PF
   const [pfActividad, setPfActividad] = useState('');
   const [pfActividadOriginal, setPfActividadOriginal] = useState<any>(null);
+  const [clientePfRfc, setClientePfRfc] = useState('');
+  const [clientePfCurp, setClientePfCurp] = useState('');
   // PM
   const [pmGiro, setPmGiro] = useState('');
   const [pmGiroOriginal, setPmGiroOriginal] = useState<any>(null);
@@ -1310,17 +1278,23 @@ export default function Page() {
     return true;
   }
 
-  const [recursosTercerosAplica, setRecursosTercerosAplica] = useState(false);
-  const [recursosTerceros, setRecursosTerceros] = useState<RecursoTerceroItem[]>([]);
   const [duenosBeneficiariosAplica, setDuenosBeneficiariosAplica] = useState(false);
   const [duenosBeneficiarios, setDuenosBeneficiarios] = useState<DuenoBeneficiarioItem[]>([]);
-  const [relatedRecursosAplica, setRelatedRecursosAplica] = useState(false);
-  const [relatedRecursos, setRelatedRecursos] = useState<RelatedRecursoRow[]>([]);
   const [relatedDuenosAplica, setRelatedDuenosAplica] = useState(false);
   const [relatedDuenos, setRelatedDuenos] = useState<RelatedDuenoRow[]>([]);
 
   function syncLegacyFromRelated(next: RelatedDuenoRow[]) {
     setDuenosBeneficiarios(next.map(projectRelatedDuenoToLegacy));
+  }
+
+  function clearBeneficiariosControladoresErrors() {
+    setErrors((prev) =>
+      Object.fromEntries(
+        Object.entries(prev).filter(
+          ([key]) => !key.startsWith('beneficiarios_controladores')
+        )
+      )
+    );
   }
 
   // A2 hydrate editar cliente: carga datos existentes al abrir edición
@@ -1356,6 +1330,8 @@ export default function Page() {
         const nextPfActividadOriginal = personaPrincipal?.actividad_economica;
         const nextPmGiroOriginal = empresaPrincipal?.giro_mercantil ?? empresaPrincipal?.giro;
         setPfActividadOriginal(nextPfActividadOriginal);
+        setClientePfRfc(safeInput(personaPrincipal?.rfc));
+        setClientePfCurp(safeInput(personaPrincipal?.curp));
         setPmGiroOriginal(nextPmGiroOriginal);
         setPfActividad(catalogStateValue(nextPfActividadOriginal));
         setPmGiro(catalogStateValue(nextPmGiroOriginal));
@@ -1473,19 +1449,20 @@ export default function Page() {
         }
 
         const hydrated = hydrateRelatedCollectionsFromDatos(datos);
-        const recursosLegacy = Array.isArray(datos?.recursos_terceros)
-          ? datos.recursos_terceros.map(normalizeRecursoTerceroRow)
-          : [];
         const duenosLegacy = hydrated.relatedDuenos.map(projectRelatedDuenoToLegacy);
 
-        setRelatedRecursosAplica(hydrated.relatedRecursosAplica);
-        setRelatedRecursos(hydrated.relatedRecursos);
-        setRelatedDuenosAplica(hydrated.relatedDuenosAplica);
+        setRelatedDuenosAplica(
+          nextTipo === 'persona_fisica'
+            ? hydrated.relatedDuenosAplica
+            : true
+        );
         setRelatedDuenos(hydrated.relatedDuenos);
-        setRecursosTerceros(recursosLegacy);
-        setRecursosTercerosAplica(recursosLegacy.length > 0);
         setDuenosBeneficiarios(duenosLegacy);
-        setDuenosBeneficiariosAplica(duenosLegacy.length > 0);
+        setDuenosBeneficiariosAplica(
+          nextTipo === 'persona_fisica'
+            ? hydrated.relatedDuenosAplica
+            : true
+        );
       } catch (e: any) {
         if (alive) setFatal(e?.message || 'Error al cargar cliente');
       } finally {
@@ -1509,9 +1486,9 @@ export default function Page() {
     }
   }, [tipoCliente, pmRazonSocial, fidNombre]);
 
-  // P4: PM editar fijo en sí, visible y abierto
+  // BC canónico: PM/FID siempre visible, activo y con al menos una fila.
   useEffect(() => {
-    if (tipoCliente === 'persona_moral') {
+    if (tipoCliente === 'persona_moral' || tipoCliente === 'fideicomiso') {
       if (!relatedDuenosAplica) setRelatedDuenosAplica(true);
       if (!duenosBeneficiariosAplica) setDuenosBeneficiariosAplica(true);
       if (relatedDuenos.length === 0) {
@@ -1616,6 +1593,20 @@ export default function Page() {
       reqCURP(e, 'rep.curp', 'CURP representante', repCURP);
     }
 
+    const beneficiariosAplica =
+      tipoCliente === 'persona_fisica' ? relatedDuenosAplica : true;
+    const beneficiariosValidation = validateBeneficiariosControladores({
+      tipoCliente,
+      aplica: beneficiariosAplica,
+      beneficiarios: beneficiariosAplica
+        ? relatedDuenos.map(buildBeneficiarioControladorPayloadRow)
+        : [],
+      clientePfRfc,
+      clientePfCurp,
+    });
+
+    Object.assign(e, beneficiariosValidation.errors);
+
     return e;
   }
 
@@ -1623,7 +1614,16 @@ export default function Page() {
     setFatal('');
     const e = validate();
     setErrors(e);
-    if (Object.keys(e).length > 0) return;
+    if (Object.keys(e).length > 0) {
+      if (
+        Object.keys(e).some((key) =>
+          key.startsWith('beneficiarios_controladores')
+        )
+      ) {
+        setFatal('Completa la sección de Beneficiario Controlador para continuar.');
+      }
+      return;
+    }
 
     if (!token) {
       setFatal('No hay token en sesión. Vuelve a iniciar sesión.');
@@ -1665,22 +1665,6 @@ export default function Page() {
             actividad_economica: actividadEconomicaPrincipal
           });
 
-          body.datos_completos.recursos_terceros_aplica = recursosTercerosAplica;
-
-          body.datos_completos.recursos_terceros = recursosTercerosAplica
-            ? recursosTerceros.map((row) => ({
-                tipo_tercero: row.tipo_tercero || 'persona_fisica',
-                nombre_razon_social: row.nombre_razon_social.trim(),
-                relacion_con_cliente: row.relacion_con_cliente.trim(),
-                actividad_giro: row.actividad_giro.trim(),
-                nacionalidad: row.nacionalidad || 'MEX',
-                sin_documentacion: !!row.sin_documentacion,
-                rfc: row.sin_documentacion ? '' : normalizeUpper(row.rfc),
-                curp: row.sin_documentacion ? '' : normalizeUpper(row.curp),
-                fecha_nacimiento: row.sin_documentacion ? '' : onlyDigits(row.fecha_nacimiento).slice(0, 8),
-                observaciones: row.observaciones.trim()
-              }))
-            : [];
         }
         if (tipoCliente === 'persona_moral') {
             body.nombre_entidad = safeInput(pmRazonSocial).trim();
@@ -1706,22 +1690,6 @@ export default function Page() {
             })
           });
 
-          body.datos_completos.duenos_beneficiarios_aplica = duenosBeneficiariosAplica;
-
-          body.datos_completos.duenos_beneficiarios = duenosBeneficiariosAplica
-            ? duenosBeneficiarios.map((row) => ({
-                nombres: row.nombres.trim(),
-                apellido_paterno: row.apellido_paterno.trim(),
-                apellido_materno: row.apellido_materno.trim(),
-                fecha_nacimiento: onlyDigits(row.fecha_nacimiento).slice(0, 8),
-                nacionalidad: row.nacionalidad || 'MEX',
-                relacion_con_cliente: row.relacion_con_cliente.trim(),
-                rfc: normalizeUpper(row.rfc),
-                curp: normalizeUpper(row.curp),
-                porcentaje_participacion: row.porcentaje_participacion.trim(),
-                observaciones: row.observaciones.trim()
-              }))
-            : [];
         }
         if (tipoCliente === 'fideicomiso') {
           body.datos_completos.representante = stripEmpty({
@@ -1738,23 +1706,25 @@ export default function Page() {
             })
           });
 
-          body.datos_completos.duenos_beneficiarios_aplica = duenosBeneficiariosAplica;
-
-          body.datos_completos.duenos_beneficiarios = duenosBeneficiariosAplica
-            ? duenosBeneficiarios.map((row) => ({
-                nombres: row.nombres.trim(),
-                apellido_paterno: row.apellido_paterno.trim(),
-                apellido_materno: row.apellido_materno.trim(),
-                fecha_nacimiento: onlyDigits(row.fecha_nacimiento).slice(0, 8),
-                nacionalidad: row.nacionalidad || 'MEX',
-                relacion_con_cliente: row.relacion_con_cliente.trim(),
-                rfc: normalizeUpper(row.rfc),
-                curp: normalizeUpper(row.curp),
-                porcentaje_participacion: row.porcentaje_participacion.trim(),
-                observaciones: row.observaciones.trim()
-              }))
-            : [];
         }
+
+      const beneficiariosControladoresContract =
+        buildBeneficiariosControladoresContract({
+          tipoCliente,
+          aplica:
+            tipoCliente === 'persona_fisica'
+              ? relatedDuenosAplica
+              : true,
+          beneficiarios: relatedDuenos.map(
+            buildBeneficiarioControladorPayloadRow
+          ),
+        });
+
+      body.datos_completos = {
+        ...body.datos_completos,
+        ...beneficiariosControladoresContract,
+      };
+
       // Limpieza final para evitar mandar vacíos u objetos vacíos
       body.datos_completos = stripEmpty(body.datos_completos);
 
@@ -2079,159 +2049,37 @@ export default function Page() {
               <input
                 type="checkbox"
                 className="mt-1"
-                checked={recursosTercerosAplica}
+                checked={relatedDuenosAplica}
                 onChange={(e) => {
-                  const v = e.target.checked;
-                  setRecursosTercerosAplica(v);
-                  if (!v) {
-                    setRecursosTerceros([]);
-                  } else if (recursosTerceros.length === 0) {
-                    setRecursosTerceros([createEmptyRecursoTercero()]);
+                  const checked = e.target.checked;
+                  setRelatedDuenosAplica(checked);
+                  setDuenosBeneficiariosAplica(checked);
+                  clearBeneficiariosControladoresErrors();
+                  setFatal('');
+
+                  if (!checked) {
+                    setRelatedDuenos([]);
+                    syncLegacyFromRelated([]);
+                  } else if (relatedDuenos.length === 0) {
+                    const next = [createEmptyRelatedDueno()];
+                    setRelatedDuenos(next);
+                    syncLegacyFromRelated(next);
                   }
                 }}
               />
-              <span>¿Aplica recursos de terceros?</span>
+              <span>
+                Manifiesto que tengo conocimiento de la existencia del dueño beneficiario.
+              </span>
             </label>
 
-            {recursosTercerosAplica ? (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold">Recursos de terceros</h3>
-                  <button
-                    type="button"
-                    onClick={() => addRecursoTerceroRow(setRecursosTerceros)}
-                    className="rounded border px-3 py-1 text-sm"
-                  >
-                    Agregar
-                  </button>
-                </div>
-
-                {recursosTerceros.map((row, index) => (
-                  <div key={index} className="rounded border p-3 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium">Tercero #{index + 1}</p>
-                      <button
-                        type="button"
-                        onClick={() => removeRecursoTerceroRow(setRecursosTerceros, index)}
-                        className="rounded border px-3 py-1 text-sm text-red-700"
-                      >
-                        Eliminar
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div className="space-y-1">
-                        <label className="text-sm font-medium">Nombre / razón social</label>
-                        <input
-                          value={row.nombre_razon_social}
-                          onChange={(e) =>
-                            updateRecursoTerceroRow(
-                              setRecursosTerceros,
-                              index,
-                              'nombre_razon_social',
-                              e.target.value
-                            )
-                          }
-                          className={classInput(false)}
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-sm font-medium">Relación con el cliente</label>
-                        <input
-                          value={row.relacion_con_cliente}
-                          onChange={(e) =>
-                            updateRecursoTerceroRow(
-                              setRecursosTerceros,
-                              index,
-                              'relacion_con_cliente',
-                              e.target.value
-                            )
-                          }
-                          className={classInput(false)}
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-sm font-medium">Actividad / giro</label>
-                        <select
-                          value={row.actividad_giro}
-                          onChange={(e) =>
-                            updateRecursoTerceroRow(
-                              setRecursosTerceros,
-                              index,
-                              'actividad_giro',
-                              e.target.value
-                            )
-                          }
-                          className={classInput(false)}
-                        >
-                          <option value="">Selecciona...</option>
-                          {row.actividad_giro && !catalogHasKey(giros, row.actividad_giro) ? (
-                            <option value={row.actividad_giro}>
-                              Valor legacy/manual: {row.actividad_giro}
-                            </option>
-                          ) : null}
-                          {giros.map((g) => (
-                            <option key={g.clave} value={g.clave}>
-                              {g.descripcion} ({g.clave})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-sm font-medium">RFC</label>
-                        <input
-                          value={row.rfc}
-                          onChange={(e) =>
-                            updateRecursoTerceroRow(
-                              setRecursosTerceros,
-                              index,
-                              'rfc',
-                              e.target.value
-                            )
-                          }
-                          className={classInput(false)}
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-sm font-medium">CURP</label>
-                        <input
-                          value={row.curp}
-                          onChange={(e) =>
-                            updateRecursoTerceroRow(
-                              setRecursosTerceros,
-                              index,
-                              'curp',
-                              e.target.value
-                            )
-                          }
-                          className={classInput(false)}
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-sm font-medium">Fecha nac. (AAAAMMDD)</label>
-                        <input
-                          value={row.fecha_nacimiento}
-                          onChange={(e) =>
-                            updateRecursoTerceroRow(
-                              setRecursosTerceros,
-                              index,
-                              'fecha_nacimiento',
-                              onlyDigits(e.target.value).slice(0, 8)
-                            )
-                          }
-                          className={classInput(false)}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
+            {relatedDuenosAplica
+              ? renderRelatedDuenosList({
+                  relatedDuenos,
+                  setRelatedDuenos,
+                  syncLegacyFromRelated,
+                  errors,
+                })
+              : null}
           </div>
         </div>
       ) : null}
@@ -2444,6 +2292,7 @@ export default function Page() {
                 relatedDuenos,
                 setRelatedDuenos,
                 syncLegacyFromRelated,
+                errors,
               })}
             </div>
         </div>
@@ -2541,34 +2390,12 @@ export default function Page() {
             </div>
 
             <div className="border-t pt-3 space-y-3">
-              <label className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-1"
-                  checked={relatedDuenosAplica}
-                  onChange={(e) => {
-                    const v = e.target.checked;
-                    setRelatedDuenosAplica(v);
-                    setDuenosBeneficiariosAplica(v);
-
-                    if (!v) {
-                      setRelatedDuenos([]);
-                      syncLegacyFromRelated([]);
-                    } else if (relatedDuenos.length === 0) {
-                      const next = [createEmptyRelatedDueno()];
-                      setRelatedDuenos(next);
-                      syncLegacyFromRelated(next);
-                    }
-                  }}
-                />
-                <span>¿Aplica Beneficiario Controlador?</span>
-              </label>
-
-              {relatedDuenosAplica ? renderRelatedDuenosList({
+              {renderRelatedDuenosList({
                 relatedDuenos,
                 setRelatedDuenos,
                 syncLegacyFromRelated,
-              }) : null}
+                errors,
+              })}
             </div>
           </div>
         </div>
