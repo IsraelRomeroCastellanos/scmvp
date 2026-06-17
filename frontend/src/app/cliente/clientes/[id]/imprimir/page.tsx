@@ -77,70 +77,11 @@ function formatCatalogValue(v: any): string {
   return String(v ?? '').trim();
 }
 
-function boolText(v: any): string {
-  return v ? 'Sí' : 'No';
-}
 
 function getDomicilio(contacto: any): any {
   return contacto?.domicilio ?? contacto?.domicilio_mexico ?? {};
 }
 
-function getRecursosTerceros(dc: any, persona: any, empresa?: any, tipoCliente?: string): any[] {
-  const root = Array.isArray(dc?.recursos_terceros) ? dc.recursos_terceros : [];
-  const personaRecursos = Array.isArray(persona?.recursos_terceros) ? persona.recursos_terceros : [];
-  const empresaRecursos = Array.isArray(empresa?.recursos_terceros) ? empresa.recursos_terceros : [];
-
-  let merged: any[] = [];
-
-  if (tipoCliente === 'persona_moral') {
-    merged = [...root, ...empresaRecursos];
-
-    // Fallback legacy/pruebas: solo usar persona.recursos_terceros si PM no trae root/empresa.
-    if (!merged.length && personaRecursos.length) {
-      merged = [...personaRecursos];
-    }
-  } else if (tipoCliente === 'persona_fisica') {
-    merged = [...root, ...personaRecursos];
-  } else {
-    merged = [...root];
-  }
-
-  const seen = new Set<string>();
-
-  return merged.filter((row) => {
-    let key = '';
-    try {
-      key = JSON.stringify(row);
-    } catch {
-      key = String(row);
-    }
-
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-function recursoActividad(row: any): any {
-  return (
-    row?.actividad_giro ??
-    row?.datos_completos?.persona?.actividad_economica ??
-    row?.datos_completos?.empresa?.giro_mercantil ??
-    ''
-  );
-}
-
-function recursoRfc(row: any): any {
-  return row?.rfc ?? row?.datos_completos?.persona?.rfc ?? row?.datos_completos?.empresa?.rfc ?? '';
-}
-
-function recursoCurp(row: any): any {
-  return row?.curp ?? row?.datos_completos?.persona?.curp ?? '';
-}
-
-function recursoFechaNacimiento(row: any): any {
-  return row?.fecha_nacimiento ?? row?.datos_completos?.persona?.fecha_nacimiento ?? '';
-}
 
 
 function fullNameFromParts(v: any): string {
@@ -155,6 +96,81 @@ function fullNameFromParts(v: any): string {
     .map((part) => String(part ?? '').trim())
     .filter(Boolean)
     .join(' ');
+}
+
+function firstNonEmpty(...values: any[]): any {
+  for (const value of values) {
+    if (value === null || value === undefined) continue;
+    if (typeof value === 'string' && !value.trim()) continue;
+    return value;
+  }
+
+  return '';
+}
+
+function getBeneficiariosControladores(dc: any): any[] {
+  if (Array.isArray(dc?.beneficiarios_controladores)) {
+    return dc.beneficiarios_controladores;
+  }
+
+  return Array.isArray(dc?.duenos_beneficiarios) ? dc.duenos_beneficiarios : [];
+}
+
+function beneficiarioField(row: any, field: string): any {
+  return firstNonEmpty(
+    row?.datos_completos?.persona?.[field],
+    row?.[field]
+  );
+}
+
+function shouldShowBeneficiariosEmptyCopy(rows: any[], aplica: boolean, showAplica: boolean): boolean {
+  return rows.length === 0 && (!showAplica || aplica);
+}
+
+function BeneficiariosControladoresSection({
+  rows,
+  aplica,
+  showAplica = false
+}: {
+  rows: any[];
+  aplica: boolean;
+  showAplica?: boolean;
+}) {
+  return (
+    <Section title="Beneficiario Controlador">
+      {showAplica ? <Row label="Aplica" value={aplica ? 'Sí' : 'No'} /> : null}
+
+      {rows.length ? (
+        <div className="space-y-3">
+          {rows.map((row: any, index: number) => {
+            const nombre = [
+              beneficiarioField(row, 'nombres'),
+              beneficiarioField(row, 'apellido_paterno'),
+              beneficiarioField(row, 'apellido_materno')
+            ]
+              .map((part) => String(part ?? '').trim())
+              .filter(Boolean)
+              .join(' ') || String(row?.nombre_entidad ?? '').trim();
+
+            return (
+              <div key={index} className="rounded border border-gray-200 p-3 space-y-1">
+                <div className="text-sm font-medium">Beneficiario Controlador {index + 1}</div>
+                <Row label="Nombre" value={nombre} />
+                <Row label="Fecha nacimiento" value={fmtYYYYMMDD(beneficiarioField(row, 'fecha_nacimiento'))} />
+                <Row label="Nacionalidad" value={beneficiarioField(row, 'nacionalidad')} />
+                <Row label="Relación con el cliente" value={beneficiarioField(row, 'relacion_con_cliente')} />
+                <Row label="RFC" value={beneficiarioField(row, 'rfc')} />
+                <Row label="CURP" value={beneficiarioField(row, 'curp')} />
+                <Row label="Porcentaje accionario" value={beneficiarioField(row, 'porcentaje_participacion')} />
+              </div>
+            );
+          })}
+        </div>
+      ) : shouldShowBeneficiariosEmptyCopy(rows, aplica, showAplica) ? (
+        <div className="text-sm text-gray-600">Sin beneficiarios controladores registrados.</div>
+      ) : null}
+    </Section>
+  );
 }
 
 export default function ImprimirClientePage() {
@@ -227,8 +243,11 @@ export default function ImprimirClientePage() {
   const isFID = cliente.tipo_cliente === 'fideicomiso';
 
   const contactoDomicilio = getDomicilio(contacto);
-  const recursosTerceros = getRecursosTerceros(dc, persona, empresa, cliente.tipo_cliente);
-  const duenosBeneficiarios = Array.isArray(dc.duenos_beneficiarios) ? dc.duenos_beneficiarios : [];
+  const beneficiariosControladores = getBeneficiariosControladores(dc);
+  const beneficiariosControladoresAplica =
+    typeof dc?.beneficiarios_controladores_aplica === 'boolean'
+      ? dc.beneficiarios_controladores_aplica
+      : !!dc?.duenos_beneficiarios_aplica || beneficiariosControladores.length > 0;
 
   const representanteEsAccionista =
     dc?.representante_es_accionista === true;
@@ -322,27 +341,11 @@ export default function ImprimirClientePage() {
             <Row label="Fecha expiración" value={fmtYYYYMMDD(pfId.fecha_expiracion)} />
           </Section>
 
-          <Section title="Recursos de terceros">
-            {recursosTerceros.length ? (
-              <div className="space-y-3">
-                {recursosTerceros.map((row, index) => (
-                  <div key={index} className="rounded border border-gray-200 p-3 space-y-1">
-                    <div className="text-sm font-medium">Recurso {index + 1}</div>
-                    <Row label="Tipo tercero" value={row?.tipo_tercero ?? row?.tipo_entidad ?? ''} />
-                    <Row label="Nombre / Razón social" value={row?.nombre_razon_social ?? row?.nombre_entidad ?? ''} />
-                    <Row label="Relación con cliente" value={row?.relacion_con_cliente ?? ''} />
-                    <Row label="Actividad / giro" value={formatCatalogValue(recursoActividad(row))} />
-                    <Row label="Sin documentación" value={boolText(row?.sin_documentacion)} />
-                    <Row label="RFC" value={recursoRfc(row)} />
-                    <Row label="CURP" value={recursoCurp(row)} />
-                    <Row label="Fecha nacimiento" value={fmtYYYYMMDD(recursoFechaNacimiento(row))} />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-sm text-gray-600">Sin recursos de terceros registrados.</div>
-            )}
-          </Section>
+          <BeneficiariosControladoresSection
+            rows={beneficiariosControladores}
+            aplica={beneficiariosControladoresAplica}
+            showAplica
+          />
 
           <Section title="Acuerdo de confidencialidad (PF)">
             <div className="text-sm text-gray-800">
@@ -388,28 +391,6 @@ export default function ImprimirClientePage() {
             <Row label="Fecha expiración" value={fmtYYYYMMDD(repId.fecha_expiracion)} />
           </Section>
 
-          <Section title="Recursos de terceros">
-            {recursosTerceros.length ? (
-              <div className="space-y-3">
-                {recursosTerceros.map((row, index) => (
-                  <div key={index} className="rounded border border-gray-200 p-3 space-y-1">
-                    <div className="text-sm font-medium">Recurso {index + 1}</div>
-                    <Row label="Tipo tercero" value={row?.tipo_tercero ?? row?.tipo_entidad ?? ''} />
-                    <Row label="Nombre / Razón social" value={row?.nombre_razon_social ?? row?.nombre_entidad ?? ''} />
-                    <Row label="Relación con cliente" value={row?.relacion_con_cliente ?? ''} />
-                    <Row label="Actividad / giro" value={formatCatalogValue(recursoActividad(row))} />
-                    <Row label="Sin documentación" value={boolText(row?.sin_documentacion)} />
-                    <Row label="RFC" value={recursoRfc(row)} />
-                    <Row label="CURP" value={recursoCurp(row)} />
-                    <Row label="Fecha nacimiento" value={fmtYYYYMMDD(recursoFechaNacimiento(row))} />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-sm text-gray-600">Sin recursos de terceros registrados.</div>
-            )}
-          </Section>
-
           <Section title="Participación accionaria del representante legal">
   <Row
   label="El representante legal también es accionista"
@@ -436,30 +417,10 @@ export default function ImprimirClientePage() {
   ) : null}
   </Section>
 
-  <Section title="Dueños / Beneficiarios">
-            {duenosBeneficiarios.length ? (
-              <div className="space-y-3">
-                {duenosBeneficiarios.map((row: any, index: number) => {
-                  const p = row?.datos_completos?.persona ?? row ?? {};
-                  const nombre = [p?.nombres, p?.apellido_paterno, p?.apellido_materno].filter(Boolean).join(' ') || row?.nombre_entidad || '';
-                  return (
-                    <div key={index} className="rounded border border-gray-200 p-3 space-y-1">
-                      <div className="text-sm font-medium">Beneficiario {index + 1}</div>
-                      <Row label="Nombre" value={nombre} />
-                      <Row label="Relación con cliente" value={p?.relacion_con_cliente ?? row?.relacion_con_cliente ?? ''} />
-                      <Row label="Porcentaje participación" value={p?.porcentaje_participacion ?? row?.porcentaje_participacion ?? ''} />
-                      <Row label="Nacionalidad" value={p?.nacionalidad ?? row?.nacionalidad ?? ''} />
-                      <Row label="RFC" value={p?.rfc ?? row?.rfc ?? ''} />
-                      <Row label="CURP" value={p?.curp ?? row?.curp ?? ''} />
-                      <Row label="Fecha nacimiento" value={fmtYYYYMMDD(p?.fecha_nacimiento ?? row?.fecha_nacimiento)} />
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="text-sm text-gray-600">Sin dueños/beneficiarios registrados.</div>
-            )}
-          </Section>
+          <BeneficiariosControladoresSection
+            rows={beneficiariosControladores}
+            aplica={beneficiariosControladoresAplica}
+          />
 
           <Section title="Acuerdo de confidencialidad (PM)">
             <div className="text-sm text-gray-800">
@@ -517,30 +478,10 @@ export default function ImprimirClientePage() {
             <Row label="Fecha expiración" value={fmtYYYYMMDD(repId.fecha_expiracion)} />
           </Section>
 
-          <Section title="Dueños / Beneficiarios">
-            {duenosBeneficiarios.length ? (
-              <div className="space-y-3">
-                {duenosBeneficiarios.map((row: any, index: number) => {
-                  const p = row?.datos_completos?.persona ?? row ?? {};
-                  const nombre = [p?.nombres, p?.apellido_paterno, p?.apellido_materno].filter(Boolean).join(' ') || row?.nombre_entidad || '';
-                  return (
-                    <div key={index} className="rounded border border-gray-200 p-3 space-y-1">
-                      <div className="text-sm font-medium">Beneficiario {index + 1}</div>
-                      <Row label="Nombre" value={nombre} />
-                      <Row label="Relación con cliente" value={p?.relacion_con_cliente ?? row?.relacion_con_cliente ?? ''} />
-                      <Row label="Porcentaje participación" value={p?.porcentaje_participacion ?? row?.porcentaje_participacion ?? ''} />
-                      <Row label="Nacionalidad" value={p?.nacionalidad ?? row?.nacionalidad ?? ''} />
-                      <Row label="RFC" value={p?.rfc ?? row?.rfc ?? ''} />
-                      <Row label="CURP" value={p?.curp ?? row?.curp ?? ''} />
-                      <Row label="Fecha nacimiento" value={fmtYYYYMMDD(p?.fecha_nacimiento ?? row?.fecha_nacimiento)} />
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="text-sm text-gray-600">Sin dueños/beneficiarios registrados.</div>
-            )}
-          </Section>
+                  <BeneficiariosControladoresSection
+            rows={beneficiariosControladores}
+            aplica={beneficiariosControladoresAplica}
+          />
 
           <Section title="Acuerdo de confidencialidad (Fideicomiso)">
             <div className="text-sm text-gray-800">
