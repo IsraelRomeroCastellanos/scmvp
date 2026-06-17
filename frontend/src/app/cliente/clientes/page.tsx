@@ -2,6 +2,18 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { FiUsers } from 'react-icons/fi';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  LoadingState,
+  PageHeader,
+  Select,
+  TableContainer,
+} from '@/components/ui';
 
 type Empresa = {
   id: number;
@@ -75,9 +87,9 @@ async function apiGet<T>(path: string, token: string): Promise<T> {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
     },
-    cache: 'no-store'
+    cache: 'no-store',
   });
 
   if (!res.ok) {
@@ -94,6 +106,14 @@ async function apiGet<T>(path: string, token: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+function estadoVariant(estado?: string | null): 'success' | 'danger' | 'warning' | 'neutral' {
+  const value = String(estado || '').toLowerCase();
+  if (value === 'activo' || value === 'activa') return 'success';
+  if (value === 'inactivo' || value === 'inactiva') return 'danger';
+  if (value === 'pendiente') return 'warning';
+  return 'neutral';
+}
+
 export default function ClientesPage() {
   const router = useRouter();
 
@@ -102,7 +122,7 @@ export default function ClientesPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
-  const [empresaSel, setEmpresaSel] = useState<string>('all'); // ✅ default = Todas
+  const [empresaSel, setEmpresaSel] = useState<string>('all');
   const [clientes, setClientes] = useState<Cliente[]>([]);
 
   const token = useMemo(() => getToken(), []);
@@ -139,8 +159,6 @@ export default function ClientesPage() {
         if (!alive) return;
         const list = Array.isArray(data?.empresas) ? data.empresas : [];
         setEmpresas(list);
-
-        // Si no hay empresas, igual dejamos “all”
         setEmpresaSel('all');
       } catch (e: any) {
         if (!alive) return;
@@ -183,10 +201,8 @@ export default function ClientesPage() {
           return;
         }
 
-        // Caso A: “Todas” => pedimos por cada empresa y unimos
         if (empresaSel === 'all') {
           if (!empresas.length) {
-            // si no hay empresas, no hay nada que consultar
             if (!alive) return;
             setClientes([]);
             return;
@@ -202,7 +218,6 @@ export default function ClientesPage() {
           const allLists = await Promise.all(requests);
           const flat = allLists.flat();
 
-          // Dedup por id
           const map = new Map<number, Cliente>();
           for (const c of flat) {
             if (c?.id != null) map.set(Number(c.id), c);
@@ -215,7 +230,6 @@ export default function ClientesPage() {
           return;
         }
 
-        // Caso B: empresa específica
         const empresaId = Number(empresaSel);
         if (!Number.isFinite(empresaId) || empresaId <= 0) {
           throw new Error('Selecciona una empresa válida');
@@ -244,130 +258,132 @@ export default function ClientesPage() {
   }, [token, role, userEmpresaId, empresaSel, empresas]);
 
   if (loading) {
-    return <p className="p-6">Cargando...</p>;
+    return <LoadingState label="Cargando clientes…" />;
   }
 
   if (error) {
-    return <p className="p-6 text-red-600">{error}</p>;
+    return <Alert variant="danger">{error}</Alert>;
   }
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="bg-white p-6 rounded shadow">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold mb-1">
-              {role === 'cliente' ? 'Mis Clientes' : 'Gestión de Clientes'}
-            </h1>
-            <p className="text-sm text-gray-500">
-              {role === 'cliente'
-                ? 'Listado de clientes asociados a tu empresa'
-                : 'Listado general de clientes del sistema'}
-            </p>
-          </div>
-
-          <button
-            className="rounded border px-4 py-2 text-sm"
-            onClick={() => router.push('/cliente/registrar-cliente')}
-          >
+    <div className="space-y-6">
+      <PageHeader
+        title={role === 'cliente' ? 'Mis Clientes' : 'Gestión de Clientes'}
+        description={
+          role === 'cliente'
+            ? 'Listado de clientes asociados a tu empresa.'
+            : 'Consulta y administra los clientes disponibles en el portal.'
+        }
+        actions={
+          <Button onClick={() => router.push('/cliente/registrar-cliente')}>
             + Registrar cliente
-          </button>
+          </Button>
+        }
+      />
+
+      <Card className="overflow-hidden">
+        <div className="border-b border-border-light px-4 py-4 sm:px-6">
+          {role !== 'cliente' ? (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div className="w-full max-w-md">
+                <label htmlFor="empresa" className="mb-2 block text-sm font-medium text-text-primary">
+                  Empresa
+                </label>
+                <Select
+                  id="empresa"
+                  className="w-full"
+                  value={empresaSel}
+                  onChange={(e) => setEmpresaSel(e.target.value)}
+                >
+                  <option value="all">Todas</option>
+                  {empresas.map((e) => (
+                    <option key={e.id} value={String(e.id)}>
+                      {e.nombre_legal} (ID {e.id})
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              <div className="text-sm text-text-secondary" aria-live="polite">
+                {loadingClientes
+                  ? 'Cargando clientes…'
+                  : `${clientes.length} cliente${clientes.length === 1 ? '' : 's'}`}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <span className="text-sm text-text-secondary">
+                Empresa asignada: ID {userEmpresaId ?? '—'}
+              </span>
+              <span className="text-sm text-text-secondary" aria-live="polite">
+                {loadingClientes
+                  ? 'Cargando clientes…'
+                  : `${clientes.length} cliente${clientes.length === 1 ? '' : 's'}`}
+              </span>
+            </div>
+          )}
         </div>
 
-        {role !== 'cliente' ? (
-          <>
-            {/* ✅ Selector con default “Todas” */}
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <label className="text-sm font-medium text-gray-700">Empresa:</label>
-              <select
-                className="border rounded px-3 py-2 text-sm bg-white"
-                value={empresaSel}
-                onChange={(e) => setEmpresaSel(e.target.value)}
-              >
-                <option value="all">Todas</option>
-                {empresas.map((e) => (
-                  <option key={e.id} value={String(e.id)}>
-                    {e.nombre_legal} (ID {e.id})
-                  </option>
-                ))}
-              </select>
-
-              {loadingClientes ? (
-                <span className="text-sm text-gray-500">Cargando clientes…</span>
-              ) : (
-                <span className="text-sm text-gray-500">
-                  {clientes.length} cliente{clientes.length === 1 ? '' : 's'}
-                </span>
-              )}
-            </div>
-          </>
+        {loadingClientes ? (
+          <LoadingState label="Actualizando listado…" />
+        ) : clientes.length === 0 ? (
+          <EmptyState
+            icon={<FiUsers className="h-5 w-5" aria-hidden="true" />}
+            title="No hay clientes registrados"
+            description="Cuando se registren clientes aparecerán en este listado."
+          />
         ) : (
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <span className="text-sm text-gray-500">
-              Empresa asignada: ID {userEmpresaId ?? '—'}
-            </span>
-            {loadingClientes ? (
-              <span className="text-sm text-gray-500">Cargando clientes…</span>
-            ) : (
-              <span className="text-sm text-gray-500">
-                {clientes.length} cliente{clientes.length === 1 ? '' : 's'}
-              </span>
-            )}
-          </div>
-        )}
-
-        <div className="mt-4">
-          {clientes.length === 0 ? (
-            <p>No hay clientes registrados.</p>
-          ) : (
-            <table className="w-full border-collapse">
+          <TableContainer className="rounded-none border-0 shadow-none">
+            <table className="sbv-table">
               <thead>
-                <tr className="bg-gray-100 text-left">
-                  <th className="p-2 border">ID</th>
-                  <th className="p-2 border">Empresa</th>
-                  <th className="p-2 border">Nombre</th>
-                  <th className="p-2 border">Tipo</th>
-                  <th className="p-2 border">Nacionalidad</th>
-                  <th className="p-2 border">Estado</th>
-                  <th className="p-2 border">Acciones</th>
+                <tr>
+                  <th>ID</th>
+                  <th>Empresa</th>
+                  <th>Nombre</th>
+                  <th>Tipo</th>
+                  <th>Nacionalidad</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {clientes.map((c) => (
-                  <tr key={c.id} className="hover:bg-gray-50">
-                    <td className="p-2 border">{c.id}</td>
-                    <td className="p-2 border">{c.empresa_id}</td>
-                    <td className="p-2 border">{c.nombre_entidad}</td>
-                    <td className="p-2 border">{c.tipo_cliente}</td>
-                    <td className="p-2 border">{c.nacionalidad || '-'}</td>
-                    <td className="p-2 border">{c.estado || '-'}</td>
-                    <td className="p-2 border">
-                      <div className="flex gap-2">
-                        <button
-                          className="text-blue-600 hover:underline text-sm"
+                  <tr key={c.id}>
+                    <td className="font-medium">{c.id}</td>
+                    <td>{c.empresa_id}</td>
+                    <td className="min-w-56 font-medium">{c.nombre_entidad}</td>
+                    <td>
+                      <Badge>{c.tipo_cliente}</Badge>
+                    </td>
+                    <td>{c.nacionalidad || '—'}</td>
+                    <td>
+                      <Badge variant={estadoVariant(c.estado)}>{c.estado || 'Sin estado'}</Badge>
+                    </td>
+                    <td>
+                      <div className="flex flex-wrap gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => router.push(`/cliente/clientes/${c.id}`)}
                         >
                           Ver
-                        </button>
-                        <button
-                          className="text-blue-600 hover:underline text-sm"
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => router.push(`/cliente/editar-cliente/${c.id}`)}
                         >
                           Editar
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          )}
-        </div>
-
-        <p className="mt-4 text-xs text-gray-400">
-          API: {API_BASE}
-        </p>
-      </div>
+          </TableContainer>
+        )}
+      </Card>
     </div>
   );
 }

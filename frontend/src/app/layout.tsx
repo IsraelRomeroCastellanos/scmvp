@@ -1,11 +1,21 @@
 // frontend/src/app/layout.tsx
-import "./globals.css";
-import type { Metadata } from "next";
-import Navbar from "@/components/Navbar";
+import './globals.css';
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import Navbar from '@/components/Navbar';
+
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-inter',
+});
 
 export const metadata: Metadata = {
-  title: "SCMVP",
-  description: "Proyecto SCMVP con Next 14 + TailwindCSS",
+  title: {
+    default: 'Shield by Vission',
+    template: '%s | Shield by Vission',
+  },
+  description: 'Plataforma empresarial para la gestión de cumplimiento.',
 };
 
 export default function RootLayout({
@@ -15,14 +25,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body className="bg-gray-100 text-gray-800 min-h-screen">
-        {/* Navbar global (no se muestra en /login, eso ya lo decide el componente) */}
-        <Navbar />
-
-        {/* Contenedor principal de las vistas */}
-        <main className="max-w-7xl mx-auto px-4 py-6">
-          {children}
-        </main>
+      <body className={`${inter.variable} min-h-screen bg-app text-text-primary antialiased`}>
+        <Navbar>{children}</Navbar>
       </body>
     </html>
   );
