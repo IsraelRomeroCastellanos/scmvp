@@ -1150,10 +1150,6 @@ export default function Page() {
   const [pfRfc, setPfRfc] = useState('');
   const [pfCurp, setPfCurp] = useState('');
   const [pfPaisNacimiento, setPfPaisNacimiento] = useState('');
-  const [pfEstadoCivil, setPfEstadoCivil] = useState('');
-  const [pfRegimenMatrimonial, setPfRegimenMatrimonial] = useState('');
-  const [pfOcupacion, setPfOcupacion] = useState('');
-  const [pfActividadProfesional, setPfActividadProfesional] = useState('');
   const [pfActividad, setPfActividad] = useState('');
   const [pfActividadOriginal, setPfActividadOriginal] = useState<any>(null);
   const [pfIdTipo, setPfIdTipo] = useState('');
@@ -1351,10 +1347,6 @@ export default function Page() {
         setPfRfc(safeInput(personaPrincipal?.rfc));
         setPfCurp(safeInput(personaPrincipal?.curp));
         setPfPaisNacimiento(safeInput(personaPrincipal?.pais_nacimiento));
-        setPfEstadoCivil(safeInput(datos?.estado_civil));
-        setPfRegimenMatrimonial(safeInput(datos?.regimen_matrimonial));
-        setPfOcupacion(safeInput(datos?.ocupacion));
-        setPfActividadProfesional(safeInput(datos?.actividad_profesional));
         setPfIdTipo(safeInput(identificacionPrincipal?.tipo));
         setPfIdAutoridad(safeInput(identificacionPrincipal?.autoridad));
         setPfIdNumero(safeInput(identificacionPrincipal?.numero));
@@ -1745,10 +1737,6 @@ export default function Page() {
               fecha_expiracion: onlyDigits(pfIdExpiracion).slice(0, 8),
             }),
           });
-          body.datos_completos.estado_civil = pfEstadoCivil.trim();
-          body.datos_completos.regimen_matrimonial = pfRegimenMatrimonial.trim();
-          body.datos_completos.ocupacion = pfOcupacion.trim();
-          body.datos_completos.actividad_profesional = pfActividadProfesional.trim();
         }
         if (tipoCliente === 'persona_moral') {
             body.nombre_entidad = safeInput(pmRazonSocial).trim();
@@ -2213,44 +2201,6 @@ export default function Page() {
                 ))}
               </select>
               {errText(errors['pf.actividad'])}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Estado civil</label>
-              <input
-                value={pfEstadoCivil}
-                onChange={(e) => setPfEstadoCivil(e.target.value)}
-                className={classInput(false)}
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Régimen matrimonial</label>
-              <input
-                value={pfRegimenMatrimonial}
-                onChange={(e) => setPfRegimenMatrimonial(e.target.value)}
-                className={classInput(false)}
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Ocupación</label>
-              <input
-                value={pfOcupacion}
-                onChange={(e) => setPfOcupacion(e.target.value)}
-                className={classInput(false)}
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Profesión / actividad profesional</label>
-              <input
-                value={pfActividadProfesional}
-                onChange={(e) => setPfActividadProfesional(e.target.value)}
-                className={classInput(false)}
-              />
             </div>
           </div>
 
