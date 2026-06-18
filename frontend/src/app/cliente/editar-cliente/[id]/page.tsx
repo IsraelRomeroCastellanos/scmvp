@@ -1143,10 +1143,24 @@ export default function Page() {
 
 
   // PF
+  const [pfNombres, setPfNombres] = useState('');
+  const [pfApellidoPaterno, setPfApellidoPaterno] = useState('');
+  const [pfApellidoMaterno, setPfApellidoMaterno] = useState('');
+  const [pfFechaNacimiento, setPfFechaNacimiento] = useState('');
+  const [pfRfc, setPfRfc] = useState('');
+  const [pfCurp, setPfCurp] = useState('');
+  const [pfPaisNacimiento, setPfPaisNacimiento] = useState('');
+  const [pfEstadoCivil, setPfEstadoCivil] = useState('');
+  const [pfRegimenMatrimonial, setPfRegimenMatrimonial] = useState('');
+  const [pfOcupacion, setPfOcupacion] = useState('');
+  const [pfActividadProfesional, setPfActividadProfesional] = useState('');
   const [pfActividad, setPfActividad] = useState('');
   const [pfActividadOriginal, setPfActividadOriginal] = useState<any>(null);
-  const [clientePfRfc, setClientePfRfc] = useState('');
-  const [clientePfCurp, setClientePfCurp] = useState('');
+  const [pfIdTipo, setPfIdTipo] = useState('');
+  const [pfIdAutoridad, setPfIdAutoridad] = useState('');
+  const [pfIdNumero, setPfIdNumero] = useState('');
+  const [pfIdExpedicion, setPfIdExpedicion] = useState('');
+  const [pfIdExpiracion, setPfIdExpiracion] = useState('');
   // PM
   const [pmGiro, setPmGiro] = useState('');
   const [pmGiroOriginal, setPmGiroOriginal] = useState<any>(null);
@@ -1329,9 +1343,24 @@ export default function Page() {
         const empresaPrincipal = datos?.empresa || {};
         const nextPfActividadOriginal = personaPrincipal?.actividad_economica;
         const nextPmGiroOriginal = empresaPrincipal?.giro_mercantil ?? empresaPrincipal?.giro;
+        const identificacionPrincipal = personaPrincipal?.identificacion || {};
+        setPfNombres(safeInput(personaPrincipal?.nombres));
+        setPfApellidoPaterno(safeInput(personaPrincipal?.apellido_paterno));
+        setPfApellidoMaterno(safeInput(personaPrincipal?.apellido_materno));
+        setPfFechaNacimiento(safeInput(personaPrincipal?.fecha_nacimiento));
+        setPfRfc(safeInput(personaPrincipal?.rfc));
+        setPfCurp(safeInput(personaPrincipal?.curp));
+        setPfPaisNacimiento(safeInput(personaPrincipal?.pais_nacimiento));
+        setPfEstadoCivil(safeInput(datos?.estado_civil));
+        setPfRegimenMatrimonial(safeInput(datos?.regimen_matrimonial));
+        setPfOcupacion(safeInput(datos?.ocupacion));
+        setPfActividadProfesional(safeInput(datos?.actividad_profesional));
+        setPfIdTipo(safeInput(identificacionPrincipal?.tipo));
+        setPfIdAutoridad(safeInput(identificacionPrincipal?.autoridad));
+        setPfIdNumero(safeInput(identificacionPrincipal?.numero));
+        setPfIdExpedicion(safeInput(identificacionPrincipal?.fecha_expedicion));
+        setPfIdExpiracion(safeInput(identificacionPrincipal?.fecha_expiracion));
         setPfActividadOriginal(nextPfActividadOriginal);
-        setClientePfRfc(safeInput(personaPrincipal?.rfc));
-        setClientePfCurp(safeInput(personaPrincipal?.curp));
         setPmGiroOriginal(nextPmGiroOriginal);
         setPfActividad(catalogStateValue(nextPfActividadOriginal));
         setPmGiro(catalogStateValue(nextPmGiroOriginal));
@@ -1479,12 +1508,26 @@ export default function Page() {
 
 
   useEffect(() => {
-    if (tipoCliente === 'persona_moral') {
+    if (tipoCliente === 'persona_fisica') {
+      setNombreEntidad(
+        [pfNombres, pfApellidoPaterno, pfApellidoMaterno]
+          .map((value) => safeInput(value).trim())
+          .filter(Boolean)
+          .join(' ')
+      );
+    } else if (tipoCliente === 'persona_moral') {
       setNombreEntidad(safeInput(pmRazonSocial).trim());
     } else if (tipoCliente === 'fideicomiso') {
       setNombreEntidad(safeInput(fidNombre).trim());
     }
-  }, [tipoCliente, pmRazonSocial, fidNombre]);
+  }, [
+    tipoCliente,
+    pfNombres,
+    pfApellidoPaterno,
+    pfApellidoMaterno,
+    pmRazonSocial,
+    fidNombre,
+  ]);
 
   // BC canónico: PM/FID siempre visible, activo y con al menos una fila.
   useEffect(() => {
@@ -1554,6 +1597,26 @@ export default function Page() {
       }
     }
 
+    if (tipoCliente === 'persona_fisica') {
+      req(e, 'pf.nombres', 'Nombre(s)', pfNombres);
+      req(e, 'pf.apellido_paterno', 'Apellido paterno', pfApellidoPaterno);
+      req(e, 'pf.apellido_materno', 'Apellido materno', pfApellidoMaterno);
+      reqYYYYMMDD(e, 'pf.fecha_nacimiento', 'Fecha de nacimiento', pfFechaNacimiento);
+      reqRFC(e, 'pf.rfc', 'RFC', pfRfc);
+      reqCURP(e, 'pf.curp', 'CURP', pfCurp);
+      req(e, 'pf.actividad', 'Actividad económica', pfActividad);
+
+      if (pfIdExpedicion.trim() && !isYYYYMMDD(pfIdExpedicion)) {
+        e['pf.identificacion.fecha_expedicion'] =
+          'Fecha de expedición inválida (AAAAMMDD)';
+      }
+
+      if (pfIdExpiracion.trim() && !isYYYYMMDD(pfIdExpiracion)) {
+        e['pf.identificacion.fecha_expiracion'] =
+          'Fecha de expiración inválida (AAAAMMDD)';
+      }
+    }
+
     if (
       tipoCliente === 'persona_moral' &&
       pmRepEsAccionista
@@ -1601,8 +1664,8 @@ export default function Page() {
       beneficiarios: beneficiariosAplica
         ? relatedDuenos.map(buildBeneficiarioControladorPayloadRow)
         : [],
-      clientePfRfc,
-      clientePfCurp,
+      clientePfRfc: pfRfc,
+      clientePfCurp: pfCurp,
     });
 
     Object.assign(e, beneficiariosValidation.errors);
@@ -1660,11 +1723,32 @@ export default function Page() {
       };
 
         if (tipoCliente === 'persona_fisica') {
+          body.nombre_entidad = [pfNombres, pfApellidoPaterno, pfApellidoMaterno]
+            .map((value) => safeInput(value).trim())
+            .filter(Boolean)
+            .join(' ');
           body.datos_completos.persona = stripEmpty({
             tipo: 'persona_fisica',
-            actividad_economica: actividadEconomicaPrincipal
+            nombres: pfNombres.trim(),
+            apellido_paterno: pfApellidoPaterno.trim(),
+            apellido_materno: pfApellidoMaterno.trim(),
+            fecha_nacimiento: onlyDigits(pfFechaNacimiento).slice(0, 8),
+            rfc: normalizeUpper(pfRfc),
+            curp: normalizeUpper(pfCurp),
+            pais_nacimiento: valueToCatalogKey(pfPaisNacimiento),
+            actividad_economica: actividadEconomicaPrincipal,
+            identificacion: stripEmpty({
+              tipo: pfIdTipo.trim(),
+              autoridad: pfIdAutoridad.trim(),
+              numero: pfIdNumero.trim(),
+              fecha_expedicion: onlyDigits(pfIdExpedicion).slice(0, 8),
+              fecha_expiracion: onlyDigits(pfIdExpiracion).slice(0, 8),
+            }),
           });
-
+          body.datos_completos.estado_civil = pfEstadoCivil.trim();
+          body.datos_completos.regimen_matrimonial = pfRegimenMatrimonial.trim();
+          body.datos_completos.ocupacion = pfOcupacion.trim();
+          body.datos_completos.actividad_profesional = pfActividadProfesional.trim();
         }
         if (tipoCliente === 'persona_moral') {
             body.nombre_entidad = safeInput(pmRazonSocial).trim();
@@ -2022,26 +2106,207 @@ export default function Page() {
         <div className="rounded-md border p-4 space-y-4">
           <h2 className="font-semibold">Persona física</h2>
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium">
-              Actividad económica <span className="text-red-600">*</span>
-            </label>
-            <select
-              value={pfActividad}
-              onChange={(e) => setPfActividad(e.target.value)}
-              className={classInput(!!errors['pf.actividad'])}
-            >
-              <option value="">Selecciona...</option>
-              {pfActividad && !catalogHasKey(actividades, pfActividad) ? (
-                <option value={pfActividad}>Valor legacy/manual: {pfActividad}</option>
-              ) : null}
-              {actividades.map((a) => (
-                <option key={a.clave} value={a.clave}>
-                  {a.descripcion} ({a.clave})
-                </option>
-              ))}
-            </select>
-            {errText(errors['pf.actividad'])}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">
+                Nombre(s) <span className="text-red-600">*</span>
+              </label>
+              <input
+                value={pfNombres}
+                onChange={(e) => setPfNombres(e.target.value)}
+                className={classInput(!!errors['pf.nombres'])}
+              />
+              {errText(errors['pf.nombres'])}
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">
+                Apellido paterno <span className="text-red-600">*</span>
+              </label>
+              <input
+                value={pfApellidoPaterno}
+                onChange={(e) => setPfApellidoPaterno(e.target.value)}
+                className={classInput(!!errors['pf.apellido_paterno'])}
+              />
+              {errText(errors['pf.apellido_paterno'])}
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">
+                Apellido materno <span className="text-red-600">*</span>
+              </label>
+              <input
+                value={pfApellidoMaterno}
+                onChange={(e) => setPfApellidoMaterno(e.target.value)}
+                className={classInput(!!errors['pf.apellido_materno'])}
+              />
+              {errText(errors['pf.apellido_materno'])}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">
+                Fecha de nacimiento (AAAAMMDD) <span className="text-red-600">*</span>
+              </label>
+              <input
+                value={pfFechaNacimiento}
+                onChange={(e) => setPfFechaNacimiento(onlyDigits(e.target.value).slice(0, 8))}
+                className={classInput(!!errors['pf.fecha_nacimiento'])}
+                placeholder="19900131"
+              />
+              {errText(errors['pf.fecha_nacimiento'])}
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">
+                RFC <span className="text-red-600">*</span>
+              </label>
+              <input
+                value={pfRfc}
+                onChange={(e) => setPfRfc(e.target.value.toUpperCase())}
+                className={classInput(!!errors['pf.rfc'])}
+              />
+              {errText(errors['pf.rfc'])}
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">
+                CURP <span className="text-red-600">*</span>
+              </label>
+              <input
+                value={pfCurp}
+                onChange={(e) => setPfCurp(e.target.value.toUpperCase())}
+                className={classInput(!!errors['pf.curp'])}
+              />
+              {errText(errors['pf.curp'])}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <SearchableSelect
+              label="País de nacimiento"
+              value={pfPaisNacimiento}
+              items={paises}
+              placeholder="Busca país o clave..."
+              error={errors['pf.pais_nacimiento']}
+              onChange={setPfPaisNacimiento}
+            />
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">
+                Actividad económica <span className="text-red-600">*</span>
+              </label>
+              <select
+                value={pfActividad}
+                onChange={(e) => setPfActividad(e.target.value)}
+                className={classInput(!!errors['pf.actividad'])}
+              >
+                <option value="">Selecciona...</option>
+                {pfActividad && !catalogHasKey(actividades, pfActividad) ? (
+                  <option value={pfActividad}>Valor legacy/manual: {pfActividad}</option>
+                ) : null}
+                {actividades.map((a) => (
+                  <option key={a.clave} value={a.clave}>
+                    {a.descripcion} ({a.clave})
+                  </option>
+                ))}
+              </select>
+              {errText(errors['pf.actividad'])}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Estado civil</label>
+              <input
+                value={pfEstadoCivil}
+                onChange={(e) => setPfEstadoCivil(e.target.value)}
+                className={classInput(false)}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Régimen matrimonial</label>
+              <input
+                value={pfRegimenMatrimonial}
+                onChange={(e) => setPfRegimenMatrimonial(e.target.value)}
+                className={classInput(false)}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Ocupación</label>
+              <input
+                value={pfOcupacion}
+                onChange={(e) => setPfOcupacion(e.target.value)}
+                className={classInput(false)}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Profesión / actividad profesional</label>
+              <input
+                value={pfActividadProfesional}
+                onChange={(e) => setPfActividadProfesional(e.target.value)}
+                className={classInput(false)}
+              />
+            </div>
+          </div>
+
+          <div className="border-t pt-3 space-y-3">
+            <h3 className="font-medium">Identificación vigente</h3>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Tipo / documento</label>
+                <input
+                  value={pfIdTipo}
+                  onChange={(e) => setPfIdTipo(e.target.value)}
+                  className={classInput(false)}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Autoridad</label>
+                <input
+                  value={pfIdAutoridad}
+                  onChange={(e) => setPfIdAutoridad(e.target.value)}
+                  className={classInput(false)}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Número</label>
+                <input
+                  value={pfIdNumero}
+                  onChange={(e) => setPfIdNumero(e.target.value)}
+                  className={classInput(false)}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Fecha de expedición (AAAAMMDD)</label>
+                <input
+                  value={pfIdExpedicion}
+                  onChange={(e) => setPfIdExpedicion(onlyDigits(e.target.value).slice(0, 8))}
+                  className={classInput(!!errors['pf.identificacion.fecha_expedicion'])}
+                />
+                {errText(errors['pf.identificacion.fecha_expedicion'])}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Fecha de expiración (AAAAMMDD)</label>
+                <input
+                  value={pfIdExpiracion}
+                  onChange={(e) => setPfIdExpiracion(onlyDigits(e.target.value).slice(0, 8))}
+                  className={classInput(!!errors['pf.identificacion.fecha_expiracion'])}
+                />
+                {errText(errors['pf.identificacion.fecha_expiracion'])}
+              </div>
+            </div>
           </div>
 
           <div className="border-t pt-3 space-y-3">
