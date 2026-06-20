@@ -175,7 +175,7 @@ export default function Navbar({ children }: { children: ReactNode }) {
     {
       href: '/admin/empresas',
       baseLabel: 'Gestión de Empresas',
-      roles: ['admin'],
+      roles: ['admin', 'consultor'],
       icon: FiBriefcase,
     },
     {

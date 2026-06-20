@@ -7,7 +7,7 @@ type AppRole = 'admin' | 'consultor' | 'cliente';
 const protectedRoutes: { path: string; roles: AppRole[] | null }[] = [
   { path: '/dashboard', roles: null },
   { path: '/admin/usuarios', roles: ['admin'] },
-  { path: '/admin/empresas', roles: ['admin'] },
+  { path: '/admin/empresas', roles: ['admin', 'consultor'] },
   { path: '/cliente/clientes', roles: ['admin', 'consultor', 'cliente'] },
   { path: '/cliente/carga-masiva', roles: ['admin', 'cliente'] },
   { path: '/cliente/registrar-cliente', roles: ['admin', 'cliente'] },
