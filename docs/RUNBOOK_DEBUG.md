@@ -1,242 +1,159 @@
-# RUNBOOK — SCMVP Debug
+# RUNBOOK — SCMVP Debug y QA segura
 
-## Ejecutar Mission Check (WSL)
+Última consolidación: 2026-06-19
+Main de referencia: `3492522ec4bb1c9894c50b55983e2e56e8edee4c`
 
-1. source scripts/.env.local
-2. ./scripts/mission.sh
-3. unset PASSWORD
+## URLs vigentes
 
-## Token (WSL) — extracción robusta (evitar TOKEN\_LEN=0)
+- Frontend Production: https://scmvp.vercel.app
+- Backend Production: https://scmvp-nxtj.onrender.com
+- Marca visible: Shield by Vission
 
-Recomendado: extraer con sed.
+## Comprobaciones mínimas
 
-TOKEN=$(curl -s -X POST "$BASE/api/auth/login"   
--H "Content-Type: application/json"   
--d '{"email":"admin@cumplimiento.com","password":"***REDACTED***"}'   
-| sed -n 's/.*"token"\[ ]*:\[ ]*"(\[^"]*)".\*/\\1/p')
+- `POST /api/auth/login` devuelve token y usuario.
+- `GET /api/admin/empresas` responde para roles autorizados.
+- `GET /api/cliente/clientes` lista clientes conforme al rol y filtro vigente.
+- `GET /api/cliente/clientes/:id` devuelve el cliente y `datos_completos`.
+- `POST /api/cliente/registrar-cliente` registra PF, PM o FID bajo el contrato vigente.
+- `PUT /api/cliente/clientes/:id` actualiza mediante mezcla profunda de datos.
 
-echo "TOKEN\_LEN=${#TOKEN}"
+No guardar tokens, contraseñas ni secretos en documentación, evidencia o commits.
 
-## Golden checks (mínimos)
+## Contrato canónico de Beneficiario Controlador
 
-* POST /api/auth/login -> token
-* GET /api/admin/\_\_debug:
+Escritura vigente:
 
-  * sin Authorization -> 401
-  * Authorization: Bearer basura -> 401
+- `beneficiarios_controladores_aplica`
+- `beneficiarios_controladores`
 
-* GET /api/admin/empresas -> 200 {"empresas":\[...]}
-* GET /api/cliente/clientes?empresa\_id=32 -> 200 {"clientes":\[...]}
+Reglas de QA:
 
-  * Nota: para admin/consultor, si no se envía empresa\_id el BE puede responder 400: {"error":"empresa\_id inválido"}
+- PF: puede aplicar o no según manifestación.
+- PM y FID: BC obligatorio.
+- Cada BC es Persona Física.
+- RFC/CURP del BC no puede autocoincidir con el cliente.
+- Registrar y Editar no deben emitir contratos BC legacy.
+- Editar puede leer temporalmente estructuras legacy, pero siempre escribe el contrato canónico.
+- Impresión debe mostrar una sola sección BC.
 
-## Golden checks — registrar cliente PF (post-cambio BE)
+Claves legacy o retiradas que no deben reaparecer en payloads vigentes:
 
-Se espera:
+- `duenos_beneficiarios`
+- `BeneficiarioControlador`
+- `recursos_terceros`
+- `recursos_terceros_aplica`
+- `terceros`
+- `terceros_info`
 
-* sin persona.curp -> 400 "persona.curp es obligatorio"
-* con curp pero fecha ISO (YYYY-MM-DD) -> 400 "persona.fecha\_nacimiento inválida (AAAAMMDD)"
-* sin apellido materno -> 400 "persona.apellido\_materno es obligatorio"
-* con curp + AAAAMMDD + apellido materno -> 201
+## Edición PF vigente
 
-## Golden checks — editar cliente
+Campos editables:
 
-* PUT /api/cliente/clientes/:id con datos\_completos -> 200 ok:true
-* Validar persistencia con GET posterior
+- nombres y apellidos;
+- fecha de nacimiento;
+- RFC y CURP;
+- país de nacimiento;
+- actividad económica principal;
+- identificación vigente.
+
+Campos derogados que no deben aparecer ni emitirse:
+
+- `estado_civil`
+- `regimen_matrimonial`
+- `ocupacion`
+- `profesion`
+- `actividad_profesional`
+
+## Protocolo de QA sin escrituras
+
+1. Usar un interceptor que bloquee `POST`, `PUT`, `PATCH` y `DELETE`.
+2. Permitir únicamente `GET`.
+3. Reinstalar el interceptor después de cada login, navegación, recarga o cambio de cliente.
+4. Ejecutar un precheck que confirme:
+   - interceptor instalado;
+   - ruta actual correcta;
+   - contador de escrituras reales igual a cero.
+5. Validar el payload interceptado antes de continuar.
+6. Detener inmediatamente si se detecta una escritura real.
+
+Conteos esperados en QA segura:
+
+- POST reales: 0.
+- PUT reales: 0.
+- PATCH reales: 0.
+- DELETE reales: 0.
+- Clientes creados, modificados o eliminados: 0.
+
+## IDs protegidos
+
+- `67`: no usar para QA sin autorización expresa.
+- `99`, `100`, `101`: no consultar, modificar ni eliminar.
+
+Usar otros registros controlados y autorizados. En el cierre PF-EDIT-GENERAL-01 se utilizaron `104` y `98` con escrituras interceptadas.
+
+## Incidencia cliente 67
+
+- PUT real confirmado: `2026-06-16T06:03:52.87196317Z`.
+- Endpoint: `/api/cliente/clientes/67`.
+- Alcance histórico indeterminado.
+- Estado posterior estructuralmente válido.
+- No restaurado ni modificado nuevamente.
+- Evidencia fuera del repositorio.
+- SHA-256: `1a520ca596c87724acd26eeb44200ac3e1a278338b4eb1776472a62b59e418f3`.
+
+No incorporar datos personales del cliente en reportes.
+
+## Flujo Git seguro
+
+Antes de un frente:
+
+```bash
+cd ~/scmvp
+git switch main
+git fetch --prune origin
+git pull --ff-only origin main
+git status --short
+```
+
+Reglas:
+
+- No usar `reset`, `clean` ni checkout destructivo sobre archivos sin autorización.
+- No aplicar, eliminar ni modificar el stash histórico.
+- No incorporar untracked históricos a commits funcionales o documentales.
+- Agregar explícitamente solo los archivos autorizados.
+- Ejecutar `git diff --check` antes del commit.
+
+## Estado Git conocido
+
+Main consolidado: `3492522`.
+
+Untracked históricos conocidos:
+
+- seis respaldos de `backend/src/routes/cliente.routes.ts`;
+- `backups-previous/`;
+- `backups/`;
+- `db/`;
+- `docs/SCMVP_BOOTSTRAP_ACTUAL_2026-06-01.md`.
+
+Stash histórico: conservar intacto.
 
 ## Incidentes comunes
 
-* “Service Suspended” en Render:
+### Token ausente o inválido
 
-  * Verifica BASE; el backend actual es https://scmvp-1jhq.onrender.com
-  * El backend anterior https://scmvp.onrender.com está suspendido
+- Limpiar únicamente `token`, `authToken` y `accessToken` de `localStorage` y `sessionStorage`.
+- Volver a iniciar sesión.
+- No pegar tokens en chats, documentos o commits.
 
-## Variables (scripts/.env.local)
+### Production no corresponde al commit esperado
 
-* BASE="https://scmvp-1jhq.onrender.com"
-* EMAIL="admin@cumplimiento.com"
-* EMPRESA\_ID\_FOR\_CHECK="32" (usado por mission.sh para /api/cliente/clientes)
+- Confirmar el SHA del deployment en Vercel.
+- No ejecutar smoke sobre un Preview o Production anterior.
+- No realizar deploy manual salvo autorización expresa.
 
+### Interceptor equivocado
 
-
-
-
-🔁 Roundtrip contrato: validar POST registrar-cliente y GET clientes/:id con marcadores en datos\_completos.
-
-
-
-📦 Body size limit: JSON >2MB debe responder HTTP 413 (confirmado).
-
-
-
-🧪 Checks mínimos: POST con tipo\_cliente inválido / datos\_completos no objeto devuelve HTTP 400 (mensaje actual por contacto.pais).
-
-
-
-🧭 Estrategia: validaciones profundas viven en FE; BE mantiene validaciones mínimas y protección de tamaño.
-
-
-
-📝 Nota: mejora de mensajes específicos de validación queda fuera del bloqueo actual.
-
-
-### Runbook — migración PostgreSQL Render por expiración de trial
-
-*Escenario*
-- La instancia PostgreSQL anterior en Render expira por trial y se requiere continuidad operativa sin cambios de código.
-
-*Pasos de alto nivel*
-1. generar backup SQL de la DB anterior
-2. preparar SQL para restore en nueva instancia
-   - remover \restrict
-   - remover \unrestrict
-   - remover bloques ALTER DEFAULT PRIVILEGES si causan conflicto en restore
-3. restaurar SQL en la nueva instancia
-4. actualizar DATABASE_URL en el webservice Render
-5. actualizar NEXT_PUBLIC_API_BASE_URL en Vercel si cambia el backend operativo consumido por frontend
-6. verificar esquema/columnas de compatibilidad requeridas
-7. validar backend:
-   - login 200
-   - endpoint protegido 401 sin token
-   - endpoint protegido 200 con token
-8. validar frontend/UI con carga de módulos principales
-
-*Validación mínima esperada*
-- POST /api/auth/login → HTTP 200
-- GET /api/admin/empresas sin token → HTTP 401
-- GET /api/admin/empresas con token → HTTP 200
-
-*Pendientes recomendados*
-- formalizar migración de esquema estable
-- estandarizar parseo robusto de token en scripts
-- evitar exposición de secrets en terminal/historial
-
-### Nota operativa — migración 2026-05-10
-
-- Backend operativo vigente después de la migración: https://scmvp-1jhq.onrender.com
-- DB lógica vigente después de la migración: scmvp_xeu1
-- En esta iteración también se actualizó NEXT_PUBLIC_API_BASE_URL en Vercel.
-- La migración no requirió cambios de código.
-
-### CONTROL-DOC-01 — checkpoint documental post-D2
-
-Contexto estable:
-- main post-D2: `3934929`
-- D2 funcional: `6d9a074`
-- D1 merge: `8398908`
-- D1 funcional: `deccf4a`
-- Backend vigente: `https://scmvp-1jhq.onrender.com`
-- DB lógica vigente: `scmvp_xeu1`
-
-Validación mínima post-D2 recomendada:
-1. Login:
-   - `POST /api/auth/login` → HTTP 200
-2. PM impresión:
-   - `GET /api/cliente/clientes/63` → HTTP 200
-   - `/cliente/clientes/63/imprimir`
-   - Confirmar razón social, país de constitución, domicilio, RFC empresa, giro mercantil, representante legal, sin JSON crudo y `window.print`.
-3. PF regresión:
-   - `/cliente/clientes/83/imprimir`
-   - `/cliente/clientes/84/imprimir`
-4. FID regresión visual:
-   - `/cliente/clientes/73/imprimir`
-   - `/cliente/clientes/74/imprimir`
-5. Confirmar que no se abrió:
-   - D3
-   - C2C
-   - C2D
-   - PF/BC condicionado
-
-Disciplina:
-- Antes de abrir un frente funcional mayor posterior a D2, Control debe decidir documentación y tag estable.
-- Propuesta de tag:
-  - `stable-clientes-d2-20260523`
-- No crear tag sin autorización expresa de Control.
-
-## Runbook: Backup + Restore DB Render (trial → nueva instancia)
-
-### Reglas
-- Desde WSL/local usar **External Database URL**.
-- **No usar Internal Database URL** fuera de Render.
-- No imprimir ni documentar secretos (DATABASE_URL completas, passwords, tokens).
-- Rotar credenciales si se copiaron/pegaron URLs con secretos en historial/terminal.
-
-### Pasos
-1) Backup SQL (pg_dump) desde DB origen.
-2) Preparar `*.render_ready.sql` removiendo:
-   - `\restrict`
-   - `\unrestrict`
-   - `ALTER DEFAULT PRIVILEGES`
-3) Restore en DB destino:
-   - `DROP SCHEMA public CASCADE; CREATE SCHEMA public;`
-   - `psql -f *.render_ready.sql`
-4) Swap en Render Webservice:
-   - actualizar `DATABASE_URL`
-   - redeploy
-5) Vercel:
-   - actualizar `NEXT_PUBLIC_API_BASE_URL` si cambia backend
-   - redeploy
-6) Validaciones mínimas (curl):
-   - `GET /api/admin/empresas` sin token → 401 `Token no proporcionado`
-   - `POST /api/auth/login` → 200 con token
-   - `GET /api/admin/empresas` con token → 200 lista
-
-## Usuarios Admin — Resumen operativo
-
-### Listar usuarios
-
-GET /api/admin/usuarios
-
-Uso:
-- administración
-- edición frontend
-- validaciones QA
-
-### Crear usuario
-
-POST /api/admin/usuarios
-
-Campos esperados:
-- email
-- password
-- nombre_completo
-- rol
-- empresa_id
-- activo
-
-### Activar / desactivar usuario
-
-PATCH /api/admin/usuarios/:id/activo
-
-Body:
-```json
-{
-  "activo": true
-}
-```
-
-### Editar usuario
-
-PATCH /api/admin/usuarios/:id
-
-Campos permitidos:
-- nombre_completo
-- rol
-- empresa_id
-
-Campos prohibidos:
-- email
-- password
-- password_hash
-- activo
-
-### Restricciones
-
-No existe actualmente:
-- delete usuario
-- password reset
-- password change administrativo
-
-Nunca exponer:
-- password
-- password_hash
+- Confirmar el nombre y las funciones expuestas por el interceptor antes de guardar.
+- Recargar la ruta para retirar interceptores de una sesión anterior.
+- Reinstalar el interceptor autorizado y ejecutar el precheck.

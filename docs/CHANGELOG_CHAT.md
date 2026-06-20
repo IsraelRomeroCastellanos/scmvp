@@ -1,213 +1,99 @@
-# Changelog (Chat Sessions)
+# SCMVP — Changelog de Control
 
+Este archivo conserva hitos relevantes. El estado operativo actual se documenta en `STATUS.md`.
 
-## 2025-12-21
-- Hito: Estabilidad base en producción
-- Incluye: Login OK; Admin (__debug, empresas) OK; Cliente (__debug, mis-clientes) OK usando Authorization: Bearer <token>
-- Evidencia: docs/ops/mission/mission_20251221_233839.txt
-- Tag: stable-20251221-01
-- Próximo: completar/estabilizar Crear/Editar cliente + verificar permisos por rol end-to-end en UI
+## 2026-06-19 — PF-EDIT-GENERAL-01 cerrado
 
+- PR #44 mergeado a `main`.
+- Merge commit: `3492522ec4bb1c9894c50b55983e2e56e8edee4c`.
+- Commits integrados:
+  - `8c57e90` — ampliar edición de datos generales PF.
+  - `41a4a7e` — retirar campos PF derogados.
+- Archivo funcional modificado:
+  - `frontend/src/app/cliente/editar-cliente/[id]/page.tsx`.
+- Campos PF vigentes incorporados:
+  - nombres y apellidos;
+  - fecha de nacimiento;
+  - RFC y CURP;
+  - país de nacimiento;
+  - actividad económica principal;
+  - identificación vigente.
+- Campos derogados excluidos:
+  - estado civil;
+  - régimen matrimonial;
+  - ocupación;
+  - profesión / actividad profesional.
+- QA local, Preview y Production aprobadas con interceptor.
+- BC `true` y `false` preservados.
+- Cero escrituras reales.
+- Rama local y remota eliminadas después del cierre.
 
-## 2026-01-09
-- Cambio: migración de backend a Render service nuevo
-- Backend actual: https://scmvp-1jhq.onrender.com
-- Estado (en ese momento): Admin OK (200); Cliente endpoints 404 (no montados)
-- Evidencia: docs/ops/mission/mission_20260109_181111.txt
-- Próximo (en ese momento): restaurar montaje de clienteRoutes (/api/cliente) en backend nuevo y revalidar mission.sh
+## 2026-06 — UX-BRAND-01 integrado
 
+- PR #43 mergeado antes de PF-EDIT-GENERAL-01.
+- Merge commit base: `be893e8f81270e2f89a2dba43b0f2095fc00301e`.
+- Marca visible consolidada: Shield by Vission.
+- Logo institucional, shell oscuro y contenido claro.
+- Login, dashboard, clientes y administración actualizados.
+- Responsive y accesibilidad básica validados.
+- Roles y permisos conservados.
 
-## 2026-01-11
-- Hito: Contrato único de Cliente (PF/PM/FID) validado en PROD con evidencia
-- Cambio BE (cliente):
-  - PF: ahora requiere persona.curp (400 si falta)
-  - PF: persona.fecha_nacimiento requiere AAAAMMDD (400 si ISO)
-  - PF: persona.apellido_materno obligatorio (400 si falta)
-  - FID: representante.fecha_nacimiento requiere AAAAMMDD
-- Cambio FE (registrar cliente):
-  - UI bloquea faltantes y alinea payload a datos_completos por tipo
-  - PF: fecha se normaliza a AAAAMMDD antes de enviar
-  - PF: apellido materno obligatorio (confirmado en Vercel)
-- Editar cliente:
-  - PUT /api/cliente/clientes/:id funciona (teléfono actualizado y persistido; evidencia GET/PUT/GET)
-- Seguridad:
-  - /api/admin/__debug protegido (401 sin token; 401 token basura)
-- Evidencia:
-  - Mission OK: docs/ops/mission/mission_20260110_182748.txt
-  - Curls PF/FID/PUT ejecutados contra prod
+## 2026-06 — Beneficiario Controlador unificado
 
+Frentes integrados:
 
+- BC-UNIFY-BE1A
+- BC-UNIFY-FE1A
+- BC-UNIFY-FE2A
+- BC-UNIFY-PRINT1
 
-## 2026-01-16
-- FE: Botón “Generar / Imprimir” en detalle de cliente; impresión manual (se eliminó auto-print).
-- FE: Fechas AAAAMMDD en PF y fechas de identificación.
+Resultado consolidado:
 
+- Contrato canónico:
+  - `beneficiarios_controladores_aplica`
+  - `beneficiarios_controladores`
+- Registrar:
+  - PF condicionado por manifestación;
+  - PM y FID obligatorios;
+  - BC siempre Persona Física;
+  - autocoincidencia RFC/CURP bloqueada;
+  - escritura exclusivamente canónica.
+- Editar:
+  - mismas reglas PF/PM/FID;
+  - lectura legacy temporal;
+  - escritura exclusivamente canónica;
+  - Recursos de terceros retirado de Editar PF;
+  - Observaciones retirado.
+- Impresión:
+  - una sola sección BC;
+  - PF muestra Aplica Sí/No;
+  - PM/FID imprimen filas BC;
+  - sin Recursos de terceros;
+  - sin Dueños / Beneficiarios duplicado;
+  - sin Observaciones visibles.
 
+## 2026-06-16 — incidencia protegida cliente 67
 
-## 2026-01-18
-- Tag: stable-20260110-01
-- Commit: 0559528
-- Mission log: docs/ops/mission/mission_20260110_133004.txt
-- gate: domicilio contacto obligatorio (400 sin contacto.domicilio.*)
-- gate: RFC único por empresa (409 RFC repetido empresa_id=32)
-- evidencia: 201 alta PF OK con domicilio + RFC nuevo (id=69, empresa_id=32)
+- Se confirmó un PUT real durante QA a `/api/cliente/clientes/67`.
+- Fecha: `2026-06-16T06:03:52.87196317Z`.
+- Alcance histórico: indeterminado.
+- Estado posterior: estructuralmente válido.
+- No se restauró ni se volvió a modificar.
+- Evidencia preservada fuera del repositorio.
+- SHA-256: `1a520ca596c87724acd26eeb44200ac3e1a278338b4eb1776472a62b59e418f3`.
+- El ID `67` quedó protegido para QA.
+- Los IDs `99`, `100` y `101` permanecen protegidos como registros accidentales.
+- No se documentan datos personales.
 
+## 2026-05 a 2026-06 — Clientes y QA post-D2
 
+- Domicilio inteligente en Registrar y Editar.
+- Actividad económica PF y giro PM consolidados.
+- Impresión base PF y PM integrada.
+- Correcciones de captura PF/PM y Beneficiario Controlador.
+- U1D-BE1 y U1D-FE1 integrados para activar/desactivar usuarios.
+- Tags y checkpoints anteriores permanecen como historial; no representan el estado actual de main.
 
-## 2026-01-21
+## Historial anterior
 
-🆕 Validación de roundtrip: datos_completos persiste y retorna marcadores sin pérdida.
-
-🆕 Protección de payload: límite JSON 2MB activo; oversize → HTTP 413.
-
-⚠️ Validación mínima BE: casos inválidos retornan HTTP 400 con mensaje genérico por gate de contacto (pendiente de mejora).
-
-🧭 Decisión confirmada: paradigma (1) — BE ligero, contrato fuerte en FE.
-
-🔒 Sin cambios de secretos o credenciales.
-
-## Clientes v2
-- Cierre operativo de PF terceros / recursos de terceros con payload real y validación FE.
-- Cierre operativo de PM beneficiario controlador con payload real y validación FE.
-- Cierre operativo de PM accionista tercero / `representante_es_accionista`.
-- Cierre operativo de Fideicomiso con payload final, validación FE y captura UI de campos obligatorios.
-- Incidente de DB para `tipo_cliente='fideicomiso'` diagnosticado y posteriormente resuelto.
-- Alineación final UI vs contrato completada para `fideicomiso_nombre` y representante (`nombre_completo`, `rfc`, `curp`, `fecha_nacimiento`).
-
-### 2026-04-10 — Migración DB Render por expiración de trial
-
-- Se migra PostgreSQL a una nueva instancia en Render para mantener continuidad de pruebas.
-- DB lógica nueva reportada: scmvp.
-- Backend activo reportado: https://scmvp-nxtj.onrender.com.
-- No hubo cambios de código asociados al evento.
-- Se ejecutó:
-  - backup SQL
-  - restore en DB nueva
-  - actualización de DATABASE_URL
-  - validación funcional mínima por login y consulta de empresas
-- Evidencia mínima:
-  - login HTTP 200
-  - empresas HTTP 200 con token
-  - empresas HTTP 401 sin token
-- Queda pendiente actualizar documentación estructural y formalizar mitigación de drift de esquema.
-
-### 2026-05-10 — Migración DB Render por expiración de trial
-
-- Se migra PostgreSQL a una nueva instancia en Render para mantener continuidad de pruebas y desarrollo.
-- DB lógica nueva vigente: scmvp_xeu1.
-- Backend activo vigente después de la migración: https://scmvp-1jhq.onrender.com.
-- No hubo cambios de código asociados al evento.
-- Se ejecutó:
-  - backup SQL
-  - restore en DB nueva
-  - actualización de DATABASE_URL en Render
-  - actualización de NEXT_PUBLIC_API_BASE_URL en Vercel
-  - validación funcional por login y consulta de empresas
-- Evidencia mínima:
-  - empresas HTTP 401 sin token
-  - login HTTP 200
-  - empresas HTTP 200 con token
-- Verificación adicional reportada:
-  - módulos Usuarios / Empresas / Clientes cargan correctamente en UI.
-- Runbook repetible actualizado para futuras expiraciones de trial.
-
-### 2026-05-23 — CONTROL-DOC-01 / Consolidación post-D2
-
-- Se consolida estado estable del módulo Clientes posterior a:
-  - D1 + D1-F1 — Impresión PF base completa.
-  - D2 + D2-F1 — Impresión PM base completa.
-- Main estable:
-  - merge D2: `3934929`
-  - funcional D2: `6d9a074`
-  - merge D1: `8398908`
-  - funcional D1: `deccf4a`
-- Producción validada:
-  - Vercel Production Ready.
-  - Backend vigente: `https://scmvp-1jhq.onrender.com`.
-  - DB lógica vigente: `scmvp_xeu1`.
-
-Cierres consolidados:
-- B1/B2/B3 — Domicilio inteligente.
-- C1 — Actividad económica / giro mercantil principales.
-- C2A — Recursos de terceros en editar.
-- UX/TEXTO-01 — País nacimiento / constitución en registrar.
-- C2B-2A + F1 — relatedRecursos PF/PM en registrar.
-- D1 + D1-F1 — Impresión PF.
-- D2 + D2-F1 — Impresión PM.
-
-Salvedades vigentes:
-- C2C accionista tercero PM diferido.
-- C2D dueños/beneficiarios / relatedDuenos diferido.
-- D3 FID no abierto.
-- PF/BC condicionado no abierto.
-
-Propuesta de versión estable:
-- `stable-clientes-d2-20260523`
-- No se crea tag en este frente sin autorización posterior.
-## 2026-05-25 — CONTROL-DOC-02 / Mini checkpoint QA post-D2
-
-- Se registra estado QA post-D2 posterior al tag `stable-clientes-d2-20260523`.
-- Main actual documentado:
-  - `07c9e5f` merge UX-TEXTO-02A.
-  - `c68816c` funcional UX-TEXTO-02A.
-  - `b4fdcd2` merge QA-REG-01-F1A.
-  - `5737584` funcional QA-REG-01-F1A.
-- QA-REG-01-F1A:
-  - representante PM en editar quedó hidratado;
-  - PM 63 validado;
-  - PF 67 y cliente 66 sin regresión;
-  - sin guardar/modificar datos.
-- UX-TEXTO-02A:
-  - se retiró el label editable `País (domicilio)`;
-  - se conserva `País` solo lectura en Domicilio (contacto);
-  - el valor se deriva de Nacionalidad;
-  - País de nacimiento/constitución permanece separado;
-  - CP sigue gobernado por Nacionalidad;
-  - sin guardar/modificar datos.
-- No se abrió U1, D3, C2C, C2D ni PF/BC condicionado.
-- Tag estable propuesto:
-  - `stable-clientes-qa-post-d2-20260525`
-
-- **[2026-06-08] Infra / DB:** Migración de PostgreSQL en Render por expiración de trial. Backup+restore SQL ejecutados, `DATABASE_URL` actualizado en Render Webservice y redeploy. Frontend/Vercel actualizado mediante env var. Validación mínima: login 200 + `/api/admin/empresas` 200 con token; sin token 401. Backend vigente actual: https://scmvp-nxtj.onrender.com. DB destino: nombre lógico pendiente de recuperar.
-
-## 2026-06-10 — CONTROL-DOC-USUARIOS-20260610
-
-Checkpoint documental posterior al cierre completo del bloque Usuarios.
-
-Estado integrado en main:
-- Main: `583ec5d`
-- Funcional principal: `a67ea53`
-
-Bloque Usuarios cerrado:
-
-### U1C — Alta usuarios
-- Backend alta usuarios.
-- Frontend alta usuarios.
-- QA usuario ID 40.
-- Mitigación QA activo=false.
-
-### U1D — Activar / desactivar usuarios
-- Endpoint backend de cambio de estado.
-- Acción frontend integrada en listado.
-
-### U1E — Edición mínima usuarios
-- Diagnóstico funcional.
-- PATCH backend edición mínima.
-- Corrección mensaje campos prohibidos.
-- Ruta frontend `/admin/editar-usuario/[id]`.
-- Payload limitado a:
-  - nombre_completo
-  - rol
-  - empresa_id
-
-Campos excluidos:
-- email
-- password
-- password_hash
-- activo
-
-Backend vigente:
-- https://scmvp-nxtj.onrender.com
-
-Frontend Production:
-- https://scmvp.vercel.app
+Los hitos de 2025 y enero de 2026 correspondieron a etapas iniciales de estabilización, migraciones de backend y recuperación de rutas. Sus URLs, pendientes y tags no deben interpretarse como estado operativo vigente.
