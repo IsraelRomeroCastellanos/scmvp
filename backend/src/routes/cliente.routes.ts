@@ -1,8 +1,9 @@
 // backend/src/routes/cliente.routes.ts
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { PoolClient } from 'pg';
 import pool from '../db';
 import { authenticate } from '../middleware/auth.middleware';
+import { authorizeRoles } from '../middleware/role.middleware';
 
 const router = Router();
 
@@ -24,6 +25,83 @@ function conflict(res: Response, msg: string) {
 function parsePositiveInt(v: any): number | null {
   const n = Number(v);
   return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+function authorizeClienteEmpresaBody(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  const user = req.user;
+
+  if (!user || user.rol !== 'cliente') return next();
+
+  if (!user.empresa_id) {
+    return res.status(403).json({
+      error: 'Acceso denegado: empresa no asignada'
+    });
+  }
+
+  const requestedEmpresaId = parsePositiveInt(req.body?.empresa_id);
+
+  if (
+    requestedEmpresaId !== null &&
+    requestedEmpresaId !== user.empresa_id
+  ) {
+    return res.status(403).json({
+      error: 'Acceso denegado: empresa no autorizada'
+    });
+  }
+
+  return next();
+}
+
+async function authorizeClienteEmpresaRecurso(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  const user = req.user;
+
+  if (!user || user.rol !== 'cliente') return next();
+
+  if (!user.empresa_id) {
+    return res.status(403).json({
+      error: 'Acceso denegado: empresa no asignada'
+    });
+  }
+
+  const id = parsePositiveInt(req.params.id);
+  if (!id) return next();
+
+  try {
+    const result = await pool.query(
+      `SELECT empresa_id
+       FROM clientes
+       WHERE id=$1
+       LIMIT 1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Cliente no encontrado'
+      });
+    }
+
+    if (Number(result.rows[0].empresa_id) !== user.empresa_id) {
+      return res.status(403).json({
+        error: 'Acceso denegado: empresa no autorizada'
+      });
+    }
+
+    return next();
+  } catch (error) {
+    console.error('Error al autorizar empresa del cliente:', error);
+    return res.status(500).json({
+      error: 'Error al autorizar acceso al cliente'
+    });
+  }
 }
 
 // RFC genérico (no perfecto, pero suficiente para validación básica)
@@ -1254,7 +1332,7 @@ router.get('/clientes/:id', authenticate, async (req: Request, res: Response) =>
  * REGISTRAR CLIENTE (Contrato Único)
  * ===============================
  */
-router.post('/registrar-cliente', authenticate, async (req: Request, res: Response) => {
+router.post('/registrar-cliente', authenticate, authorizeRoles('admin', 'cliente'), authorizeClienteEmpresaBody, async (req: Request, res: Response) => {
   const client = await pool.connect();
   try {
     const empresa_id = parsePositiveInt(req.body.empresa_id);
@@ -1330,7 +1408,7 @@ router.post('/registrar-cliente', authenticate, async (req: Request, res: Respon
  * - replace-all temporal para listas hijas
  * ===============================
  */
-router.put('/clientes/:id', authenticate, async (req: Request, res: Response) => {
+router.put('/clientes/:id', authenticate, authorizeRoles('admin', 'consultor', 'cliente'), authorizeClienteEmpresaRecurso, async (req: Request, res: Response) => {
   const client = await pool.connect();
   try {
     const id = parsePositiveInt(req.params.id);
