@@ -8,9 +8,12 @@ const protectedRoutes: { path: string; roles: AppRole[] | null }[] = [
   { path: '/dashboard', roles: null },
   { path: '/admin/usuarios', roles: ['admin'] },
   { path: '/admin/empresas', roles: ['admin', 'consultor'] },
+  { path: '/admin/crear-empresa', roles: ['admin'] },
+  { path: '/admin/editar-empresa', roles: ['admin'] },
   { path: '/cliente/clientes', roles: ['admin', 'consultor', 'cliente'] },
   { path: '/cliente/carga-masiva', roles: ['admin', 'cliente'] },
   { path: '/cliente/registrar-cliente', roles: ['admin', 'cliente'] },
+  { path: '/cliente/editar-cliente', roles: ['admin', 'consultor', 'cliente'] },
   { path: '/consultor', roles: ['consultor'] },
 ];
 
@@ -34,7 +37,7 @@ const normalizeRole = (raw: unknown): AppRole | null => {
 };
 
 const defaultRouteForRole = (role: AppRole | null): string => {
-  if (role === 'admin') return '/admin/usuarios';
+  if (role === 'admin') return '/dashboard';
   if (role === 'consultor') return '/cliente/clientes';
   if (role === 'cliente') return '/cliente/clientes';
   return '/dashboard';
