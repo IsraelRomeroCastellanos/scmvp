@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { getCurrentUser, isAdmin } from '@/lib/auth';
 
 interface Empresa {
   id: number;
@@ -31,6 +32,7 @@ export default function EmpresasPage() {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [canManageEmpresas, setCanManageEmpresas] = useState(false);
 
   const fetchEmpresas = async () => {
     try {
@@ -63,6 +65,7 @@ export default function EmpresasPage() {
   };
 
   useEffect(() => {
+    setCanManageEmpresas(isAdmin(getCurrentUser()?.rol));
     fetchEmpresas();
   }, []);
 
@@ -76,12 +79,14 @@ export default function EmpresasPage() {
             <p className="text-sm text-gray-500">Listado general de empresas del sistema</p>
           </div>
 
-          <Link
-            href="/admin/crear-empresa"
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-          >
-            Crear empresa
-          </Link>
+          {canManageEmpresas ? (
+            <Link
+              href="/admin/crear-empresa"
+              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+            >
+              Crear empresa
+            </Link>
+          ) : null}
         </div>
 
         {/* Tabla */}
@@ -106,7 +111,9 @@ export default function EmpresasPage() {
                   <th className="pr-3">Municipio</th>
                   <th className="pr-3">C.P.</th>
                   <th className="pr-3">Estado</th>
-                  <th className="text-right">Acciones</th>
+                  {canManageEmpresas ? (
+                    <th className="text-right">Acciones</th>
+                  ) : null}
                 </tr>
               </thead>
 
@@ -127,20 +134,25 @@ export default function EmpresasPage() {
                         {mostrar(e.estado)}
                       </span>
                     </td>
-                    <td className="text-right">
-                      <Link
-                        href={`/admin/editar-empresa/${e.id}`}
-                        className="text-blue-600 hover:underline"
-                      >
-                        Editar
-                      </Link>
-                    </td>
+                    {canManageEmpresas ? (
+                      <td className="text-right">
+                        <Link
+                          href={`/admin/editar-empresa/${e.id}`}
+                          className="text-blue-600 hover:underline"
+                        >
+                          Editar
+                        </Link>
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
 
                 {empresas.length === 0 && !error && (
                   <tr>
-                    <td colSpan={9} className="py-6 text-center text-gray-500">
+                    <td
+                      colSpan={canManageEmpresas ? 9 : 8}
+                      className="py-6 text-center text-gray-500"
+                    >
                       No hay empresas registradas.
                     </td>
                   </tr>

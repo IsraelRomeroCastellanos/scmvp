@@ -275,9 +275,11 @@ export default function ClientesPage() {
             : 'Consulta y administra los clientes disponibles en el portal.'
         }
         actions={
-          <Button onClick={() => router.push('/cliente/registrar-cliente')}>
-            + Registrar cliente
-          </Button>
+          role === 'admin' || role === 'cliente' ? (
+            <Button onClick={() => router.push('/cliente/registrar-cliente')}>
+              + Registrar cliente
+            </Button>
+          ) : undefined
         }
       />
 
