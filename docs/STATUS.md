@@ -1,5 +1,80 @@
 # SCMVP — Estado vigente
 
+<!-- RELEASE-CHECKPOINT-01:START -->
+## RELEASE-CHECKPOINT-01 — estado estable de autorización
+
+**Fecha:** 2026-06-28
+**Estado:** cerrado y aprobado
+**Main estable de referencia:** `2d2d0f795a0991eec9773a75281e639ccd1317d0`
+
+### Production vigente
+
+- Frontend: https://scmvp.vercel.app
+- Backend: https://scmvp-nxtj.onrender.com
+- Marca visible: **Shield by Vission**
+
+### Frentes integrados y cerrados
+
+- AUTHZ-BE-WRITES-01 — PR #47.
+- AUTHZ-FE-ROUTES-01 — PR #48.
+- AUTHZ-UI-ACTIONS-01 — PR #49.
+- LEGACY-ROUTES-01 — PR #50.
+- AUTHZ-REGRESSION-FINAL-01 — auditoría read-only aprobada.
+
+### Política vigente por rol
+
+**Empresas**
+
+- `admin`: consulta y acciones visibles para crear/editar.
+- `consultor`: consulta únicamente; crear/editar ocultos.
+- `cliente`: sin acceso administrativo.
+- anónimo: sin acceso.
+
+La autorización, navegación y visibilidad están cerradas. La implementación funcional end-to-end de crear y editar empresas permanece pendiente.
+
+**Clientes**
+
+- Registrar: permitido para `admin` y `cliente`; denegado para `consultor` y anónimo.
+- Editar: permitido para `admin`, `consultor` y `cliente`, con alcance empresarial cuando corresponde.
+- Listar: `cliente` limitado a su empresa.
+
+### Rutas legacy
+
+- `/clientes` redirige `307` a `/cliente/clientes`.
+- `/registrar-cliente` redirige `307` a `/cliente/registrar-cliente`.
+
+### Regresión final congelada
+
+- Matriz frontend autenticada: 27/27.
+- Acciones prohibidas: ausentes del DOM.
+- Backend sin sesión: `401`.
+- Backend con rol insuficiente: `403`.
+- Escrituras de negocio durante QA: 0.
+- Errores 5xx nuevos: 0.
+- Defectos reproducibles: 0.
+- Navbar, middleware y Shield by Vission: intactos.
+
+### Siguiente frente
+
+`GAP-MAP-01` — congelamiento detallado de brechas.
+
+### Pendiente administrativo separado
+
+Proyecto Vercel `scmvp-legacy-routes-preview-audit`: vacío, no vinculado al repositorio y sin impacto en Production. No eliminar sin autorización independiente.
+
+### Artefactos protegidos
+
+No tocar ni limpiar:
+
+- respaldos `backend/src/routes/cliente.routes.ts.bak_*`;
+- `backups-previous/`;
+- `backups/`;
+- `db/`;
+- `docs/SCMVP_BOOTSTRAP_ACTUAL_2026-06-01.md`;
+- stash histórico `On main: resguardo local no-clientes-v2 backend tracked`.
+
+<!-- RELEASE-CHECKPOINT-01:END -->
+
 Última consolidación documental: 2026-06-19
 Frente documental: CONTROL-DOC-03
 Main vigente: `3492522ec4bb1c9894c50b55983e2e56e8edee4c`

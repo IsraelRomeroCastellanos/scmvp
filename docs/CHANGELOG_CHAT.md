@@ -97,3 +97,61 @@ Resultado consolidado:
 ## Historial anterior
 
 Los hitos de 2025 y enero de 2026 correspondieron a etapas iniciales de estabilización, migraciones de backend y recuperación de rutas. Sus URLs, pendientes y tags no deben interpretarse como estado operativo vigente.
+
+<!-- RELEASE-CHECKPOINT-01:START -->
+## 2026-06-28 — RELEASE-CHECKPOINT-01
+
+Checkpoint estable posterior al cierre integral de autorización.
+
+### AUTHZ-BE-WRITES-01 — PR #47
+
+- PR: https://github.com/IsraelRomeroCastellanos/scmvp/pull/47
+- Commit funcional: `0c2c94f919d432955f28e555b6fe0f2a7ca3e5b7`
+- Merge commit: `142eea51ac1844ddd36b46081023fce10998899b`
+- Resultado: escrituras sensibles protegidas por autenticación, rol y alcance empresarial.
+
+### AUTHZ-FE-ROUTES-01 — PR #48
+
+- PR: https://github.com/IsraelRomeroCastellanos/scmvp/pull/48
+- Commit funcional: `ce901916a5afae43cd28e60c67d2098f97936ed3`
+- Merge commit: `62827e0202704e0a60ac664411173aa1565adecf`
+- Resultado: rutas frontend sensibles protegidas mediante middleware y redirección por rol.
+
+### AUTHZ-UI-ACTIONS-01 — PR #49
+
+- PR: https://github.com/IsraelRomeroCastellanos/scmvp/pull/49
+- Commit funcional: `7a6ae945072697abef120dc62cef606d8258d759`
+- Merge commit: `8b2de381ca853ad455c0b0f02913adc79627d0e8`
+- Resultado: acciones no autorizadas ocultas según rol.
+
+### LEGACY-ROUTES-01 — PR #50
+
+- PR: https://github.com/IsraelRomeroCastellanos/scmvp/pull/50
+- Commit funcional: `349acaa34bc854eb94cc46ddd5e4a1c6c7b2e4b7`
+- Merge commit: `2d2d0f795a0991eec9773a75281e639ccd1317d0`
+- Resultado:
+  - `/clientes` redirige `307` a `/cliente/clientes`;
+  - `/registrar-cliente` redirige `307` a `/cliente/registrar-cliente`;
+  - contenido legacy duplicado retirado.
+
+### AUTHZ-REGRESSION-FINAL-01
+
+- Auditoría read-only en Production.
+- Matriz frontend autenticada: 27/27 rutas aprobadas.
+- Acciones prohibidas ausentes del DOM.
+- Backend anónimo: `401` antes de validaciones funcionales.
+- Backend con rol insuficiente: `403`.
+- Escrituras de negocio durante QA: 0.
+- Errores 5xx nuevos: 0.
+- Defectos funcionales reproducibles: 0.
+
+### Estado estable resultante
+
+- Frontend Production: https://scmvp.vercel.app
+- Backend vigente: https://scmvp-nxtj.onrender.com
+- Main estable: `2d2d0f795a0991eec9773a75281e639ccd1317d0`
+- Siguiente frente: `GAP-MAP-01`.
+- Tag previsto después del merge documental: `stable-authz-20260628`.
+- El tag todavía no fue creado.
+
+<!-- RELEASE-CHECKPOINT-01:END -->

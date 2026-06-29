@@ -1,5 +1,154 @@
 # RUNBOOK — SCMVP Debug y QA segura
 
+<!-- RELEASE-CHECKPOINT-01:START -->
+## RELEASE-CHECKPOINT-01 — runbook estable de autorización
+
+**Fecha:** 2026-06-28
+**Frontend Production:** https://scmvp.vercel.app
+**Backend vigente:** https://scmvp-nxtj.onrender.com
+**Main estable de referencia:** `2d2d0f795a0991eec9773a75281e639ccd1317d0`
+
+### Entorno obligatorio para QA web
+
+Toda prueba de navegador de este checkpoint debe realizarse en Production:
+
+- Inicio de sesión: https://scmvp.vercel.app/login
+- Frontend base: https://scmvp.vercel.app
+
+No usar Preview, localhost, `127.0.0.1` ni la URL directa de Render para pruebas de interfaz.
+
+### Limpieza segura de sesión
+
+Ejecutar en DevTools → Console estando dentro de `https://scmvp.vercel.app`:
+
+```javascript
+(() => {
+  for (const key of ['token', 'authToken', 'accessToken', 'user']) {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  }
+
+  for (const name of ['token', 'user']) {
+    document.cookie =
+      `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+  }
+
+  location.replace('/login');
+})();
+```
+
+Confirmar después que la dirección exacta sea:
+
+`https://scmvp.vercel.app/login`
+
+No documentar, copiar ni conservar contraseñas, tokens o secretos.
+
+### Smoke mínimo por rol
+
+#### Administrador
+
+- https://scmvp.vercel.app/admin/empresas
+  - consulta permitida;
+  - Crear Empresa visible;
+  - Editar visible;
+  - Administración de usuarios visible.
+- https://scmvp.vercel.app/cliente/clientes
+  - Registrar Cliente visible;
+  - Editar visible.
+
+#### Consultor
+
+- https://scmvp.vercel.app/admin/empresas
+  - consulta permitida;
+  - Crear Empresa oculto;
+  - Editar Empresa oculto;
+  - Administración de usuarios oculta.
+- https://scmvp.vercel.app/cliente/clientes
+  - consulta permitida;
+  - Registrar Cliente oculto;
+  - Editar Cliente visible.
+- https://scmvp.vercel.app/cliente/registrar-cliente
+  - redirección esperada a `/cliente/clientes`.
+
+#### Cliente
+
+- https://scmvp.vercel.app/cliente/clientes
+  - listado limitado a su empresa;
+  - Registrar Cliente visible;
+  - Editar Cliente visible;
+  - administración de empresas y usuarios oculta.
+
+### Precedencia de autorización backend
+
+1. Sin sesión o sin token válido: `401`.
+2. Sesión válida con rol no autorizado: `403`.
+3. Solo después de autenticar y autorizar deben ejecutarse validaciones del recurso o del cuerpo.
+
+Comprobaciones negativas read-only:
+
+- `GET /api/admin/empresas`
+  - anónimo: `401`;
+  - admin: `200`;
+  - consultor: `200`;
+  - cliente: `403`.
+- `POST /api/cliente/registrar-cliente`
+  - anónimo: `401`;
+  - consultor: `403`.
+- `PUT /api/cliente/clientes/999999999`
+  - anónimo: `401`.
+
+### Rutas legacy
+
+- https://scmvp.vercel.app/clientes
+  - `307` a `/cliente/clientes`.
+- https://scmvp.vercel.app/registrar-cliente
+  - `307` a `/cliente/registrar-cliente`.
+
+### Contención obligatoria
+
+Durante auditorías read-only:
+
+- POST de negocio: 0.
+- PUT: 0.
+- PATCH: 0.
+- DELETE: 0.
+- Respuestas 2xx de escritura: 0.
+- No pulsar Crear, Editar, Guardar, Registrar, Activar o Desactivar.
+- Login y logout están permitidos.
+- Ante cualquier escritura exitosa, detener la prueba.
+
+### IDs protegidos
+
+No utilizar para pruebas de escritura:
+
+- 67;
+- 99;
+- 100;
+- 101.
+
+### QA basada en riesgo
+
+Cuando local ya validó exhaustivamente el mismo commit y Preview o Production no cambian middleware, autorización, páginas canónicas ni UI responsive:
+
+- comprobar SHA y deployment;
+- automatizar HTTP y rutas;
+- verificar ausencia de contenido legacy;
+- ejecutar smoke visual mínimo;
+- no repetir matrices redundantes ni pruebas tablet/móvil sin una causa de riesgo.
+
+### Artefactos históricos protegidos
+
+No limpiar, restaurar, aplicar ni eliminar:
+
+- `backend/src/routes/cliente.routes.ts.bak_*`;
+- `backups-previous/`;
+- `backups/`;
+- `db/`;
+- `docs/SCMVP_BOOTSTRAP_ACTUAL_2026-06-01.md`;
+- stash `On main: resguardo local no-clientes-v2 backend tracked`.
+
+<!-- RELEASE-CHECKPOINT-01:END -->
+
 Última consolidación: 2026-06-19
 Main de referencia: `3492522ec4bb1c9894c50b55983e2e56e8edee4c`
 
