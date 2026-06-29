@@ -1,5 +1,154 @@
 # SCMVP — Contexto operativo consolidado V2
 
+<!-- RELEASE-CHECKPOINT-01:START -->
+## RELEASE-CHECKPOINT-01 — contexto operativo vigente
+
+**Fecha:** 2026-06-28
+**Repositorio:** `IsraelRomeroCastellanos/scmvp`
+**Main estable:** `2d2d0f795a0991eec9773a75281e639ccd1317d0`
+
+### Arquitectura y Production
+
+- Frontend: Next.js 14, App Router, TypeScript y Tailwind.
+- Frontend Production: https://scmvp.vercel.app
+- Backend: Node.js, Express y TypeScript.
+- Backend vigente: https://scmvp-nxtj.onrender.com
+- Base de datos: PostgreSQL en Render.
+- Middleware frontend: `frontend/src/middleware.ts`.
+- Marca visible: **Shield by Vission**.
+
+### Rutas frontend canónicas
+
+- `/login`
+- `/dashboard`
+- `/admin/usuarios`
+- `/admin/empresas`
+- `/admin/crear-empresa`
+- `/admin/editar-empresa/[id]`
+- `/cliente/clientes`
+- `/cliente/registrar-cliente`
+- `/cliente/editar-cliente/[id]`
+- `/cliente/clientes/[id]/imprimir`
+
+### Política vigente por rol
+
+#### Administrador
+
+- Gestión de usuarios.
+- Consulta de empresas.
+- Acciones visibles para crear y editar empresas.
+- Listado, registro y edición de clientes.
+
+#### Consultor
+
+- Consulta de empresas.
+- Sin crear ni editar empresas.
+- Listado y edición de clientes.
+- Sin registrar clientes.
+- Sin gestión de usuarios.
+
+#### Cliente
+
+- Sin administración de usuarios o empresas.
+- Listado de clientes limitado a su empresa.
+- Registro y edición de clientes conforme a su empresa.
+
+#### Anónimo
+
+- Sin acceso a rutas protegidas.
+
+### Política backend congelada
+
+- Sin token válido: `401` antes de validaciones funcionales.
+- Token válido con rol insuficiente: `403`.
+- Registrar cliente:
+  - permitido para `admin` y `cliente`;
+  - denegado para `consultor` y anónimo.
+- Editar cliente:
+  - permitido para `admin` y `consultor`;
+  - permitido para `cliente` conforme a su empresa;
+  - denegado para anónimo.
+
+### Rutas legacy
+
+- `/clientes` redirige `307` a `/cliente/clientes`.
+- `/registrar-cliente` redirige `307` a `/cliente/registrar-cliente`.
+
+### Frentes cerrados
+
+- AUTHZ-BE-WRITES-01 — PR #47.
+- AUTHZ-FE-ROUTES-01 — PR #48.
+- AUTHZ-UI-ACTIONS-01 — PR #49.
+- LEGACY-ROUTES-01 — PR #50.
+- AUTHZ-REGRESSION-FINAL-01 — auditoría read-only aprobada.
+
+### Regresión final congelada
+
+- Matriz frontend autenticada: 27/27.
+- Acciones prohibidas ausentes del DOM.
+- Escrituras de negocio durante QA: 0.
+- Errores 5xx nuevos: 0.
+- Defectos funcionales reproducibles: 0.
+- Navbar, middleware y Shield by Vission intactos.
+
+### Gestión de empresas
+
+La autorización, las rutas y la visibilidad por rol están cerradas. La implementación funcional end-to-end de crear y editar empresas continúa pendiente.
+
+### IDs protegidos
+
+- 67;
+- 99;
+- 100;
+- 101.
+
+No utilizarlos para pruebas de escritura.
+
+### Artefactos históricos protegidos
+
+- `backend/src/routes/cliente.routes.ts.bak_*`;
+- `backups-previous/`;
+- `backups/`;
+- `db/`;
+- `docs/SCMVP_BOOTSTRAP_ACTUAL_2026-06-01.md`;
+- stash `On main: resguardo local no-clientes-v2 backend tracked`.
+
+No limpiar, restaurar, aplicar, eliminar ni incorporar estos artefactos.
+
+### Pendiente administrativo separado
+
+Proyecto Vercel `scmvp-legacy-routes-preview-audit`:
+
+- vacío;
+- no vinculado al repositorio;
+- sin despliegue funcional;
+- sin impacto en Production;
+- no eliminar sin autorización independiente.
+
+### Backlog inmediato
+
+1. `GAP-MAP-01` — congelamiento detallado de brechas.
+2. Acomodo UX de Beneficiario Controlador en Registrar PF.
+3. Catálogo nacional completo de códigos postales.
+4. Crear y editar empresas funcionalmente de extremo a extremo.
+5. Logo y aviso de privacidad personalizados por empresa.
+6. Impresión personalizada por empresa.
+7. Depuración del detalle de clientes y campos por confirmar.
+8. Carga Masiva: plantilla, validación y procesamiento end-to-end.
+9. Página de presentación autenticada.
+10. Actualización de la bienvenida pública a Shield by Vission.
+11. Otros detalles y hallazgos emergentes.
+12. Grado de Riesgo — épica separada en definición.
+13. Perfil Transaccional — épica separada en definición.
+
+### Siguiente frente
+
+`GAP-MAP-01`.
+
+Las secciones históricas posteriores permanecen como antecedente y no sustituyen este estado vigente.
+
+<!-- RELEASE-CHECKPOINT-01:END -->
+
 Última actualización: 2026-06-19
 Main: `3492522ec4bb1c9894c50b55983e2e56e8edee4c`
 
