@@ -182,3 +182,20 @@ No documentar datos personales del registro.
 - Evaluar consolidación física futura de estructuras legacy de Beneficiario Controlador.
 - Evaluar eliminación futura de fallbacks legacy después de completar compatibilidad y migración.
 - Priorizar futuros frentes funcionales mediante Control de Misión V2.
+
+<!-- GAP-MAP-DOC-01:START -->
+## GAP-MAP-DOC-01 — congelamiento documental del mapa de brechas
+
+- Base auditada: `dedffc8dd32515262b100610b3ae4eb6104e25a9`.
+- Tag de referencia: `stable-authz-20260628`.
+- GAP-MAP-01: auditoría técnica y visual read-only completada.
+- Escrituras de negocio: 0.
+- Modificaciones durante la auditoría: 0.
+- Frente activo: `GAP-MAP-DOC-01`.
+- Documento canónico: `docs/GAP_MAP_01.md`.
+- P0: `/test-css`, Dashboard simulado, CRUD de empresas, Carga Masiva e identidad/impresión por empresa.
+- P1: Beneficiario Controlador PF, catálogo nacional de C.P., campos del cliente y página pública.
+- P2: Grado de Riesgo, Perfil Transaccional e higiene del árbol.
+- No se autoriza implementación funcional.
+- Siguiente punto de control: commit documental local y autorización posterior de push/PR.
+<!-- GAP-MAP-DOC-01:END -->

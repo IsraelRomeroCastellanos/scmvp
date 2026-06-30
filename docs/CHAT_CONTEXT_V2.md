@@ -346,3 +346,27 @@ No registrar información personal del cliente.
 8. Estado civil, régimen matrimonial, ocupación y profesión están derogados.
 9. IDs `67`, `99`, `100`, `101` están protegidos.
 10. Stash y untracked históricos no deben tocarse sin autorización.
+
+<!-- GAP-MAP-DOC-01:START -->
+## Contexto operativo — GAP-MAP-DOC-01
+
+- Base: `dedffc8dd32515262b100610b3ae4eb6104e25a9`.
+- Tag estable: `stable-authz-20260628`.
+- GAP-MAP-01 quedó levantado mediante auditoría read-only.
+- Prioridad P0:
+  1. retirar/bloquear `/test-css`;
+  2. contener Dashboard simulado;
+  3. completar CRUD de empresas;
+  4. implementar Carga Masiva;
+  5. completar identidad e impresión por empresa.
+- Prioridad P1:
+  1. UX de Beneficiario Controlador PF;
+  2. catálogo nacional de códigos postales;
+  3. depuración de campos del cliente;
+  4. presentación pública Shield.
+- Épicas separadas: Grado de Riesgo y Perfil Transaccional.
+- Orden recomendado: contención → empresas → carga masiva → identidad/impresión → UX/datos → presentación → regresión/release.
+- Fuente canónica: `docs/GAP_MAP_01.md`.
+- Prohibición vigente: no iniciar frentes funcionales hasta cerrar y autorizar el documento.
+- Proyecto Vercel accidental `scmvp-legacy-routes-preview-audit`: preservar sin cambios.
+<!-- GAP-MAP-DOC-01:END -->

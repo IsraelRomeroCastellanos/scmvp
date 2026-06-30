@@ -155,3 +155,24 @@ Checkpoint estable posterior al cierre integral de autorización.
 - El tag todavía no fue creado.
 
 <!-- RELEASE-CHECKPOINT-01:END -->
+
+<!-- GAP-MAP-DOC-01:START -->
+## 2026-06-29 — GAP-MAP-01 y apertura de GAP-MAP-DOC-01
+
+- Se auditó `main` en `dedffc8dd32515262b100610b3ae4eb6104e25a9`, referenciado por `stable-authz-20260628`.
+- La auditoría fue read-only: cero cambios de repositorio y cero escrituras de negocio.
+- Se revisaron código, contratos frontend/backend, Production, red, DOM y documentación.
+- Hallazgos principales:
+  - CRUD de empresas incompleto;
+  - Carga Masiva sin endpoint backend;
+  - Dashboard y estado de servicios simulados sin advertencia;
+  - `/test-css` pública;
+  - impresión sin identidad por empresa y con texto provisional;
+  - catálogo postal de solo dos registros;
+  - defectos UX en Beneficiario Controlador PF;
+  - campos obsoletos en el detalle;
+  - Grado de Riesgo y Perfil Transaccional como demos separadas.
+- Se autorizó `GAP-MAP-DOC-01` para congelar matriz, prioridades, criterios, estimaciones y pronósticos.
+- El detalle canónico reside en `docs/GAP_MAP_01.md`.
+- No se autorizó implementación, despliegue ni limpieza.
+<!-- GAP-MAP-DOC-01:END -->

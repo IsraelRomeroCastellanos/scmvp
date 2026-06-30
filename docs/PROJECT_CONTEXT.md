@@ -254,3 +254,25 @@ Campos derogados excluidos:
 - Consolidación física futura de estructuras legacy BC.
 - Eliminación futura de fallbacks legacy.
 - Nuevos frentes funcionales por priorizar.
+
+<!-- GAP-MAP-DOC-01:START -->
+## Estado de producto posterior a GAP-MAP-01
+
+SCMVP mantiene como base estable `dedffc8dd32515262b100610b3ae4eb6104e25a9`, con autenticación, autorización y gestión principal de clientes estabilizadas.
+
+Estado estructural:
+
+- Gestión de clientes: base funcional, con brechas UX y de depuración.
+- Empresas: listado operativo; alta y edición incompletas end-to-end.
+- Carga Masiva: interfaz parcial sin endpoint backend.
+- Impresión: borrador funcional, pendiente de identidad y contenido legal por empresa.
+- Dashboard: información simulada presentada sin advertencia.
+- Códigos postales: infraestructura presente, cobertura nacional ausente.
+- Página pública: alineación parcial con Shield.
+- Grado de Riesgo y Perfil Transaccional: épicas separadas, aún no productivas.
+- Deuda técnica: auxiliares del árbol y pendiente administrativo de Vercel.
+
+La matriz, criterios de aceptación, estimaciones min/prob/max, Pronósticos A/B/C y secuencia recomendada se mantienen en `docs/GAP_MAP_01.md`.
+
+No se autoriza implementación funcional como parte de GAP-MAP-DOC-01.
+<!-- GAP-MAP-DOC-01:END -->
