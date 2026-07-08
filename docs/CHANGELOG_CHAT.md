@@ -176,3 +176,35 @@ Checkpoint estable posterior al cierre integral de autorización.
 - El detalle canónico reside en `docs/GAP_MAP_01.md`.
 - No se autorizó implementación, despliegue ni limpieza.
 <!-- GAP-MAP-DOC-01:END -->
+
+<!-- DOCS-DB-RENDER-MIGRATION-20260707:start -->
+## 2026-07-07 — Migración DB Render
+
+- Se documenta migración DB Render ejecutada el 2026-07-07.
+- Motivo: vencimiento de periodo/prueba en Render y continuidad operativa.
+- DB origen: Render PostgreSQL, nombre lógico scmvp_db.
+- DB destino vigente: Render PostgreSQL, nombre lógico scmvp_0plk.
+- Backend vigente posterior: https://scmvp-1jhq.onrender.com.
+- Frontend Production: https://scmvp.vercel.app.
+- Backups registrados:
+  - scmvp_20260707_134630.sql.
+  - scmvp_20260707_134641.dump.
+  - scmvp_20260707_134630.render_ready.sql.
+- Conteos baseline y post-restore:
+  - empresas: 17.
+  - usuarios: 24.
+  - clientes: 95.
+- Restore:
+  - sin errores bloqueantes.
+  - COPY 95 clientes.
+  - COPY 17 empresas.
+  - COPY 24 usuarios.
+- Validaciones:
+  - backend sin token devuelve 401 Token no proporcionado.
+  - login admin válido emite token.
+  - /api/admin/empresas con token devuelve HTTP 200.
+  - GET https://scmvp-1jhq.onrender.com/api/cliente/clientes?empresa_id=5 devuelve 200 OK.
+- Cambios de código: 0.
+- Cambios de esquema adicionales: 0.
+- Secretos documentados: 0.
+<!-- DOCS-DB-RENDER-MIGRATION-20260707:end -->

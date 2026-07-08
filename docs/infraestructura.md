@@ -125,3 +125,78 @@ Backend histórico:
 - U1E-FE1
 - commit funcional: `a67ea53`
 - merge main: `583ec5d`
+
+<!-- DOCS-DB-RENDER-MIGRATION-20260707:start -->
+## Migración DB Render 2026-07-07
+
+### Estado vigente
+
+- Fecha operativa: 2026-07-07.
+- Zona horaria de referencia: America/Mexico_City.
+- Resultado: migración cerrada funcionalmente.
+- Frontend Production vigente: https://scmvp.vercel.app.
+- Backend vigente: https://scmvp-1jhq.onrender.com.
+- DB vigente en Render PostgreSQL: scmvp_0plk.
+- Variable pública frontend esperada: NEXT_PUBLIC_API_BASE_URL=https://scmvp-1jhq.onrender.com.
+
+### Motivo
+
+La migración se ejecutó por vencimiento de periodo/prueba en Render y por la necesidad de conservar continuidad operativa del sistema SCMVP con una nueva base PostgreSQL vigente.
+
+### Origen y destino
+
+- DB origen:
+  - Render PostgreSQL.
+  - Nombre lógico documentado: scmvp_db.
+  - External Database URL validada desde WSL.
+- DB destino vigente:
+  - Render PostgreSQL.
+  - Nombre lógico: scmvp_0plk.
+  - Conexión validada con current_database() y now().
+
+### Backups generados
+
+- scmvp_20260707_134630.sql.
+- scmvp_20260707_134641.dump.
+- scmvp_20260707_134630.render_ready.sql.
+
+### Conteos validados
+
+Baseline previo:
+
+- empresas: 17.
+- usuarios: 24.
+- clientes: 95.
+
+Post-restore:
+
+- empresas: 17.
+- usuarios: 24.
+- clientes: 95.
+
+### Restore
+
+- Restore sin errores bloqueantes.
+- COPY 95 clientes.
+- COPY 17 empresas.
+- COPY 24 usuarios.
+- Cambios de esquema adicionales: no.
+- Cambios de código: no.
+
+### Validaciones operativas
+
+- GET /api/admin/empresas sin token devuelve 401 Token no proporcionado.
+- Login admin válido emite token.
+- GET /api/admin/empresas con token devuelve HTTP 200.
+- Validación UI/API:
+  - GET https://scmvp-1jhq.onrender.com/api/cliente/clientes?empresa_id=5.
+  - Resultado: 200 OK.
+
+### Seguridad
+
+- No documentar DATABASE_URL.
+- No documentar passwords.
+- No documentar tokens.
+- No documentar cadenas de conexión completas.
+- Si alguna credencial fue pegada en terminal o historial, rotar credenciales.
+<!-- DOCS-DB-RENDER-MIGRATION-20260707:end -->
