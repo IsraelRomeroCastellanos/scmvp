@@ -306,3 +306,43 @@ Stash histórico: conservar intacto.
 - Confirmar el nombre y las funciones expuestas por el interceptor antes de guardar.
 - Recargar la ruta para retirar interceptores de una sesión anterior.
 - Reinstalar el interceptor autorizado y ejecutar el precheck.
+
+<!-- DOCS-DB-RENDER-MIGRATION-20260707:start -->
+## Runbook — validación post migración DB Render 2026-07-07
+
+### Infraestructura vigente
+
+- Frontend Production: https://scmvp.vercel.app.
+- Backend vigente: https://scmvp-1jhq.onrender.com.
+- DB vigente Render PostgreSQL: scmvp_0plk.
+- No usar como backend vigente el servicio suspendido anterior si no hay autorización expresa.
+
+### Verificación backend sin secretos
+
+Comando de verificación:
+
+curl -sS -i https://scmvp-1jhq.onrender.com/api/admin/empresas | sed -n '1,40p'
+
+Resultado esperado sin token:
+
+- HTTP 401.
+- Respuesta: Token no proporcionado.
+
+### Validación funcional esperada
+
+- Login admin válido emite token.
+- GET /api/admin/empresas con token devuelve HTTP 200.
+- GET https://scmvp-1jhq.onrender.com/api/cliente/clientes?empresa_id=5 devuelve 200 OK.
+- Conteos validados:
+  - empresas: 17.
+  - usuarios: 24.
+  - clientes: 95.
+
+### Seguridad
+
+- No pegar ni documentar DATABASE_URL.
+- No pegar ni documentar passwords.
+- No pegar ni documentar tokens.
+- No pegar ni documentar headers Bearer.
+- Si alguna credencial quedó en historial de terminal, rotar credenciales.
+<!-- DOCS-DB-RENDER-MIGRATION-20260707:end -->

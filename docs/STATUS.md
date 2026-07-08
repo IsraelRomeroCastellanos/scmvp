@@ -199,3 +199,28 @@ No documentar datos personales del registro.
 - No se autoriza implementación funcional.
 - Siguiente punto de control: commit documental local y autorización posterior de push/PR.
 <!-- GAP-MAP-DOC-01:END -->
+
+<!-- DOCS-DB-RENDER-MIGRATION-20260707:start -->
+## Estado infraestructura — migración DB Render 2026-07-07
+
+- Estado: migración DB Render cerrada funcionalmente.
+- Fecha: 2026-07-07.
+- Zona horaria: America/Mexico_City.
+- Frontend Production vigente: https://scmvp.vercel.app.
+- Backend vigente: https://scmvp-1jhq.onrender.com.
+- DB vigente: scmvp_0plk.
+- NEXT_PUBLIC_API_BASE_URL: https://scmvp-1jhq.onrender.com.
+- Conteos post-restore:
+  - empresas: 17.
+  - usuarios: 24.
+  - clientes: 95.
+- Validación backend:
+  - /api/admin/empresas sin token devuelve 401 Token no proporcionado.
+  - login admin válido emite token.
+  - /api/admin/empresas con token devuelve HTTP 200.
+- Validación UI/API:
+  - GET https://scmvp-1jhq.onrender.com/api/cliente/clientes?empresa_id=5 devuelve 200 OK.
+- Cambios de código: no.
+- Cambios de esquema adicionales: no.
+- Secretos documentados: no.
+<!-- DOCS-DB-RENDER-MIGRATION-20260707:end -->
