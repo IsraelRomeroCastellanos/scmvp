@@ -373,4 +373,290 @@ router.get(
   }
 );
 
+const EMPRESA_SELECT_FIELDS = `
+  id,
+  nombre_legal,
+  rfc,
+  tipo_entidad,
+  pais,
+  domicilio,
+  estado,
+  entidad,
+  municipio,
+  colonia,
+  codigo_postal,
+  calle,
+  numero,
+  ciudad_delegacion,
+  estado_provincia
+`;
+
+const TIPOS_ENTIDAD_EMPRESA = ['persona_fisica', 'persona_moral'];
+const ESTADOS_EMPRESA = ['activo', 'suspendido', 'inactivo'];
+
+function normalizarTextoEmpresa(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+
+  const normalized = String(value).trim();
+  return normalized || null;
+}
+
+function normalizarEmpresaBody(body: any, estadoPorDefecto: string) {
+  const nombre_legal = normalizarTextoEmpresa(body?.nombre_legal);
+  const rfcNormalizado = normalizarTextoEmpresa(body?.rfc);
+  const tipo_entidad = normalizarTextoEmpresa(body?.tipo_entidad);
+  const estadoRecibido = normalizarTextoEmpresa(body?.estado);
+
+  return {
+    nombre_legal,
+    rfc: rfcNormalizado ? rfcNormalizado.toUpperCase() : null,
+    tipo_entidad,
+    pais: normalizarTextoEmpresa(body?.pais),
+    domicilio: normalizarTextoEmpresa(body?.domicilio),
+    estado: estadoRecibido ?? estadoPorDefecto,
+    entidad: normalizarTextoEmpresa(body?.entidad),
+    municipio: normalizarTextoEmpresa(body?.municipio),
+    colonia: normalizarTextoEmpresa(body?.colonia),
+    codigo_postal: normalizarTextoEmpresa(body?.codigo_postal),
+    calle: normalizarTextoEmpresa(body?.calle),
+    numero: normalizarTextoEmpresa(body?.numero),
+    ciudad_delegacion: normalizarTextoEmpresa(body?.ciudad_delegacion),
+    estado_provincia: normalizarTextoEmpresa(body?.estado_provincia)
+  };
+}
+
+function validarEmpresaBody(
+  res: any,
+  empresa: ReturnType<typeof normalizarEmpresaBody>
+): boolean {
+  if (!empresa.nombre_legal) {
+    res.status(400).json({ error: 'nombre_legal es obligatorio' });
+    return false;
+  }
+
+  if (!empresa.tipo_entidad || !TIPOS_ENTIDAD_EMPRESA.includes(empresa.tipo_entidad)) {
+    res.status(400).json({ error: 'tipo_entidad invalido' });
+    return false;
+  }
+
+  if (!ESTADOS_EMPRESA.includes(empresa.estado)) {
+    res.status(400).json({ error: 'estado invalido' });
+    return false;
+  }
+
+  return true;
+}
+
+function responderConflictoEmpresa(res: any, error: any) {
+  if (error?.code !== '23505') return false;
+
+  const constraint = String(error?.constraint ?? '').toLowerCase();
+  if (constraint.includes('nombre_legal')) {
+    res.status(409).json({ error: 'nombre_legal ya registrado' });
+    return true;
+  }
+
+  if (constraint.includes('rfc')) {
+    res.status(409).json({ error: 'rfc ya registrado' });
+    return true;
+  }
+
+  res.status(409).json({ error: 'Empresa duplicada' });
+  return true;
+}
+
+// ===============================
+// CONSULTAR EMPRESA (ADMIN / CONSULTOR)
+// ===============================
+router.get(
+  '/empresas/:id',
+  authenticate,
+  authorizeRoles('admin', 'consultor'),
+  async (req, res) => {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'id invalido' });
+    }
+
+    try {
+      const result = await pool.query(
+        `SELECT ${EMPRESA_SELECT_FIELDS} FROM public.empresas WHERE id = $1 LIMIT 1`,
+        [id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Empresa no encontrada' });
+      }
+
+      return res.json({ empresa: result.rows[0] });
+    } catch (error) {
+      console.error('Error al consultar empresa:', error);
+      return res.status(500).json({ error: 'Error al consultar empresa' });
+    }
+  }
+);
+
+// ===============================
+// CREAR EMPRESA (ADMIN)
+// ===============================
+router.post(
+  '/empresas',
+  authenticate,
+  authorizeRoles('admin'),
+  async (req, res) => {
+    const empresa = normalizarEmpresaBody(req.body, 'activo');
+    if (!validarEmpresaBody(res, empresa)) return;
+
+    try {
+      const duplicateResult = await pool.query(
+        `SELECT nombre_legal, rfc
+         FROM public.empresas
+         WHERE LOWER(nombre_legal) = LOWER($1)
+            OR ($2::text IS NOT NULL AND UPPER(rfc) = $2)
+         LIMIT 1`,
+        [empresa.nombre_legal, empresa.rfc]
+      );
+
+      if (duplicateResult.rows.length > 0) {
+        const duplicate = duplicateResult.rows[0];
+        if (String(duplicate.nombre_legal).toLowerCase() === empresa.nombre_legal!.toLowerCase()) {
+          return res.status(409).json({ error: 'nombre_legal ya registrado' });
+        }
+
+        return res.status(409).json({ error: 'rfc ya registrado' });
+      }
+
+      const result = await pool.query(
+        `INSERT INTO public.empresas (
+          nombre_legal, rfc, tipo_entidad, pais, domicilio, estado, entidad,
+          municipio, colonia, codigo_postal, calle, numero, ciudad_delegacion,
+          estado_provincia
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        RETURNING ${EMPRESA_SELECT_FIELDS}`,
+        [
+          empresa.nombre_legal,
+          empresa.rfc,
+          empresa.tipo_entidad,
+          empresa.pais,
+          empresa.domicilio,
+          empresa.estado,
+          empresa.entidad,
+          empresa.municipio,
+          empresa.colonia,
+          empresa.codigo_postal,
+          empresa.calle,
+          empresa.numero,
+          empresa.ciudad_delegacion,
+          empresa.estado_provincia
+        ]
+      );
+
+      return res.status(201).json({ empresa: result.rows[0] });
+    } catch (error) {
+      if (responderConflictoEmpresa(res, error)) return;
+
+      console.error('Error al crear empresa:', error);
+      return res.status(500).json({ error: 'Error al crear empresa' });
+    }
+  }
+);
+
+// ===============================
+// EDITAR EMPRESA (ADMIN)
+// ===============================
+router.put(
+  '/empresas/:id',
+  authenticate,
+  authorizeRoles('admin'),
+  async (req, res) => {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'id invalido' });
+    }
+
+    try {
+      const existingResult = await pool.query(
+        'SELECT id, estado FROM public.empresas WHERE id = $1 LIMIT 1',
+        [id]
+      );
+
+      if (existingResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Empresa no encontrada' });
+      }
+
+      const empresa = normalizarEmpresaBody(req.body, existingResult.rows[0].estado);
+      if (!validarEmpresaBody(res, empresa)) return;
+
+      const duplicateResult = await pool.query(
+        `SELECT nombre_legal, rfc
+         FROM public.empresas
+         WHERE id <> $1
+           AND (
+             LOWER(nombre_legal) = LOWER($2)
+             OR ($3::text IS NOT NULL AND UPPER(rfc) = $3)
+           )
+         LIMIT 1`,
+        [id, empresa.nombre_legal, empresa.rfc]
+      );
+
+      if (duplicateResult.rows.length > 0) {
+        const duplicate = duplicateResult.rows[0];
+        if (String(duplicate.nombre_legal).toLowerCase() === empresa.nombre_legal!.toLowerCase()) {
+          return res.status(409).json({ error: 'nombre_legal ya registrado' });
+        }
+
+        return res.status(409).json({ error: 'rfc ya registrado' });
+      }
+
+      const result = await pool.query(
+        `UPDATE public.empresas
+         SET nombre_legal = $1,
+             rfc = $2,
+             tipo_entidad = $3,
+             pais = $4,
+             domicilio = $5,
+             estado = $6,
+             entidad = $7,
+             municipio = $8,
+             colonia = $9,
+             codigo_postal = $10,
+             calle = $11,
+             numero = $12,
+             ciudad_delegacion = $13,
+             estado_provincia = $14,
+             actualizado_en = NOW()
+         WHERE id = $15
+         RETURNING ${EMPRESA_SELECT_FIELDS}`,
+        [
+          empresa.nombre_legal,
+          empresa.rfc,
+          empresa.tipo_entidad,
+          empresa.pais,
+          empresa.domicilio,
+          empresa.estado,
+          empresa.entidad,
+          empresa.municipio,
+          empresa.colonia,
+          empresa.codigo_postal,
+          empresa.calle,
+          empresa.numero,
+          empresa.ciudad_delegacion,
+          empresa.estado_provincia,
+          id
+        ]
+      );
+
+      return res.json({ empresa: result.rows[0] });
+    } catch (error) {
+      if (responderConflictoEmpresa(res, error)) return;
+
+      console.error('Error al editar empresa:', error);
+      return res.status(500).json({ error: 'Error al editar empresa' });
+    }
+  }
+);
+
 export default router;

@@ -5,11 +5,24 @@ import { useRouter } from 'next/navigation';
 
 type TipoEntidad = 'persona_moral' | 'persona_fisica';
 
+async function getEmpresaErrorMessage(res: Response): Promise<string> {
+  const data = await res.json().catch(() => null);
+  const detail = typeof data?.error === 'string' ? data.error : '';
+
+  if (res.status === 400) return detail ? `Datos inválidos: ${detail}` : 'Datos inválidos';
+  if (res.status === 403) return 'No tienes permiso para crear empresas';
+  if (res.status === 409) return detail || 'Ya existe una empresa con ese nombre o RFC';
+  if (res.status >= 500) return 'Error interno al crear la empresa';
+
+  return detail || 'No se pudo crear la empresa';
+}
+
 export default function CrearEmpresaPage() {
   const router = useRouter();
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const [form, setForm] = useState({
     nombre_legal: '',
@@ -39,8 +52,11 @@ export default function CrearEmpresaPage() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving || success) return;
+
     setSaving(true);
     setError('');
+    setSuccess('');
 
     try {
       const token = localStorage.getItem('token');
@@ -48,13 +64,13 @@ export default function CrearEmpresaPage() {
       if (!base) throw new Error('Falta NEXT_PUBLIC_API_BASE_URL');
 
       const body = {
-        nombre_legal: form.nombre_legal,
-        rfc: form.rfc,
+        nombre_legal: form.nombre_legal.trim(),
+        rfc: form.rfc.trim().toUpperCase() || null,
         tipo_entidad: form.tipo_entidad,
         domicilio: buildDomicilio(),
-        entidad: form.entidad,
-        municipio: form.municipio,
-        codigo_postal: form.codigo_postal,
+        entidad: form.entidad.trim(),
+        municipio: form.municipio.trim(),
+        codigo_postal: form.codigo_postal.trim(),
       };
 
       const res = await fetch(`${base}/api/admin/empresas`, {
@@ -67,12 +83,13 @@ export default function CrearEmpresaPage() {
       });
 
       if (!res.ok) {
-        throw new Error('No se pudo crear');
+        throw new Error(await getEmpresaErrorMessage(res));
       }
 
-      router.push('/admin/empresas');
-    } catch (_e) {
-      setError('Error al crear la empresa');
+      setSuccess('Empresa creada correctamente');
+      window.setTimeout(() => router.push('/admin/empresas'), 700);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al crear la empresa');
     } finally {
       setSaving(false);
     }
@@ -90,6 +107,12 @@ export default function CrearEmpresaPage() {
           </div>
         )}
 
+        {success && (
+          <div className="mb-4 rounded border border-green-200 bg-green-50 p-3 text-green-700">
+            {success}
+          </div>
+        )}
+
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
             <label className="block text-sm text-gray-600 mb-1">Nombre legal *</label>
@@ -102,12 +125,11 @@ export default function CrearEmpresaPage() {
           </div>
 
           <div>
-            <label className="block text-sm text-gray-600 mb-1">RFC *</label>
+            <label className="block text-sm text-gray-600 mb-1">RFC</label>
             <input
               value={form.rfc}
               onChange={onChange('rfc')}
               className="w-full rounded border px-3 py-2"
-              required
             />
           </div>
 
@@ -192,7 +214,7 @@ export default function CrearEmpresaPage() {
           <div className="flex items-center gap-3 pt-2">
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || !!success}
               className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-60"
             >
               {saving ? 'Creando…' : 'Crear empresa'}

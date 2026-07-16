@@ -7,6 +7,23 @@ import { useParams, useRouter } from 'next/navigation';
 type TipoEntidad = 'persona_moral' | 'persona_fisica';
 type Estado = 'activo' | 'suspendido' | 'inactivo';
 
+async function getEmpresaErrorMessage(res: Response, action: 'cargar' | 'guardar'): Promise<string> {
+  const data = await res.json().catch(() => null);
+  const detail = typeof data?.error === 'string' ? data.error : '';
+
+  if (res.status === 400) return detail ? `Datos inválidos: ${detail}` : 'Datos inválidos';
+  if (res.status === 403) return 'No tienes permiso para acceder a esta empresa';
+  if (res.status === 404) return 'Empresa no encontrada';
+  if (res.status === 409) return detail || 'Ya existe una empresa con ese nombre o RFC';
+  if (res.status >= 500) {
+    return action === 'cargar'
+      ? 'Error interno al cargar la empresa'
+      : 'Error interno al guardar la empresa';
+  }
+
+  return detail || (action === 'cargar' ? 'No se pudo cargar la empresa' : 'No se pudo guardar la empresa');
+}
+
 type FormState = {
   nombre_legal: string;
   rfc: string;
@@ -16,7 +33,11 @@ type FormState = {
   interior: string;
   entidad: string;
   municipio: string;
+  pais: string;
+  colonia: string;
   codigo_postal: string;
+  ciudad_delegacion: string;
+  estado_provincia: string;
   estado: Estado;
 };
 
@@ -53,6 +74,7 @@ export default function EditarEmpresaPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const [form, setForm] = useState<FormState>({
     nombre_legal: '',
@@ -63,7 +85,11 @@ export default function EditarEmpresaPage() {
     interior: '',
     entidad: '',
     municipio: '',
+    pais: '',
+    colonia: '',
     codigo_postal: '',
+    ciudad_delegacion: '',
+    estado_provincia: '',
     estado: 'activo',
   });
 
@@ -88,27 +114,31 @@ export default function EditarEmpresaPage() {
           cache: 'no-store',
         });
 
-        if (!res.ok) throw new Error('No se pudo cargar empresa');
+        if (!res.ok) throw new Error(await getEmpresaErrorMessage(res, 'cargar'));
 
         const data = await res.json();
         const empresa = data?.empresa;
 
-        const { calle, numero, interior } = splitDomicilio(empresa?.domicilio);
+        const domicilioParts = splitDomicilio(empresa?.domicilio);
 
         setForm({
           nombre_legal: empresa?.nombre_legal ?? '',
           rfc: empresa?.rfc ?? '',
           tipo_entidad: (empresa?.tipo_entidad ?? 'persona_moral') as TipoEntidad,
-          calle,
-          numero,
-          interior,
+          calle: empresa?.calle ?? domicilioParts.calle,
+          numero: empresa?.numero ?? domicilioParts.numero,
+          interior: domicilioParts.interior,
           entidad: empresa?.entidad ?? '',
           municipio: empresa?.municipio ?? '',
+          pais: empresa?.pais ?? '',
+          colonia: empresa?.colonia ?? '',
           codigo_postal: empresa?.codigo_postal ?? '',
+          ciudad_delegacion: empresa?.ciudad_delegacion ?? '',
+          estado_provincia: empresa?.estado_provincia ?? '',
           estado: (empresa?.estado ?? 'activo') as Estado,
         });
-      } catch (_e) {
-        setError('Error al cargar la empresa');
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Error al cargar la empresa');
       } finally {
         setLoading(false);
       }
@@ -119,8 +149,11 @@ export default function EditarEmpresaPage() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving || success) return;
+
     setSaving(true);
     setError('');
+    setSuccess('');
 
     try {
       const token = localStorage.getItem('token');
@@ -128,13 +161,19 @@ export default function EditarEmpresaPage() {
       if (!base) throw new Error('Falta NEXT_PUBLIC_API_BASE_URL');
 
       const body = {
-        nombre_legal: form.nombre_legal,
-        rfc: form.rfc,
+        nombre_legal: form.nombre_legal.trim(),
+        rfc: form.rfc.trim().toUpperCase() || null,
         tipo_entidad: form.tipo_entidad,
         domicilio: buildDomicilio(form.calle, form.numero, form.interior),
-        entidad: form.entidad,
-        municipio: form.municipio,
-        codigo_postal: form.codigo_postal,
+        entidad: form.entidad.trim(),
+        municipio: form.municipio.trim(),
+        pais: form.pais.trim(),
+        colonia: form.colonia.trim(),
+        codigo_postal: form.codigo_postal.trim(),
+        calle: form.calle.trim(),
+        numero: form.numero.trim(),
+        ciudad_delegacion: form.ciudad_delegacion.trim(),
+        estado_provincia: form.estado_provincia.trim(),
         estado: form.estado,
       };
 
@@ -147,11 +186,12 @@ export default function EditarEmpresaPage() {
         body: JSON.stringify(body),
       });
 
-      if (!res.ok) throw new Error('No se pudo guardar');
+      if (!res.ok) throw new Error(await getEmpresaErrorMessage(res, 'guardar'));
 
-      router.push('/admin/empresas');
-    } catch (_e) {
-      setError('Error al guardar cambios');
+      setSuccess('Empresa actualizada correctamente');
+      window.setTimeout(() => router.push('/admin/empresas'), 700);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al guardar cambios');
     } finally {
       setSaving(false);
     }
@@ -179,6 +219,12 @@ export default function EditarEmpresaPage() {
           </div>
         )}
 
+        {success && (
+          <div className="mb-4 rounded border border-green-200 bg-green-50 p-3 text-green-700">
+            {success}
+          </div>
+        )}
+
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
             <label className="block text-sm text-gray-600 mb-1">Nombre legal *</label>
@@ -191,12 +237,11 @@ export default function EditarEmpresaPage() {
           </div>
 
           <div>
-            <label className="block text-sm text-gray-600 mb-1">RFC *</label>
+            <label className="block text-sm text-gray-600 mb-1">RFC</label>
             <input
               value={form.rfc}
               onChange={onChange('rfc')}
               className="w-full rounded border px-3 py-2"
-              required
             />
           </div>
 
@@ -284,6 +329,7 @@ export default function EditarEmpresaPage() {
               value={form.estado}
               onChange={onChange('estado')}
               className="w-full rounded border px-3 py-2"
+              required
             >
               <option value="activo">Activo</option>
               <option value="suspendido">Suspendido</option>
@@ -294,7 +340,7 @@ export default function EditarEmpresaPage() {
           <div className="flex items-center gap-3 pt-2">
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || !!success}
               className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-60"
             >
               {saving ? 'Guardando…' : 'Guardar cambios'}
