@@ -1311,6 +1311,17 @@ router.get('/clientes/:id', authenticate, async (req: Request, res: Response) =>
     if (result.rows.length === 0) return res.status(404).json({ error: 'Cliente no encontrado' });
 
     const row = result.rows[0];
+
+    if (req.user?.rol === 'cliente') {
+      if (!req.user.empresa_id) {
+        return res.status(403).json({ error: 'Usuario cliente sin empresa asignada' });
+      }
+
+      if (Number(row.empresa_id) !== req.user.empresa_id) {
+        return res.status(403).json({ error: 'No autorizado para acceder a esta empresa' });
+      }
+    }
+
     row.datos_completos = exposeCanonicalBeneficiarios(
       row.tipo_cliente,
       await materializeChildren(
