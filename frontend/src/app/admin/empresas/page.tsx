@@ -1,7 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import {
+  Alert,
+  Badge,
+  EmptyState,
+  Input,
+  LoadingState,
+  PageHeader,
+  TableContainer,
+} from '@/components/ui';
 import { getCurrentUser, isAdmin } from '@/lib/auth';
 
 interface Empresa {
@@ -15,17 +24,55 @@ interface Empresa {
   codigo_postal: string | null;
 }
 
-function mostrar(v: string | null | undefined) {
-  if (v === null || v === undefined || String(v).trim() === '') return '—';
-  return v;
+function mostrar(value: string | null | undefined) {
+  const normalized = String(value ?? '').trim();
+  return normalized || '—';
 }
 
-function badgeEstado(estado: string) {
-  const e = (estado || '').toLowerCase();
-  if (e === 'activo') return 'bg-green-100 text-green-800';
-  if (e === 'suspendido') return 'bg-yellow-100 text-yellow-800';
-  if (e === 'inactivo') return 'bg-red-100 text-red-800';
-  return 'bg-gray-100 text-gray-800';
+function normalizeSearchValue(value: string | null | undefined) {
+  return String(value ?? '').trim().toLocaleLowerCase('es');
+}
+
+function tipoEntidadLabel(tipo: string) {
+  const normalized = String(tipo ?? '').trim().toLowerCase();
+  if (normalized === 'persona_moral') return 'Persona moral';
+  if (normalized === 'persona_fisica') return 'Persona física';
+
+  const readable = normalized.replace(/[_-]+/g, ' ').trim();
+  return readable ? `${readable.charAt(0).toUpperCase()}${readable.slice(1)}` : '—';
+}
+
+function estadoVariant(estado: string): 'success' | 'warning' | 'danger' | 'neutral' {
+  const normalized = String(estado ?? '').trim().toLowerCase();
+  if (normalized === 'activo') return 'success';
+  if (normalized === 'suspendido') return 'warning';
+  if (normalized === 'inactivo') return 'danger';
+  return 'neutral';
+}
+
+function ubicacionPrincipal(empresa: Empresa) {
+  return [empresa.municipio, empresa.entidad]
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean)
+    .join(', ') || '—';
+}
+
+function EmpresaDetails({ empresa }: { empresa: Empresa }) {
+  return (
+    <div className="min-w-0">
+      <div className="font-semibold text-text-primary">{mostrar(empresa.nombre_legal)}</div>
+      <div className="mt-1 text-xs text-text-secondary">RFC: {mostrar(empresa.rfc)}</div>
+    </div>
+  );
+}
+
+function UbicacionDetails({ empresa }: { empresa: Empresa }) {
+  return (
+    <div>
+      <div className="text-text-primary">{ubicacionPrincipal(empresa)}</div>
+      <div className="mt-1 text-xs text-text-secondary">C.P. {mostrar(empresa.codigo_postal)}</div>
+    </div>
+  );
 }
 
 export default function EmpresasPage() {
@@ -33,6 +80,8 @@ export default function EmpresasPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [canManageEmpresas, setCanManageEmpresas] = useState(false);
+  const [search, setSearch] = useState('');
+  const [selectedEmpresa, setSelectedEmpresa] = useState<Empresa | null>(null);
 
   const fetchEmpresas = async () => {
     try {
@@ -57,7 +106,8 @@ export default function EmpresasPage() {
 
       const data = await res.json();
       setEmpresas(Array.isArray(data?.empresas) ? data.empresas : []);
-    } catch (_e) {
+    } catch (_error) {
+      setEmpresas([]);
       setError('Error al cargar empresas');
     } finally {
       setLoading(false);
@@ -69,99 +119,251 @@ export default function EmpresasPage() {
     fetchEmpresas();
   }, []);
 
-  return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="max-w-7xl mx-auto bg-white rounded-lg shadow-sm p-6">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-semibold">Gestión de Empresas</h1>
-            <p className="text-sm text-gray-500">Listado general de empresas del sistema</p>
-          </div>
+  useEffect(() => {
+    if (!selectedEmpresa) return;
 
-          {canManageEmpresas ? (
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelectedEmpresa(null);
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedEmpresa]);
+
+  const normalizedSearch = normalizeSearchValue(search);
+  const filteredEmpresas = useMemo(() => {
+    if (!normalizedSearch) return empresas;
+
+    return empresas.filter((empresa) =>
+      [empresa.nombre_legal, empresa.rfc, empresa.municipio, empresa.entidad]
+        .map(normalizeSearchValue)
+        .some((value) => value.includes(normalizedSearch)),
+    );
+  }, [empresas, normalizedSearch]);
+
+  const resultLabel = normalizedSearch
+    ? `${filteredEmpresas.length} coincidencia${filteredEmpresas.length === 1 ? '' : 's'}`
+    : `${empresas.length} empresa${empresas.length === 1 ? '' : 's'}`;
+
+  const emptyTitle = normalizedSearch
+    ? 'No se encontraron empresas'
+    : 'No hay empresas registradas';
+  const emptyDescription = normalizedSearch
+    ? 'Prueba con otro nombre, RFC, municipio o entidad.'
+    : 'Cuando se registren empresas aparecerán en este listado.';
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Gestión de Empresas"
+        description="Consulta las empresas registradas en Shield by Vission."
+        actions={
+          canManageEmpresas ? (
             <Link
               href="/admin/crear-empresa"
-              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+              className="inline-flex min-h-11 items-center justify-center rounded-control bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 focus-visible:ring-2 focus-visible:ring-blue-300"
             >
               Crear empresa
             </Link>
-          ) : null}
+          ) : undefined
+        }
+      />
+
+      {canManageEmpresas && !loading && !error ? (
+        <div className="max-w-xl">
+          <label htmlFor="buscar-empresa" className="mb-2 block text-sm font-medium text-text-primary">
+            Buscar empresas
+          </label>
+          <Input
+            id="buscar-empresa"
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Nombre, RFC, municipio o entidad"
+          />
         </div>
+      ) : null}
 
-        {/* Tabla */}
-        <div className="bg-gray-50 rounded-lg p-4 overflow-x-auto">
-          {error && (
-            <div className="text-red-600 bg-red-50 p-3 rounded mb-3">
-              {error}
-            </div>
-          )}
+      {loading ? <LoadingState label="Cargando empresas…" /> : null}
 
-          {loading ? (
-            <div className="text-gray-600">Cargando empresas…</div>
+      {!loading && error ? <Alert variant="danger">{error}</Alert> : null}
+
+      {!loading && !error ? (
+        <section className="space-y-3" aria-label="Listado de empresas">
+          <div className="text-sm text-text-secondary" aria-live="polite">
+            {resultLabel}
+          </div>
+
+          {filteredEmpresas.length === 0 ? (
+            <EmptyState title={emptyTitle} description={emptyDescription} />
           ) : (
-            <table className="w-full">
-              <thead>
-                <tr className="border-b text-left text-sm text-gray-600">
-                  <th className="py-2 pr-3">ID</th>
-                  <th className="pr-3">Nombre legal</th>
-                  <th className="pr-3">RFC</th>
-                  <th className="pr-3">Tipo</th>
-                  <th className="pr-3">Entidad</th>
-                  <th className="pr-3">Municipio</th>
-                  <th className="pr-3">C.P.</th>
-                  <th className="pr-3">Estado</th>
-                  {canManageEmpresas ? (
-                    <th className="text-right">Acciones</th>
-                  ) : null}
-                </tr>
-              </thead>
+            <>
+              <TableContainer className="hidden md:block">
+                <table className="sbv-table">
+                  <thead>
+                    <tr>
+                      <th>Empresa</th>
+                      <th>Ubicación</th>
+                      <th>Tipo</th>
+                      <th>Estado</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredEmpresas.map((empresa) => (
+                      <tr key={empresa.id}>
+                        <td className="min-w-64">
+                          <EmpresaDetails empresa={empresa} />
+                        </td>
+                        <td className="min-w-52">
+                          <UbicacionDetails empresa={empresa} />
+                        </td>
+                        <td>{tipoEntidadLabel(empresa.tipo_entidad)}</td>
+                        <td>
+                          <Badge variant={estadoVariant(empresa.estado)}>{mostrar(empresa.estado)}</Badge>
+                        </td>
+                        <td>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedEmpresa(empresa)}
+                              className="inline-flex min-h-10 items-center rounded-control border border-border-light px-3 text-sm font-semibold text-brand-graphite hover:bg-surface-muted hover:text-brand-elevated focus-visible:ring-2 focus-visible:ring-brand-silver"
+                            >
+                              Ver
+                            </button>
+                            {canManageEmpresas ? (
+                              <Link
+                                href={`/admin/editar-empresa/${empresa.id}`}
+                                className="inline-flex min-h-10 items-center rounded-control px-3 text-sm font-semibold text-brand-graphite hover:bg-surface-muted hover:text-brand-elevated focus-visible:ring-2 focus-visible:ring-brand-silver"
+                              >
+                                Editar
+                              </Link>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </TableContainer>
 
-              <tbody>
-                {empresas.map((e) => (
-                  <tr key={e.id} className="border-b text-sm hover:bg-white">
-                    <td className="py-2 pr-3">{e.id}</td>
-                    <td className="pr-3">{mostrar(e.nombre_legal)}</td>
-                    <td className="pr-3">{mostrar(e.rfc)}</td>
-                    <td className="pr-3">{mostrar(e.tipo_entidad)}</td>
-                    <td className="pr-3">{mostrar(e.entidad)}</td>
-                    <td className="pr-3">{mostrar(e.municipio)}</td>
-                    <td className="pr-3">{mostrar(e.codigo_postal)}</td>
-                    <td className="pr-3">
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-semibold ${badgeEstado(e.estado)}`}
+              <div className="space-y-3 md:hidden">
+                {filteredEmpresas.map((empresa) => (
+                  <article
+                    key={empresa.id}
+                    className="rounded-card border border-border-light bg-white p-4 shadow-card"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <EmpresaDetails empresa={empresa} />
+                      <Badge className="shrink-0" variant={estadoVariant(empresa.estado)}>
+                        {mostrar(empresa.estado)}
+                      </Badge>
+                    </div>
+
+                    <dl className="mt-4 grid gap-3 text-sm">
+                      <div>
+                        <dt className="text-xs font-medium uppercase tracking-wide text-text-secondary">Tipo</dt>
+                        <dd className="mt-1 text-text-primary">{tipoEntidadLabel(empresa.tipo_entidad)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs font-medium uppercase tracking-wide text-text-secondary">Ubicación</dt>
+                        <dd className="mt-1">
+                          <UbicacionDetails empresa={empresa} />
+                        </dd>
+                      </div>
+                    </dl>
+
+                    <div className="mt-4 flex flex-wrap gap-2 border-t border-border-light pt-3">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedEmpresa(empresa)}
+                        className="inline-flex min-h-10 items-center rounded-control border border-border-light px-3 text-sm font-semibold text-brand-graphite hover:bg-surface-muted hover:text-brand-elevated focus-visible:ring-2 focus-visible:ring-brand-silver"
                       >
-                        {mostrar(e.estado)}
-                      </span>
-                    </td>
-                    {canManageEmpresas ? (
-                      <td className="text-right">
+                        Ver
+                      </button>
+                      {canManageEmpresas ? (
                         <Link
-                          href={`/admin/editar-empresa/${e.id}`}
-                          className="text-blue-600 hover:underline"
+                          href={`/admin/editar-empresa/${empresa.id}`}
+                          className="inline-flex min-h-10 items-center rounded-control px-3 text-sm font-semibold text-brand-graphite hover:bg-surface-muted hover:text-brand-elevated focus-visible:ring-2 focus-visible:ring-brand-silver"
                         >
                           Editar
                         </Link>
-                      </td>
-                    ) : null}
-                  </tr>
+                      ) : null}
+                    </div>
+                  </article>
                 ))}
-
-                {empresas.length === 0 && !error && (
-                  <tr>
-                    <td
-                      colSpan={canManageEmpresas ? 9 : 8}
-                      className="py-6 text-center text-gray-500"
-                    >
-                      No hay empresas registradas.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+              </div>
+            </>
           )}
+        </section>
+      ) : null}
+
+      {selectedEmpresa ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="empresa-modal-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/65"
+            aria-label="Cerrar detalle de empresa"
+            onClick={() => setSelectedEmpresa(null)}
+          />
+
+          <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-panel border border-border-light bg-white p-5 shadow-float sm:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-text-secondary">Detalle de empresa</p>
+                <h2 id="empresa-modal-title" className="mt-1 break-words text-xl font-semibold text-text-primary sm:text-2xl">
+                  {mostrar(selectedEmpresa.nombre_legal)}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedEmpresa(null)}
+                className="inline-flex min-h-10 shrink-0 items-center rounded-control border border-border-light px-3 text-sm font-semibold text-brand-graphite hover:bg-surface-muted hover:text-brand-elevated focus-visible:ring-2 focus-visible:ring-brand-silver"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <dl className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="rounded-card bg-surface-muted p-3 sm:col-span-2">
+                <dt className="text-xs font-medium uppercase tracking-wide text-text-secondary">Nombre legal</dt>
+                <dd className="mt-1 break-words font-medium text-text-primary">{mostrar(selectedEmpresa.nombre_legal)}</dd>
+              </div>
+              <div className="rounded-card bg-surface-muted p-3">
+                <dt className="text-xs font-medium uppercase tracking-wide text-text-secondary">RFC</dt>
+                <dd className="mt-1 break-words text-text-primary">{mostrar(selectedEmpresa.rfc)}</dd>
+              </div>
+              <div className="rounded-card bg-surface-muted p-3">
+                <dt className="text-xs font-medium uppercase tracking-wide text-text-secondary">Tipo</dt>
+                <dd className="mt-1 text-text-primary">{tipoEntidadLabel(selectedEmpresa.tipo_entidad)}</dd>
+              </div>
+              <div className="rounded-card bg-surface-muted p-3">
+                <dt className="text-xs font-medium uppercase tracking-wide text-text-secondary">Estado</dt>
+                <dd className="mt-2">
+                  <Badge variant={estadoVariant(selectedEmpresa.estado)}>{mostrar(selectedEmpresa.estado)}</Badge>
+                </dd>
+              </div>
+              <div className="rounded-card bg-surface-muted p-3">
+                <dt className="text-xs font-medium uppercase tracking-wide text-text-secondary">Entidad</dt>
+                <dd className="mt-1 break-words text-text-primary">{mostrar(selectedEmpresa.entidad)}</dd>
+              </div>
+              <div className="rounded-card bg-surface-muted p-3">
+                <dt className="text-xs font-medium uppercase tracking-wide text-text-secondary">Municipio</dt>
+                <dd className="mt-1 break-words text-text-primary">{mostrar(selectedEmpresa.municipio)}</dd>
+              </div>
+              <div className="rounded-card bg-surface-muted p-3">
+                <dt className="text-xs font-medium uppercase tracking-wide text-text-secondary">Código postal</dt>
+                <dd className="mt-1 break-words text-text-primary">{mostrar(selectedEmpresa.codigo_postal)}</dd>
+              </div>
+            </dl>
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }
