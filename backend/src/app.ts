@@ -4,6 +4,7 @@ import cors from 'cors';
 import authRoutes from './routes/auth.routes';
 import adminRoutes from './routes/admin.routes';
 import clienteRoutes from './routes/cliente.routes';
+import dashboardRoutes from './routes/dashboard.routes';
 
 const app = express();
 
@@ -29,5 +30,8 @@ app.use('/api/admin', adminRoutes);
 
 // Cliente
 app.use('/api/cliente', clienteRoutes);
+
+// Dashboard
+app.use('/api/dashboard', dashboardRoutes);
 
 export default app;
