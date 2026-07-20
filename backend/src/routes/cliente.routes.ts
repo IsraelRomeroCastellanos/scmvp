@@ -1275,6 +1275,20 @@ router.get('/clientes', authenticate, async (req: Request, res: Response) => {
     const empresa_id = parsePositiveInt(req.query.empresa_id);
     if (!empresa_id) return badRequest(res, 'empresa_id inválido');
 
+    if (req.user?.rol === 'cliente') {
+      if (!req.user.empresa_id) {
+        return res.status(403).json({
+          error: 'Acceso denegado: empresa no asignada'
+        });
+      }
+
+      if (empresa_id !== req.user.empresa_id) {
+        return res.status(403).json({
+          error: 'Acceso denegado: empresa no autorizada'
+        });
+      }
+    }
+
     const result = await pool.query(
       `SELECT id, empresa_id, nombre_entidad, tipo_cliente, nacionalidad, estado, creado_en, actualizado_en
        FROM clientes
