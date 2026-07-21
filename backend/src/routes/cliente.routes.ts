@@ -1345,7 +1345,33 @@ router.get('/clientes/:id', authenticate, async (req: Request, res: Response) =>
       ),
     );
 
-    return res.json({ cliente: row });
+    const perfilResult = await pool.query(
+      `SELECT *
+       FROM cliente_perfil_transaccional
+       WHERE cliente_id=$1
+       ORDER BY id DESC
+       LIMIT 1`,
+      [id]
+    );
+
+    const perfil_transaccional = perfilResult.rows[0] ?? null;
+
+    const matrizResult = await pool.query(
+      `SELECT *
+       FROM matrices_riesgo
+       WHERE cliente_id=$1
+       ORDER BY id DESC
+       LIMIT 1`,
+      [id]
+    );
+
+    const matriz_riesgo = matrizResult.rows[0] ?? null;
+
+    return res.json({
+      cliente: row,
+      perfil_transaccional,
+      matriz_riesgo
+    });
   } catch (error) {
     console.error('Error al obtener cliente:', error);
     return res.status(500).json({ error: 'Error al obtener cliente' });
