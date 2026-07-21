@@ -23,6 +23,25 @@ type Cliente = {
   estado?: string | null;
 };
 
+type PerfilTransaccional = {
+  tipo_servicio?: string | null;
+  actividad_esperada?: string | null;
+  monto_mensual_estimado?: number | string | null;
+  frecuencia_operacion?: string | null;
+  origen_recursos?: string | null;
+  destino_recursos?: string | null;
+  instrumentos_pago?: unknown;
+};
+
+type MatrizRiesgo = {
+  nivel_riesgo?: string | null;
+  puntaje_riesgo?: number | string | null;
+  version_matriz?: string | number | null;
+  tipo_evaluacion?: string | null;
+  generado_en?: string | null;
+  observaciones?: string | null;
+};
+
 function Label({ children }: { children: React.ReactNode }) {
   return <div className="text-xs text-gray-500">{children}</div>;
 }
@@ -139,6 +158,8 @@ export default function ClienteDetallePage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [cliente, setCliente] = useState<Cliente | null>(null);
+  const [perfilTransaccional, setPerfilTransaccional] = useState<PerfilTransaccional | null>(null);
+  const [matrizRiesgo, setMatrizRiesgo] = useState<MatrizRiesgo | null>(null);
   const [showRaw, setShowRaw] = useState(false);
 
   const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '';
@@ -180,13 +201,19 @@ export default function ClienteDetallePage() {
         if (!res.ok) {
           setErr(data?.error || `Error HTTP ${res.status}`);
           setCliente(null);
+          setPerfilTransaccional(null);
+          setMatrizRiesgo(null);
           return;
         }
 
         setCliente(data?.cliente ?? null);
+        setPerfilTransaccional(data?.perfil_transaccional ?? null);
+        setMatrizRiesgo(data?.matriz_riesgo ?? null);
       } catch (e: any) {
         setErr(e?.message || 'Error al cargar cliente');
         setCliente(null);
+        setPerfilTransaccional(null);
+        setMatrizRiesgo(null);
       } finally {
         setLoading(false);
       }
@@ -368,6 +395,41 @@ export default function ClienteDetallePage() {
           </div>
         </Card>
       )}
+
+      <Card title="Perfil Transaccional">
+        {perfilTransaccional ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <Row label="Tipo de servicio" value={perfilTransaccional.tipo_servicio} />
+            <Row label="Actividad esperada" value={perfilTransaccional.actividad_esperada} />
+            <Row label="Monto mensual estimado" value={perfilTransaccional.monto_mensual_estimado} />
+            <Row label="Frecuencia de operación" value={perfilTransaccional.frecuencia_operacion} />
+            <Row label="Origen de recursos" value={perfilTransaccional.origen_recursos} />
+            <Row label="Destino de recursos" value={perfilTransaccional.destino_recursos} />
+            <Row label="Instrumentos de pago" value={perfilTransaccional.instrumentos_pago} />
+          </div>
+        ) : (
+          <div className="rounded border border-dashed bg-gray-50 p-4 text-sm text-gray-600">
+            No hay perfil transaccional registrado para este cliente.
+          </div>
+        )}
+      </Card>
+
+      <Card title="Evaluación de Riesgo">
+        {matrizRiesgo ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <Row label="Nivel de riesgo" value={matrizRiesgo.nivel_riesgo} />
+            <Row label="Puntaje de riesgo" value={matrizRiesgo.puntaje_riesgo} />
+            <Row label="Versión de matriz" value={matrizRiesgo.version_matriz} />
+            <Row label="Tipo de evaluación" value={matrizRiesgo.tipo_evaluacion} />
+            <Row label="Generado en" value={matrizRiesgo.generado_en} />
+            <Row label="Observaciones" value={matrizRiesgo.observaciones} />
+          </div>
+        ) : (
+          <div className="rounded border border-dashed bg-gray-50 p-4 text-sm text-gray-600">
+            No hay evaluación de riesgo registrada para este cliente.
+          </div>
+        )}
+      </Card>
 
       <div className="rounded border bg-white p-4">
         <div className="flex items-center justify-between gap-3">
