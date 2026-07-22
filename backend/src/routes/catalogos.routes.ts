@@ -20,4 +20,22 @@ router.get('/paises', authenticate, async (_req, res) => {
   }
 });
 
+router.get('/actividades-economicas', authenticate, async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, clave, descripcion
+       FROM public.cat_actividades_economicas
+       WHERE activo = true
+       ORDER BY descripcion`
+    );
+
+    return res.json({ actividades_economicas: result.rows });
+  } catch (error) {
+    console.error('Error al listar catálogo de actividades económicas:', error);
+    return res.status(500).json({
+      error: 'Error al listar catálogo de actividades económicas'
+    });
+  }
+});
+
 export default router;
