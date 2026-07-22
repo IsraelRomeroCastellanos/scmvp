@@ -170,13 +170,18 @@ export default function ClientPage() {
   }
 
 
-const MEXICO_CATALOGO_KEY = 'mexico-mx';
+const MEXICO_CATALOGO_KEY = 'MX';
+const MEXICO_CATALOGO_KEY_LEGACY = 'mexico-mx';
 
 type TipoNacionalidad = '' | 'nacional' | 'extranjero';
 
 function isMexicoKey(value: string) {
   const v = (value ?? '').trim().toLowerCase();
-  return v === MEXICO_CATALOGO_KEY || v === 'mex';
+  return (
+    v === MEXICO_CATALOGO_KEY.toLowerCase() ||
+    v === MEXICO_CATALOGO_KEY_LEGACY ||
+    v === 'mex'
+  );
 }
 
 function inferNacionalExtranjero(value: string): TipoNacionalidad {
@@ -186,8 +191,7 @@ function inferNacionalExtranjero(value: string): TipoNacionalidad {
 }
 
 function valueToCatalogKey(v: string) {
-    // En este UI guardamos "clave" en el state (ej. "MEX"), así que regresamos tal cual.
-    return v;
+    return isMexicoKey(v) ? MEXICO_CATALOGO_KEY : v;
   }
 
   function SearchableSelect({
@@ -774,8 +778,38 @@ function valueToCatalogKey(v: string) {
     (async () => {
       try {
         setFatal(null);
+        const apiBase =
+          process.env.NEXT_PUBLIC_API_BASE_URL ||
+          "https://scmvp-1jhq.onrender.com";
+
+        const paisesResponse = await fetch(`${apiBase}/api/catalogos/paises`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          cache: "no-store",
+        });
+
+        if (!paisesResponse.ok) {
+          throw new Error(
+            `No se pudo cargar el catálogo de países (${paisesResponse.status})`,
+          );
+        }
+
+        const paisesData = await paisesResponse.json().catch(() => null);
+        if (!Array.isArray(paisesData?.paises)) {
+          throw new Error("La respuesta del catálogo de países no es válida");
+        }
+
+        const paisesApi: CatalogItem[] = paisesData.paises
+          .map((item: any) => ({
+            id: item?.id,
+            clave: String(item?.clave ?? "").trim(),
+            descripcion: String(item?.descripcion ?? "").trim(),
+          }))
+          .filter((item: CatalogItem) => item.clave && item.descripcion);
+
         const [p, a, g] = await Promise.all([
-          loadCatalogo("sat/c_pais"),
+          Promise.resolve(paisesApi),
           loadCatalogo("sat/c_actividad_economica"),
           loadCatalogo("internos/giro_mercantil"),
         ]);

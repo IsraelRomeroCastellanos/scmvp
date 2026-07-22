@@ -1,5 +1,6 @@
 // frontend/src/lib/catalogos.ts
 export type CatalogItem = {
+  id?: string | number;
   clave: string;
   descripcion: string;
 };
