@@ -38,4 +38,22 @@ router.get('/actividades-economicas', authenticate, async (_req, res) => {
   }
 });
 
+router.get('/giros-mercantiles', authenticate, async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, clave, descripcion
+       FROM public.cat_giros_mercantiles
+       WHERE activo = true
+       ORDER BY descripcion`
+    );
+
+    return res.json({ giros_mercantiles: result.rows });
+  } catch (error) {
+    console.error('Error al listar catálogo de giros mercantiles:', error);
+    return res.status(500).json({
+      error: 'Error al listar catálogo de giros mercantiles'
+    });
+  }
+});
+
 export default router;
