@@ -5,6 +5,7 @@ import authRoutes from './routes/auth.routes';
 import adminRoutes from './routes/admin.routes';
 import clienteRoutes from './routes/cliente.routes';
 import dashboardRoutes from './routes/dashboard.routes';
+import catalogosRoutes from './routes/catalogos.routes';
 
 const app = express();
 
@@ -33,5 +34,8 @@ app.use('/api/cliente', clienteRoutes);
 
 // Dashboard
 app.use('/api/dashboard', dashboardRoutes);
+
+// Catálogos
+app.use('/api/catalogos', catalogosRoutes);
 
 export default app;
