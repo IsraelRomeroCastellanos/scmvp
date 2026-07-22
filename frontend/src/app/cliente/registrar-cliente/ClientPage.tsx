@@ -808,9 +808,40 @@ function valueToCatalogKey(v: string) {
           }))
           .filter((item: CatalogItem) => item.clave && item.descripcion);
 
+        const actividadesResponse = await fetch(
+          `${apiBase}/api/catalogos/actividades-economicas`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            cache: "no-store",
+          },
+        );
+
+        if (!actividadesResponse.ok) {
+          throw new Error(
+            `No se pudo cargar el catálogo de actividades económicas (${actividadesResponse.status})`,
+          );
+        }
+
+        const actividadesData = await actividadesResponse.json().catch(() => null);
+        if (!Array.isArray(actividadesData?.actividades_economicas)) {
+          throw new Error(
+            "La respuesta del catálogo de actividades económicas no es válida",
+          );
+        }
+
+        const actividadesApi: CatalogItem[] = actividadesData.actividades_economicas
+          .map((item: any) => ({
+            id: item?.id,
+            clave: String(item?.clave ?? "").trim(),
+            descripcion: String(item?.descripcion ?? "").trim(),
+          }))
+          .filter((item: CatalogItem) => item.clave && item.descripcion);
+
         const [p, a, g] = await Promise.all([
           Promise.resolve(paisesApi),
-          loadCatalogo("sat/c_actividad_economica"),
+          Promise.resolve(actividadesApi),
           loadCatalogo("internos/giro_mercantil"),
         ]);
         setPaises(p);
