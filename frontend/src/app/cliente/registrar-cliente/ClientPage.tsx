@@ -2970,8 +2970,8 @@ persona: {
         </div>
 
         {/* DOMICILIO (CONTACTO) */}
-        <div className="rounded border border-gray-200 p-4 space-y-4">
-          <h2 className="font-medium">Domicilio (contacto)</h2>
+        <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-4">
+          <h2 className="text-lg font-semibold text-gray-900">Domicilio (contacto)</h2>
           <p className="text-xs text-gray-500">
             Cuando la Nacionalidad es México, el código postal busca un catálogo local mínimo. Para Nacionalidad extranjera,
             la captura permanece manual.
@@ -3185,8 +3185,8 @@ persona: {
 
         {/* Persona Física */}
         {tipo === "persona_fisica" && (
-          <div className="rounded border border-gray-200 p-4 space-y-4">
-            <h2 className="font-medium">Persona Física</h2>
+          <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-4">
+            <h2 className="text-lg font-semibold text-gray-900">Persona Física</h2>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1">
@@ -3604,8 +3604,8 @@ persona: {
           </div>
         )}
         {tipo === "persona_moral" && (
-                  <div className="rounded border border-gray-200 p-4 space-y-4">
-                    <h2 className="font-medium">Persona Moral</h2>
+                  <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-4">
+                    <h2 className="text-lg font-semibold text-gray-900">Persona Moral</h2>
 
                       <div className="space-y-1 md:col-span-3">
                         <label className="text-sm font-medium">
@@ -4309,10 +4309,10 @@ persona: {
                 {tipo === "fideicomiso" && (
 
 
-                  <div className="rounded border border-gray-200 p-4 space-y-4">
+                  <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-4">
 
 
-                    <h2 className="font-medium">Fideicomiso</h2>
+                    <h2 className="text-lg font-semibold text-gray-900">Fideicomiso</h2>
 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
 
