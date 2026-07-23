@@ -1882,7 +1882,13 @@ function valueToCatalogKey(v: string) {
 
     return (
       <div className="space-y-3">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div
+          className={`grid grid-cols-1 gap-4 ${
+            tipo === "persona_fisica"
+              ? "md:grid-cols-2 xl:grid-cols-3"
+              : "sm:grid-cols-3"
+          }`}
+        >
           <div className="space-y-1">
             <label className="text-sm font-medium">País</label>
             <input
@@ -1911,7 +1917,13 @@ function valueToCatalogKey(v: string) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+        <div
+          className={`grid grid-cols-1 gap-4 ${
+            tipo === "persona_fisica"
+              ? "md:grid-cols-2 xl:grid-cols-3"
+              : "sm:grid-cols-4"
+          }`}
+        >
           <div className="space-y-1">
             <label className="text-sm font-medium">Calle</label>
             <input
@@ -1995,7 +2007,13 @@ function valueToCatalogKey(v: string) {
 
     return (
       <div className="space-y-3">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div
+          className={`grid grid-cols-1 gap-4 ${
+            tipo === "persona_fisica"
+              ? "md:grid-cols-2 xl:grid-cols-3"
+              : "sm:grid-cols-3"
+          }`}
+        >
           <div className="space-y-1">
             <label className="text-sm font-medium">
               Nombres <span className="text-red-600">*</span>
@@ -2082,7 +2100,13 @@ function valueToCatalogKey(v: string) {
             ) : null}
           </div>
 
-          <div className="space-y-1 sm:col-span-3">
+          <div
+            className={`space-y-1 ${
+              tipo === "persona_fisica"
+                ? "md:col-span-2 xl:col-span-3"
+                : "sm:col-span-3"
+            }`}
+          >
             <label className="text-sm font-medium">Actividad económica</label>
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
@@ -2099,8 +2123,20 @@ function valueToCatalogKey(v: string) {
 
   function renderBeneficiariosControladoresList() {
     return (
-      <div className="rounded border border-gray-200 p-4 space-y-4">
-        <div className="flex items-center justify-between">
+      <div
+        className={
+          tipo === "persona_fisica"
+            ? "space-y-4 rounded-lg border border-gray-200 bg-white p-4 md:p-5"
+            : "space-y-4 rounded border border-gray-200 p-4"
+        }
+      >
+        <div
+          className={
+            tipo === "persona_fisica"
+              ? "flex flex-wrap items-center justify-between gap-3"
+              : "flex items-center justify-between"
+          }
+        >
           <p className="text-sm font-medium">Beneficiario Controlador</p>
           <button
             type="button"
@@ -2118,8 +2154,21 @@ function valueToCatalogKey(v: string) {
         ) : null}
 
         {beneficiariosControladores.map((row, index) => (
-          <div key={index} className="rounded border border-gray-200 p-4 space-y-4">
-            <div className="flex items-center justify-between">
+          <div
+            key={index}
+            className={
+              tipo === "persona_fisica"
+                ? "space-y-5 rounded-lg border border-gray-200 bg-gray-50/40 p-4"
+                : "space-y-4 rounded border border-gray-200 p-4"
+            }
+          >
+            <div
+              className={
+                tipo === "persona_fisica"
+                  ? "flex flex-wrap items-center justify-between gap-3"
+                  : "flex items-center justify-between"
+              }
+            >
               <p className="text-sm font-medium">
                 Beneficiario Controlador #{index + 1}
               </p>
@@ -2132,7 +2181,13 @@ function valueToCatalogKey(v: string) {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div
+              className={`grid grid-cols-1 gap-4 ${
+                tipo === "persona_fisica"
+                  ? "md:grid-cols-2 xl:grid-cols-3"
+                  : "sm:grid-cols-3"
+              }`}
+            >
               <div className="space-y-1">
                 <label className="text-sm font-medium">
                   Relación con cliente <span className="text-red-600">*</span>
@@ -3106,7 +3161,7 @@ persona: {
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-1">
+            <div className={`${tipo === "persona_fisica" ? "order-[7]" : ""} space-y-1`}>
               <label className="text-sm font-medium">
                 Calle <span className="text-red-600">*</span>
               </label>
@@ -3125,7 +3180,7 @@ persona: {
               ) : null}
             </div>
 
-            <div className="space-y-1">
+            <div className={`${tipo === "persona_fisica" ? "order-[8]" : ""} space-y-1`}>
               <label className="text-sm font-medium">
                 Número <span className="text-red-600">*</span>
               </label>
@@ -3144,7 +3199,7 @@ persona: {
               ) : null}
             </div>
 
-            <div className="space-y-1">
+            <div className={`${tipo === "persona_fisica" ? "order-[9]" : ""} space-y-1`}>
               <label className="text-sm font-medium">Interior</label>
               <input
                 className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
@@ -3154,7 +3209,7 @@ persona: {
             </div>
 
             {aplicaCpMexico && domColoniasOpciones.length > 1 ? (
-              <div className="space-y-1">
+              <div className={`${tipo === "persona_fisica" ? "order-[2]" : ""} space-y-1`}>
                 <label className="text-sm font-medium">
                   Colonia <span className="text-red-600">*</span>
                 </label>
@@ -3185,7 +3240,7 @@ persona: {
                 ) : null}
               </div>
             ) : (
-              <div className="space-y-1">
+              <div className={`${tipo === "persona_fisica" ? "order-[2]" : ""} space-y-1`}>
                 <label className="text-sm font-medium">
                   Colonia <span className="text-red-600">*</span>
                 </label>
@@ -3210,7 +3265,7 @@ persona: {
               </div>
             )}
 
-            <div className="space-y-1">
+            <div className={`${tipo === "persona_fisica" ? "order-[3]" : ""} space-y-1`}>
               <label className="text-sm font-medium">
                 Municipio <span className="text-red-600">*</span>
               </label>
@@ -3229,7 +3284,7 @@ persona: {
               ) : null}
             </div>
 
-            <div className="space-y-1">
+            <div className={`${tipo === "persona_fisica" ? "order-[4]" : ""} space-y-1`}>
               <label className="text-sm font-medium">
                 Ciudad/Delegación <span className="text-red-600">*</span>
               </label>
@@ -3250,7 +3305,7 @@ persona: {
               ) : null}
             </div>
 
-            <div className="space-y-1">
+            <div className={`${tipo === "persona_fisica" ? "order-[1]" : ""} space-y-1`}>
               <label className="text-sm font-medium">
                 Código Postal <span className="text-red-600">*</span>
               </label>
@@ -3275,7 +3330,7 @@ persona: {
               ) : null}
             </div>
 
-            <div className="space-y-1">
+            <div className={`${tipo === "persona_fisica" ? "order-[5]" : ""} space-y-1`}>
               <label className="text-sm font-medium">
                 Estado <span className="text-red-600">*</span>
               </label>
@@ -3294,7 +3349,7 @@ persona: {
                 </p>
               ) : null}
             </div>
-            <div className="space-y-1">
+            <div className={`${tipo === "persona_fisica" ? "order-[6]" : ""} space-y-1`}>
               <label className="text-sm font-medium">
                 País{" "}
                 {tipo === "persona_fisica" ? (
@@ -3327,10 +3382,13 @@ persona: {
 
         {/* Persona Física */}
         {tipo === "persona_fisica" && (
-          <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900">Persona Física</h2>
+          <>
+          <div className="space-y-4 rounded-lg border border-gray-200 bg-white p-4 md:p-5">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Persona Física
+            </h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               <div className="space-y-1">
                 <label className="text-sm font-medium">
                   RFC{" "}
@@ -3501,10 +3559,13 @@ persona: {
 
             </div>
 
-            <hr className="my-2" />
+          </div>
 
-            <h3 className="font-medium">Identificación / Acreditación</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-4 rounded-lg border border-gray-200 bg-white p-4 md:p-5">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Identificación / Acreditación
+            </h2>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               <div className="space-y-1">
                 <label className="text-sm font-medium">
                   Tipo / nombre del documento *
@@ -3642,13 +3703,14 @@ persona: {
                   Sin vigencia
                 </label>
               </div>
+            </div>
+          </div>
 
-
-
-              <hr className="my-2" />
-
-              <h3 className="font-medium">Cargo público</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-4 rounded-lg border border-gray-200 bg-white p-4 md:p-5">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Cargo público
+            </h2>
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                 <div className="space-y-1">
                   <label className="text-sm font-medium">
                     Actualmente desempeño un cargo público *
@@ -3718,10 +3780,12 @@ persona: {
                   ) : null}
                 </div>
               </div>
+          </div>
 
-              <hr className="my-2" />
-
-              <div className="space-y-2">
+          <div className="space-y-3 rounded-lg border border-gray-200 bg-white p-4 md:p-5">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Manifestación sobre beneficiario controlador
+            </h2>
                 <label className="flex items-start gap-2 text-sm">
                   <input
                     type="checkbox"
@@ -3747,17 +3811,12 @@ persona: {
                     beneficiario.
                   </span>
                 </label>
-
-                {beneficiariosControladoresAplica
-                  ? renderBeneficiariosControladoresList()
-                  : null}
-              </div>
-
-
-              <hr className="my-2" />
-
-            </div>
           </div>
+
+          {beneficiariosControladoresAplica
+            ? renderBeneficiariosControladoresList()
+            : null}
+          </>
         )}
         {tipo === "persona_moral" && (
                   <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-4">
