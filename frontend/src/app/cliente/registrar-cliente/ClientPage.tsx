@@ -503,26 +503,7 @@ function valueToCatalogKey(v: string) {
   const [pfIdNumero, setPfIdNumero] = useState("");
   const [pfIdExpedicion, setPfIdExpedicion] = useState(""); // YYYY-MM-DD o AAAAMMDD
   const [pfIdExpiracion, setPfIdExpiracion] = useState(""); // YYYY-MM-DD o AAAAMMDD
-
-  // PF Datos adicionales (iteración 2)
-  const [pfCalidadMigratoria, setPfCalidadMigratoria] = useState(""); // opcional
-  const [pfEstadoCivil, setPfEstadoCivil] = useState("");
-  const [pfRegimenMatrimonial, setPfRegimenMatrimonial] = useState("");
-  const [pfBienesMancomunados, setPfBienesMancomunados] = useState(""); // 'si' | 'no'
-
-  // PF Dirección privada
-  const [pfPrivCalle, setPfPrivCalle] = useState("");
-  const [pfPrivNumero, setPfPrivNumero] = useState("");
-  const [pfPrivColonia, setPfPrivColonia] = useState("");
-  const [pfPrivMunicipio, setPfPrivMunicipio] = useState("");
-  const [pfPrivCiudadDelegacion, setPfPrivCiudadDelegacion] = useState("");
-  const [pfPrivCP, setPfPrivCP] = useState("");
-  const [pfPrivEstado, setPfPrivEstado] = useState("");
-  const [pfPrivPais, setPfPrivPais] = useState("");
-
-  // PF Ocupación / actividad profesional
-  const [pfOcupacion, setPfOcupacion] = useState("");
-  const [pfActividadProfesional, setPfActividadProfesional] = useState("");
+  const [pfIdSinVigencia, setPfIdSinVigencia] = useState(false);
 
   // PF PEP / cargo público
   const [pfCargoPublicoActual, setPfCargoPublicoActual] = useState(""); // 'si' | 'no'
@@ -532,20 +513,7 @@ function valueToCatalogKey(v: string) {
   const [pfResidencia, setPfResidencia] = useState(""); // Temporal | Permanente (key/string)
   const [pfNacionalExtranjero, setPfNacionalExtranjero] = useState(""); // Nacional | Extranjero (key/string)
 
-  // PF terceros / dueño beneficiario
-  const [pfManifiestaTerceros, setPfManifiestaTerceros] = useState(false);
-  const [pfTerceroActividadGiro, setPfTerceroActividadGiro] = useState("");
-  const [pfTerceroRelacion, setPfTerceroRelacion] = useState("");
-  const [pfNoDocumentacionTercero, setPfNoDocumentacionTercero] =
-    useState(false);
-
   // PM
-  const [pfTerceroNombreCompleto, setPfTerceroNombreCompleto] = useState("");
-  const [pfTerceroRfc, setPfTerceroRfc] = useState("");
-  const [pfTerceroCurp, setPfTerceroCurp] = useState("");
-  const [pfTerceroFechaNac, setPfTerceroFechaNac] = useState(""); // AAAAMMDD o YYYY-MM-DD
-  const [pfTerceroNacionalidad, setPfTerceroNacionalidad] = useState("MEX");
-
   const [recursosTercerosAplica, setRecursosTercerosAplica] = useState(false);
   const [recursosTerceros, setRecursosTerceros] = useState<RecursoTerceroItem[]>([]);
   const [pmRfc, setPmRfc] = useState("");
@@ -761,6 +729,37 @@ function valueToCatalogKey(v: string) {
       nacionalidad,
       contactoPais,
       contactoEmail: email,
+      tipoNacionalidad,
+      empresa_id: empresaId,
+      "contacto.pais": contactoPais,
+      "contacto.email": email,
+      "contacto.telefono.codigo_pais": telCodigoPais,
+      "contacto.telefono.numero": telNumero,
+      "contacto.telefono.ext": telExt,
+      "contacto.domicilio.calle": domCalle,
+      "contacto.domicilio.numero": domNumero,
+      "contacto.domicilio.colonia": domColonia,
+      "contacto.domicilio.municipio": domMunicipio,
+      "contacto.domicilio.ciudad_delegacion": domCiudadDelegacion,
+      "contacto.domicilio.codigo_postal": domCP,
+      "contacto.domicilio.estado": domEstado,
+      "contacto.domicilio.pais": domPais,
+      "persona.rfc": pfRfc,
+      "persona.curp": pfCurp,
+      "persona.fecha_nacimiento": pfFechaNac,
+      "persona.nombres": pfNombres,
+      "persona.apellido_paterno": pfApPat,
+      "persona.actividad_economica": pfActividad,
+      "persona.residencia": pfResidencia,
+      "persona.identificacion.tipo": pfIdTipo,
+      "persona.identificacion.autoridad": pfIdAutoridad,
+      "persona.identificacion.numero": pfIdNumero,
+      "persona.identificacion.expedicion": pfIdExpedicion,
+      "persona.identificacion.expiracion": pfIdExpiracion,
+      pfIdSinVigencia,
+      "persona.cargo_publico.actual": pfCargoPublicoActual,
+      "persona.cargo_publico.previo": pfCargoPublicoPrevio,
+      "persona.cargo_publico.familiar": pfCargoPublicoFamiliar,
     },
     setErrors,
     isEmailValid: (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
@@ -1322,25 +1321,6 @@ function valueToCatalogKey(v: string) {
 
     if (recursosTerceros.length > 0) {
       return recursosTerceros.map(buildCanonicalRecursoRowFromLegacy);
-    }
-
-    if (pfManifiestaTerceros) {
-      return [
-        buildCanonicalRecursoRowFromLegacy({
-          tipo_tercero: "persona_fisica",
-          nombre_razon_social: pfTerceroNombreCompleto.trim(),
-          relacion_con_cliente: pfTerceroRelacion.trim(),
-          actividad_giro: pfTerceroActividadGiro.trim(),
-          nacionalidad: valueToCatalogKey(pfTerceroNacionalidad) || "MEX",
-          sin_documentacion: pfNoDocumentacionTercero,
-          rfc: pfNoDocumentacionTercero ? "" : pfTerceroRfc.trim().toUpperCase(),
-          curp: pfNoDocumentacionTercero ? "" : pfTerceroCurp.trim().toUpperCase(),
-          fecha_nacimiento: pfNoDocumentacionTercero
-            ? ""
-            : (normalizeToYYYYMMDD(pfTerceroFechaNac) ?? pfTerceroFechaNac.trim()),
-          observaciones: "",
-        }),
-      ];
     }
 
     return [];
@@ -2010,62 +1990,96 @@ function valueToCatalogKey(v: string) {
 
   function renderBeneficiarioControladorPFFields(row: BeneficiarioControladorRow, index: number) {
     const persona = ((((row.datos_completos as Record<string, any>).persona) || {}) as Record<string, any>);
+    const fieldError = (field: string) =>
+      errors[`beneficiarios_controladores.${index}.${field}`];
 
     return (
       <div className="space-y-3">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="space-y-1">
-            <label className="text-sm font-medium">Nombres</label>
+            <label className="text-sm font-medium">
+              Nombres <span className="text-red-600">*</span>
+            </label>
             <input
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              className={`w-full rounded border px-3 py-2 text-sm ${fieldError("nombres") ? "border-red-500" : "border-gray-300"}`}
               value={safeInput(persona.nombres)}
               onChange={(e) => updateBeneficiarioControladorDataField(index, "persona", "nombres", e.target.value)}
             />
+            {fieldError("nombres") ? (
+              <p className="text-xs text-red-600">{fieldError("nombres")}</p>
+            ) : null}
           </div>
 
           <div className="space-y-1">
-            <label className="text-sm font-medium">Apellido paterno</label>
+            <label className="text-sm font-medium">
+              Apellido paterno <span className="text-red-600">*</span>
+            </label>
             <input
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              className={`w-full rounded border px-3 py-2 text-sm ${fieldError("apellido_paterno") ? "border-red-500" : "border-gray-300"}`}
               value={safeInput(persona.apellido_paterno)}
               onChange={(e) => updateBeneficiarioControladorDataField(index, "persona", "apellido_paterno", e.target.value)}
             />
+            {fieldError("apellido_paterno") ? (
+              <p className="text-xs text-red-600">
+                {fieldError("apellido_paterno")}
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-1">
-            <label className="text-sm font-medium">Apellido materno</label>
+            <label className="text-sm font-medium">
+              Apellido materno <span className="text-red-600">*</span>
+            </label>
             <input
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              className={`w-full rounded border px-3 py-2 text-sm ${fieldError("apellido_materno") ? "border-red-500" : "border-gray-300"}`}
               value={safeInput(persona.apellido_materno)}
               onChange={(e) => updateBeneficiarioControladorDataField(index, "persona", "apellido_materno", e.target.value)}
             />
+            {fieldError("apellido_materno") ? (
+              <p className="text-xs text-red-600">
+                {fieldError("apellido_materno")}
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-1">
-            <label className="text-sm font-medium">Fecha nac. (AAAAMMDD)</label>
+            <label className="text-sm font-medium">
+              Fecha nac. (AAAAMMDD) <span className="text-red-600">*</span>
+            </label>
             <input
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              className={`w-full rounded border px-3 py-2 text-sm ${fieldError("fecha_nacimiento") ? "border-red-500" : "border-gray-300"}`}
               value={safeInput(persona.fecha_nacimiento)}
               onChange={(e) => updateBeneficiarioControladorDataField(index, "persona", "fecha_nacimiento", onlyDigits(e.target.value).slice(0, 8))}
             />
+            {fieldError("fecha_nacimiento") ? (
+              <p className="text-xs text-red-600">
+                {fieldError("fecha_nacimiento")}
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-1">
             <label className="text-sm font-medium">RFC</label>
             <input
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              className={`w-full rounded border px-3 py-2 text-sm ${fieldError("rfc") ? "border-red-500" : "border-gray-300"}`}
               value={safeInput(persona.rfc)}
               onChange={(e) => updateBeneficiarioControladorDataField(index, "persona", "rfc", e.target.value)}
             />
+            {fieldError("rfc") ? (
+              <p className="text-xs text-red-600">{fieldError("rfc")}</p>
+            ) : null}
           </div>
 
           <div className="space-y-1">
             <label className="text-sm font-medium">CURP</label>
             <input
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              className={`w-full rounded border px-3 py-2 text-sm ${fieldError("curp") ? "border-red-500" : "border-gray-300"}`}
               value={safeInput(persona.curp)}
               onChange={(e) => updateBeneficiarioControladorDataField(index, "persona", "curp", e.target.value)}
             />
+            {fieldError("curp") ? (
+              <p className="text-xs text-red-600">{fieldError("curp")}</p>
+            ) : null}
           </div>
 
           <div className="space-y-1 sm:col-span-3">
@@ -2120,9 +2134,11 @@ function valueToCatalogKey(v: string) {
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="space-y-1">
-                <label className="text-sm font-medium">Relación con cliente</label>
+                <label className="text-sm font-medium">
+                  Relación con cliente <span className="text-red-600">*</span>
+                </label>
                 <input
-                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors[`beneficiarios_controladores.${index}.relacion_con_cliente`] ? "border-red-500" : "border-gray-300"}`}
                   value={row.relacion_con_cliente}
                   onChange={(e) =>
                     updateBeneficiarioControladorCommonField(
@@ -2132,12 +2148,25 @@ function valueToCatalogKey(v: string) {
                     )
                   }
                 />
+                {errors[
+                  `beneficiarios_controladores.${index}.relacion_con_cliente`
+                ] ? (
+                  <p className="text-xs text-red-600">
+                    {
+                      errors[
+                        `beneficiarios_controladores.${index}.relacion_con_cliente`
+                      ]
+                    }
+                  </p>
+                ) : null}
               </div>
 
               <div className="space-y-1">
-                <label className="text-sm font-medium">Nacionalidad</label>
+                <label className="text-sm font-medium">
+                  Nacionalidad <span className="text-red-600">*</span>
+                </label>
                 <input
-                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                  className={`w-full rounded border px-3 py-2 text-sm ${errors[`beneficiarios_controladores.${index}.nacionalidad`] ? "border-red-500" : "border-gray-300"}`}
                   value={row.nacionalidad}
                   onChange={(e) =>
                     updateBeneficiarioControladorCommonField(
@@ -2147,6 +2176,17 @@ function valueToCatalogKey(v: string) {
                     )
                   }
                 />
+                {errors[
+                  `beneficiarios_controladores.${index}.nacionalidad`
+                ] ? (
+                  <p className="text-xs text-red-600">
+                    {
+                      errors[
+                        `beneficiarios_controladores.${index}.nacionalidad`
+                      ]
+                    }
+                  </p>
+                ) : null}
               </div>
 
               <div className="space-y-1">
@@ -2498,8 +2538,9 @@ function valueToCatalogKey(v: string) {
 
       const idExp =
         normalizeToYYYYMMDD(pfIdExpedicion) ?? pfIdExpedicion.trim();
-      const idExpi =
-        normalizeToYYYYMMDD(pfIdExpiracion) ?? pfIdExpiracion.trim();
+      const idExpi = pfIdSinVigencia
+        ? null
+        : normalizeToYYYYMMDD(pfIdExpiracion) ?? pfIdExpiracion.trim();
       const payload = {
         empresa_id: parseInt(empresaId, 10),
         tipo_cliente: tipoCliente,
@@ -2522,7 +2563,6 @@ persona: {
             residencia: pfResidencia.trim(),
             nacional_extranjero: tipoNacionalidad,
             CargoPublico: pfCargoPublicoActual.trim(),
-            BeneficiarioTerceros: pfManifiestaTerceros,
             actividad_economica: act
               ? { clave: act.clave, descripcion: act.descripcion }
               : pfActividad,
@@ -2532,24 +2572,9 @@ persona: {
               numero: pfIdNumero.trim(),
               fecha_expedicion: idExp,
               fecha_expiracion: idExpi,
+              sin_vigencia: pfIdSinVigencia,
             },
           },
-          calidad_migratoria: pfCalidadMigratoria.trim() || null,
-          estado_civil: "",
-          regimen_matrimonial: "",
-          bienes_mancomunados: "",
-          direccion_privada: {
-            calle: "",
-            numero: "",
-            colonia: "",
-            municipio: "",
-            ciudad_delegacion: "",
-            codigo_postal: "",
-            estado: "",
-            pais: "",
-          },
-          ocupacion: "",
-          actividad_profesional: "",
           cargo_publico: {
             actual: pfCargoPublicoActual.trim(),
             previo: pfCargoPublicoPrevio.trim(),
@@ -2681,11 +2706,39 @@ persona: {
     });
     setFatal(null);
 
-    if (!validateA2Nacionalidad()) return;
-    if (!validateB1Domicilio()) return;
-    if (!validator.validateAll()) {
-      setFatal("Corrige los campos marcados en rojo.");
-      return;
+    const focusFirstInvalidField = () => {
+      window.setTimeout(() => {
+        const firstInvalid = document.querySelector<HTMLElement>(
+          "form .border-red-500",
+        );
+        firstInvalid?.scrollIntoView({ behavior: "smooth", block: "center" });
+        firstInvalid?.focus();
+      }, 0);
+    };
+
+    if (tipo === "persona_fisica") {
+      const nacionalidadOk = validateA2Nacionalidad();
+      const domicilioOk = validateB1Domicilio();
+      const formularioOk = validator.validateAll();
+      const beneficiariosOk = validateBeneficiariosControladoresBeforeSubmit();
+
+      if (
+        !nacionalidadOk ||
+        !domicilioOk ||
+        !formularioOk ||
+        !beneficiariosOk
+      ) {
+        setFatal("Corrige los campos marcados en rojo.");
+        focusFirstInvalidField();
+        return;
+      }
+    } else {
+      if (!validateA2Nacionalidad()) return;
+      if (!validateB1Domicilio()) return;
+      if (!validator.validateAll()) {
+        setFatal("Corrige los campos marcados en rojo.");
+        return;
+      }
     }
 
     if (tipo === "fideicomiso") {
@@ -2725,7 +2778,10 @@ persona: {
       }
     }
 
-    if (!validateBeneficiariosControladoresBeforeSubmit()) {
+    if (
+      tipo !== "persona_fisica" &&
+      !validateBeneficiariosControladoresBeforeSubmit()
+    ) {
       return;
     }
 
@@ -2889,7 +2945,14 @@ persona: {
           </div>
 
 
-          <div className="space-y-2 rounded-md border border-gray-200 p-3">
+          <div
+            tabIndex={-1}
+            className={`space-y-2 rounded-md border p-3 ${
+              a2Errors.tipoNacionalidad
+                ? "border-red-500"
+                : "border-gray-200"
+            }`}
+          >
             <label className="text-sm font-medium">
               Tipo de nacionalidad <span className="text-red-600">*</span>
             </label>
@@ -3232,16 +3295,30 @@ persona: {
               ) : null}
             </div>
             <div className="space-y-1">
-              <label className="text-sm font-medium">País</label>
+              <label className="text-sm font-medium">
+                País{" "}
+                {tipo === "persona_fisica" ? (
+                  <span className="text-red-600">*</span>
+                ) : null}
+              </label>
               <input
-                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                className={`w-full rounded border px-3 py-2 text-sm ${errors["contacto.domicilio.pais"] ? "border-red-500" : "border-gray-300"}`}
                 value={domPais}
                 onChange={(e) => setDomPais(e.target.value)}
+                onBlur={() =>
+                  validator.validateField("contacto.domicilio.pais")
+                }
                 placeholder="México"
               />
-              <p className="text-xs text-gray-500">
-                País del domicilio/contacto. Se captura manualmente y no modifica la regla de Código Postal.
-              </p>
+              {errors["contacto.domicilio.pais"] ? (
+                <p className="text-xs text-red-600">
+                  {errors["contacto.domicilio.pais"]}
+                </p>
+              ) : (
+                <p className="text-xs text-gray-500">
+                  País del domicilio/contacto. Se captura manualmente y no modifica la regla de Código Postal.
+                </p>
+              )}
             </div>
 
 
@@ -3255,7 +3332,14 @@ persona: {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1">
-                <label className="text-sm font-medium">RFC *</label>
+                <label className="text-sm font-medium">
+                  RFC{" "}
+                  {tipoNacionalidad === "nacional" ? (
+                    <span className="text-red-600">*</span>
+                  ) : (
+                    <span className="text-gray-500">(opcional)</span>
+                  )}
+                </label>
                 <input
                   className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.rfc"] ? "border-red-500" : "border-gray-300"}`}
                   value={pfRfc}
@@ -3271,7 +3355,14 @@ persona: {
               </div>
 
               <div className="space-y-1">
-                <label className="text-sm font-medium">CURP *</label>
+                <label className="text-sm font-medium">
+                  CURP{" "}
+                  {tipoNacionalidad === "nacional" ? (
+                    <span className="text-red-600">*</span>
+                  ) : (
+                    <span className="text-gray-500">(opcional)</span>
+                  )}
+                </label>
                 <input
                   className={`w-full rounded border px-3 py-2 text-sm ${errors["persona.curp"] ? "border-red-500" : "border-gray-300"}`}
                   value={pfCurp}
@@ -3288,9 +3379,10 @@ persona: {
 
               <div className="space-y-1">
                 <label className="text-sm font-medium">
-                  Fecha nacimiento (AAAAMMDD) *
+                  Fecha de nacimiento <span className="text-red-600">*</span>
                 </label>
                 <input
+                  type="date"
                   className={`w-full rounded border px-3 py-2 text-sm ${
                     errors["persona.fecha_nacimiento"]
                       ? "border-red-500"
@@ -3301,17 +3393,12 @@ persona: {
                   onBlur={() =>
                     validator.validateField("persona.fecha_nacimiento")
                   }
-                  placeholder="19900101 (o 1990-01-01)"
                 />
                 {errors["persona.fecha_nacimiento"] ? (
                   <p className="text-xs text-red-600">
                     {errors["persona.fecha_nacimiento"]}
                   </p>
-                ) : (
-                  <p className="text-xs text-gray-500">
-                    Acepta AAAAMMDD o YYYY-MM-DD (se convierte a AAAAMMDD).
-                  </p>
-                )}
+                ) : null}
               </div>
 
               <div className="space-y-1">
@@ -3354,7 +3441,8 @@ persona: {
 
               <div className="space-y-1">
                 <label className="text-sm font-medium">
-                  Apellido materno *
+                  Apellido materno{" "}
+                  <span className="text-gray-500">(opcional)</span>
                 </label>
                 <input
                   className={`w-full rounded border px-3 py-2 text-sm ${
@@ -3490,9 +3578,10 @@ persona: {
 
               <div className="space-y-1">
                 <label className="text-sm font-medium">
-                  Fecha de expedición (AAAAMMDD) *
+                  Fecha de expedición <span className="text-red-600">*</span>
                 </label>
                 <input
+                  type="date"
                   className={`w-full rounded border px-3 py-2 text-sm ${
                     errors["persona.identificacion.expedicion"]
                       ? "border-red-500"
@@ -3503,7 +3592,6 @@ persona: {
                   onBlur={() =>
                     validator.validateField("persona.identificacion.expedicion")
                   }
-                  placeholder="20240131 (o 2024-01-31)"
                 />
                 {errors["persona.identificacion.expedicion"] ? (
                   <p className="text-xs text-red-600">
@@ -3514,9 +3602,13 @@ persona: {
 
               <div className="space-y-1">
                 <label className="text-sm font-medium">
-                  Fecha de expiración (AAAAMMDD) *
+                  Fecha de expiración{" "}
+                  {!pfIdSinVigencia ? (
+                    <span className="text-red-600">*</span>
+                  ) : null}
                 </label>
                 <input
+                  type="date"
                   className={`w-full rounded border px-3 py-2 text-sm ${
                     errors["persona.identificacion.expiracion"]
                       ? "border-red-500"
@@ -3524,32 +3616,31 @@ persona: {
                   }`}
                   value={pfIdExpiracion}
                   onChange={(e) => setPfIdExpiracion(e.target.value)}
+                  disabled={pfIdSinVigencia}
                   onBlur={() =>
                     validator.validateField("persona.identificacion.expiracion")
                   }
-                  placeholder="20290131 (o 2029-01-31)"
                 />
                 {errors["persona.identificacion.expiracion"] ? (
                   <p className="text-xs text-red-600">
                     {errors["persona.identificacion.expiracion"]}
                   </p>
                 ) : null}
-              </div>
-
-              <hr className="my-2" />
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1 md:col-span-3">
-                  <label className="text-sm font-medium">
-                    Calidad migratoria (opcional)
-                  </label>
+                <label className="flex items-center gap-2 text-sm">
                   <input
-                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                    value={pfCalidadMigratoria}
-                    onChange={(e) => setPfCalidadMigratoria(e.target.value)}
-                    placeholder="Temporal / Permanente / ..."
+                    type="checkbox"
+                    checked={pfIdSinVigencia}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setPfIdSinVigencia(checked);
+                      if (checked) {
+                        setPfIdExpiracion("");
+                        setErr("persona.identificacion.expiracion");
+                      }
+                    }}
                   />
-                </div>
+                  Sin vigencia
+                </label>
               </div>
 
 
