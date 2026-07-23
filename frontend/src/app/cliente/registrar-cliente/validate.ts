@@ -8,7 +8,11 @@ export type RegistrarClienteValidatorCtx = {
   values: Record<string, any>;
 
   // Para reportar errores como hoy:
-  setErrors: (next: Record<string, string>) => void;
+  setErrors: (
+    next:
+      | Record<string, string>
+      | ((previous: Record<string, string>) => Record<string, string>),
+  ) => void;
 
   // Helpers que ya existan en page.tsx y hoy se usan dentro de validaciones:
   isEmailValid: (email: string) => boolean;
@@ -17,23 +21,189 @@ export type RegistrarClienteValidatorCtx = {
 };
 
 export function createRegistrarClienteValidator(ctx: RegistrarClienteValidatorCtx) {
-  // 👇 Pega aquí TU validateField actual, pero reemplazando
-  // accesos directos a variables de page.tsx por ctx.values / ctx.tipoCliente / ctx.helpers
+  function normalizedDate(value: any): string {
+    return String(value ?? "").trim().replaceAll("-", "");
+  }
+
+  function validatePersonaFisicaField(field: string): string | undefined {
+    const values = ctx.values;
+    const required: Record<string, string> = {
+      empresa_id: "Empresa ID es obligatorio",
+      nacionalidad: "Nacionalidad es obligatoria",
+      "contacto.pais": "País de nacimiento es obligatorio",
+      "contacto.email": "Email es obligatorio",
+      "contacto.telefono.codigo_pais":
+        "Código de país telefónico es obligatorio",
+      "contacto.telefono.numero": "Teléfono es obligatorio",
+      "contacto.domicilio.calle": "Calle es obligatoria",
+      "contacto.domicilio.numero": "Número exterior es obligatorio",
+      "contacto.domicilio.colonia": "Colonia es obligatoria",
+      "contacto.domicilio.municipio": "Municipio es obligatorio",
+      "contacto.domicilio.ciudad_delegacion":
+        "Ciudad o delegación es obligatoria",
+      "contacto.domicilio.codigo_postal": "Código postal es obligatorio",
+      "contacto.domicilio.estado": "Estado es obligatorio",
+      "contacto.domicilio.pais": "País del domicilio es obligatorio",
+      "persona.fecha_nacimiento": "Fecha de nacimiento es obligatoria",
+      "persona.nombres": "Nombre(s) es obligatorio",
+      "persona.apellido_paterno": "Apellido paterno es obligatorio",
+      "persona.actividad_economica": "Actividad económica es obligatoria",
+      "persona.residencia": "Residencia es obligatoria",
+      "persona.identificacion.tipo":
+        "Tipo o nombre del documento es obligatorio",
+      "persona.identificacion.autoridad":
+        "Autoridad que expide es obligatoria",
+      "persona.identificacion.numero":
+        "Número de identificación es obligatorio",
+      "persona.identificacion.expedicion":
+        "Fecha de expedición es obligatoria",
+      "persona.cargo_publico.actual":
+        "Indica si desempeñas un cargo público actualmente",
+      "persona.cargo_publico.previo":
+        "Indica si desempeñaste un cargo público",
+      "persona.cargo_publico.familiar":
+        "Indica si un familiar desempeña o desempeñó un cargo público",
+    };
+
+    const value = values[field];
+
+    if (required[field] && !isNonEmptyString(value)) {
+      return required[field];
+    }
+
+    if (field === "empresa_id") {
+      const id = Number(value);
+      if (!Number.isInteger(id) || id <= 0) return "Empresa ID inválido";
+    }
+
+    if (
+      field === "persona.rfc" &&
+      (values.tipoNacionalidad === "nacional" || isNonEmptyString(value)) &&
+      !isRfc(value)
+    ) {
+      return values.tipoNacionalidad === "nacional" && !isNonEmptyString(value)
+        ? "RFC es obligatorio para una persona mexicana"
+        : "RFC inválido";
+    }
+
+    if (
+      field === "persona.curp" &&
+      (values.tipoNacionalidad === "nacional" || isNonEmptyString(value)) &&
+      !isCurp(value)
+    ) {
+      return values.tipoNacionalidad === "nacional" && !isNonEmptyString(value)
+        ? "CURP es obligatoria para una persona mexicana"
+        : "CURP inválida";
+    }
+
+    if (
+      [
+        "persona.fecha_nacimiento",
+        "persona.identificacion.expedicion",
+      ].includes(field) &&
+      isNonEmptyString(value) &&
+      !isYyyyMmDd(normalizedDate(value))
+    ) {
+      return "Fecha inválida";
+    }
+
+    if (field === "persona.identificacion.expiracion") {
+      if (values.pfIdSinVigencia === true) return undefined;
+      if (!isNonEmptyString(value)) return "Fecha de expiración es obligatoria";
+      if (!isYyyyMmDd(normalizedDate(value))) return "Fecha inválida";
+    }
+
+    if (
+      field === "contacto.email" &&
+      isNonEmptyString(value) &&
+      !ctx.isEmailValid(String(value))
+    ) {
+      return "Email inválido";
+    }
+
+    if (
+      field === "contacto.telefono.codigo_pais" &&
+      isNonEmptyString(value) &&
+      !/^\+\d{1,4}$/.test(String(value).trim())
+    ) {
+      return "Código de país inválido";
+    }
+
+    if (
+      field === "contacto.telefono.numero" &&
+      isNonEmptyString(value) &&
+      !/^\d{7,15}$/.test(String(value).trim())
+    ) {
+      return "Teléfono inválido";
+    }
+
+    if (
+      field === "contacto.telefono.ext" &&
+      isNonEmptyString(value) &&
+      !/^\d{1,6}$/.test(String(value).trim())
+    ) {
+      return "Extensión inválida";
+    }
+
+    return undefined;
+  }
+
   function validateField(field: string): boolean {
-    // --- PEGAR validateField EXISTENTE ---
-    // IMPORTANTE: donde antes decía tipoCliente / personaRfc / contactoEmail, etc.,
-    // cámbialo a lecturas desde ctx.values (para no pasar 100 params).
-    // Ej: const email = ctx.values.contactoEmail;
-    return true;
+    if (ctx.tipoCliente !== "persona_fisica") return true;
+
+    const message = validatePersonaFisicaField(field);
+    ctx.setErrors((previous) => {
+      const next = { ...previous };
+      if (message) next[field] = message;
+      else delete next[field];
+      return next;
+    });
+    return !message;
   }
 
   function validateAll(): boolean {
-    // --- PEGAR validateAll EXISTENTE ---
-    // reemplaza:
-    // - tipoCliente -> ctx.tipoCliente
-    // - setErrors(...) -> ctx.setErrors(...)
-    // - validateField(...) -> validateField(...)
-    return true;
+    if (ctx.tipoCliente !== "persona_fisica") return true;
+
+    const fields = [
+      "empresa_id",
+      "nacionalidad",
+      "contacto.pais",
+      "contacto.email",
+      "contacto.telefono.codigo_pais",
+      "contacto.telefono.numero",
+      "contacto.telefono.ext",
+      "contacto.domicilio.calle",
+      "contacto.domicilio.numero",
+      "contacto.domicilio.colonia",
+      "contacto.domicilio.municipio",
+      "contacto.domicilio.ciudad_delegacion",
+      "contacto.domicilio.codigo_postal",
+      "contacto.domicilio.estado",
+      "contacto.domicilio.pais",
+      "persona.rfc",
+      "persona.curp",
+      "persona.fecha_nacimiento",
+      "persona.nombres",
+      "persona.apellido_paterno",
+      "persona.actividad_economica",
+      "persona.residencia",
+      "persona.identificacion.tipo",
+      "persona.identificacion.autoridad",
+      "persona.identificacion.numero",
+      "persona.identificacion.expedicion",
+      "persona.identificacion.expiracion",
+      "persona.cargo_publico.actual",
+      "persona.cargo_publico.previo",
+      "persona.cargo_publico.familiar",
+    ];
+    const next = Object.fromEntries(
+      fields
+        .map((field) => [field, validatePersonaFisicaField(field)])
+        .filter((entry): entry is [string, string] => Boolean(entry[1])),
+    );
+
+    ctx.setErrors(next);
+    return Object.keys(next).length === 0;
   }
 
   return { validateField, validateAll };
