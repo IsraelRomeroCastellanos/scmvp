@@ -11,12 +11,7 @@ import {
   type NormalizedRole,
 } from "@/lib/auth";
 import { loadCatalogo, type CatalogItem } from "@/lib/catalogos";
-import {
-  findCodigoPostalMx,
-  loadCodigosPostalesMx,
-  normalizeCodigoPostalMx,
-  type CodigoPostalMx,
-} from "@/lib/codigosPostalesMx";
+import api from "@/lib/api";
 
 import {
   buildBeneficiariosControladoresContract,
@@ -65,6 +60,7 @@ export default function ClientPage() {
   type RelatedPFData = {
     contacto: Record<string, any>;
     persona: Record<string, any>;
+    cargo_publico?: Record<string, any>;
   };
 
   type RelatedPMData = {
@@ -147,6 +143,15 @@ export default function ClientPage() {
     return null;
   }
 
+  function toDateInputValue(input: any): string {
+    const value = String(input ?? "").trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+    if (/^\d{8}$/.test(value)) {
+      return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`;
+    }
+    return value;
+  }
+
   function isEmail(v: any) {
     if (!isNonEmpty(v)) return false;
     const s = v.trim();
@@ -191,6 +196,10 @@ function isMexicoKey(value: string) {
     v === MEXICO_CATALOGO_KEY_LEGACY ||
     v === 'mex'
   );
+}
+
+function normalizeCodigoPostalMx(value: string) {
+  return String(value ?? "").replace(/\D/g, "").slice(0, 5);
 }
 
 function inferNacionalExtranjero(value: string): TipoNacionalidad {
@@ -356,6 +365,10 @@ function valueToCatalogKey(v: string) {
 
     if (next === "nacional") {
       setNacionalidad(MEXICO_CATALOGO_KEY);
+      setTelCodigoPais("+52");
+    } else {
+      setNacionalidad("");
+      setTelCodigoPais("");
     }
   }
 
@@ -390,7 +403,7 @@ function valueToCatalogKey(v: string) {
 
   // contacto (iteración 1)
   const [email, setEmail] = useState("");
-  const [telCodigoPais, setTelCodigoPais] = useState("+52");
+  const [telCodigoPais, setTelCodigoPais] = useState("");
   const [telNumero, setTelNumero] = useState("");
   const [telExt, setTelExt] = useState("");
 
@@ -403,40 +416,26 @@ function valueToCatalogKey(v: string) {
   const [domCiudadDelegacion, setDomCiudadDelegacion] = useState("");
   const [domCP, setDomCP] = useState("");
   const [domEstado, setDomEstado] = useState("");
-  const [domPais, setDomPais] = useState("MEX"); // manual (no catálogo)
+  const [domPais, setDomPais] = useState("");
 
-  const [codigosPostalesMx, setCodigosPostalesMx] = useState<CodigoPostalMx[]>([]);
   const [domColoniasOpciones, setDomColoniasOpciones] = useState<string[]>([]);
   const [domCpAviso, setDomCpAviso] = useState("");
+  const [domCpLoading, setDomCpLoading] = useState(false);
   const [b1Errors, setB1Errors] = useState<Record<string, string>>({});
+  const domCpRequestRef = useRef<AbortController | null>(null);
+  const beneficiarioCpRequestsRef = useRef<Record<number, AbortController>>({});
+  const [beneficiarioCpLoading, setBeneficiarioCpLoading] = useState<Record<number, boolean>>({});
 
-  const aplicaCpMexico = isMexicoKey(nacionalidad);
-
-  // UX-TEXTO-03A: País en Domicilio/contacto se captura manualmente.
-  // No debe derivarse ni sobrescribirse automáticamente desde Nacionalidad.
-
-  useEffect(() => {
-    let alive = true;
-
-    loadCodigosPostalesMx()
-      .then((items) => {
-        if (alive) setCodigosPostalesMx(items);
-      })
-      .catch((e) => {
-        if (alive) setDomCpAviso(e?.message || "No se pudo cargar catálogo de códigos postales MX");
-      });
-
-    return () => {
-      alive = false;
-    };
-  }, []);
+  const aplicaCpMexico = isMexicoKey(domPais);
 
   useEffect(() => {
+    domCpRequestRef.current?.abort();
     setB1Errors({});
 
     if (!aplicaCpMexico) {
       setDomColoniasOpciones([]);
       setDomCpAviso("");
+      setDomCpLoading(false);
       return;
     }
 
@@ -454,38 +453,87 @@ function valueToCatalogKey(v: string) {
       return;
     }
 
-    const found = findCodigoPostalMx(codigosPostalesMx, cp);
+    const controller = new AbortController();
+    domCpRequestRef.current = controller;
+    setDomCpLoading(true);
+    setDomCpAviso("Consultando código postal…");
 
-    if (!found) {
-      setDomColoniasOpciones([]);
-      setDomCpAviso("Código postal no encontrado en catálogo local; captura manual habilitada.");
-      return;
-    }
+    api
+      .get("/api/catalogos/codigos-postales", {
+        params: { cp },
+        signal: controller.signal,
+      })
+      .then((response) => {
+        const resultados = Array.isArray(response.data?.resultados)
+          ? response.data.resultados
+          : [];
+        if (resultados.length === 0) {
+          setDomColoniasOpciones([]);
+          setDomCpAviso("Código postal no encontrado; captura manual habilitada.");
+          return;
+        }
+        const first = resultados[0];
+        setDomEstado(String(first.estado ?? ""));
+        setDomMunicipio(String(first.municipio ?? ""));
+        setDomCiudadDelegacion(String(first.ciudad ?? first.ciudad_delegacion ?? ""));
+        const colonias = Array.from(
+          new Set(resultados.map((item: any) => String(item.colonia ?? "").trim()).filter(Boolean)),
+        ) as string[];
+        setDomColoniasOpciones(colonias);
+        setDomColonia((previous) =>
+          colonias.length === 1 ? colonias[0] : colonias.includes(previous) ? previous : "",
+        );
+        setDomCpAviso("");
+      })
+      .catch((error) => {
+        if (error?.code === "ERR_CANCELED") return;
+        const status = error?.response?.status;
+        const messages: Record<number, string> = {
+          400: "El código postal debe tener exactamente 5 dígitos.",
+          401: "La sesión expiró; inicia sesión para consultar el código postal.",
+          404: "Código postal no encontrado; captura manual habilitada.",
+          500: "El catálogo de códigos postales no está disponible.",
+        };
+        setDomColoniasOpciones([]);
+        setDomCpAviso(
+          error?.response?.data?.error ||
+          messages[status] ||
+          "No se pudo consultar el código postal.",
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setDomCpLoading(false);
+      });
 
-    setDomCpAviso("");
-    setDomEstado(found.estado);
-    setDomMunicipio(found.municipio);
-    setDomCiudadDelegacion(found.ciudad_delegacion);
-
-    const colonias = found.colonias || [];
-    setDomColoniasOpciones(colonias);
-
-    if (colonias.length === 1) {
-      setDomColonia(colonias[0]);
-    } else if (colonias.length > 1) {
-      setDomColonia((prev) => (colonias.includes(prev) ? prev : ""));
-    }
-  }, [codigosPostalesMx, domCP, aplicaCpMexico]);
+    return () => controller.abort();
+  }, [domCP, aplicaCpMexico]);
 
   function handleDomCPChange(value: string) {
-    const next = isMexicoKey(nacionalidad) ? normalizeCodigoPostalMx(value) : value;
+    const next = aplicaCpMexico ? normalizeCodigoPostalMx(value) : value;
     setDomCP(next);
+  }
+
+  function handleDomPaisChange(value: string) {
+    setDomPais(value);
+    setDomCP("");
+    setDomColoniasOpciones([]);
+    setDomCpAviso("");
+
+    if (tipo !== "persona_fisica") return;
+
+    domCpRequestRef.current?.abort();
+    setDomCpLoading(false);
+    setDomColonia("");
+    setDomMunicipio("");
+    setDomCiudadDelegacion("");
+    setDomEstado("");
+    setB1Errors({});
   }
 
   function validateB1Domicilio() {
     const next: Record<string, string> = {};
 
-    if (isMexicoKey(nacionalidad)) {
+    if (aplicaCpMexico) {
       const cp = normalizeCodigoPostalMx(domCP);
 
       if (cp.length !== 5) {
@@ -977,9 +1025,15 @@ function valueToCatalogKey(v: string) {
         pais: "MEX",
         email: "",
         telefono: "",
+        telefono_detalle: {
+          codigo_pais: "",
+          numero: "",
+          ext: "",
+        },
         domicilio: {
           calle: "",
           numero: "",
+          interior: "",
           colonia: "",
           municipio: "",
           ciudad_delegacion: "",
@@ -989,6 +1043,10 @@ function valueToCatalogKey(v: string) {
         },
       },
       persona: {
+        tipo_nacionalidad: "",
+        nacional_extranjero: "",
+        nacionalidad: "",
+        pais_nacimiento: "",
         nombres: "",
         apellido_paterno: "",
         apellido_materno: "",
@@ -996,6 +1054,20 @@ function valueToCatalogKey(v: string) {
         rfc: "",
         curp: "",
         actividad_economica: "",
+        residencia: "",
+        identificacion: {
+          tipo: "",
+          autoridad: "",
+          numero: "",
+          fecha_expedicion: "",
+          fecha_expiracion: "",
+          sin_vigencia: false,
+        },
+      },
+      cargo_publico: {
+        actual: "",
+        previo: "",
+        familiar: "",
       },
     };
   }
@@ -1113,9 +1185,11 @@ function valueToCatalogKey(v: string) {
 
   function createEmptyBeneficiarioControlador(): BeneficiarioControladorRow {
     const datos_completos = createEmptyRelatedPFData();
+    datos_completos.contacto.pais = "";
+    datos_completos.contacto.domicilio.pais = "";
     return {
       nombre_entidad: deriveRelatedNombreEntidad("persona_fisica", datos_completos),
-      nacionalidad: "MEX",
+      nacionalidad: "",
       relacion_con_cliente: "",
       porcentaje_participacion: "",
       sin_documentacion: false,
@@ -1150,9 +1224,26 @@ function valueToCatalogKey(v: string) {
   function buildCanonicalPFPayloadData(data: RelatedPFData): RelatedPFData {
     const contacto = isPlainObject(data?.contacto) ? data.contacto : {};
     const persona = isPlainObject(data?.persona) ? data.persona : {};
+    const identificacion = isPlainObject(persona?.identificacion) ? persona.identificacion : {};
+    const telefonoDetalle = isPlainObject(contacto?.telefono_detalle) ? contacto.telefono_detalle : {};
+    const actividad = persona?.actividad_economica;
 
     return {
-      contacto,
+      ...data,
+      contacto: {
+        ...contacto,
+        telefono: buildTelefonoE164Like(
+          safeInput(telefonoDetalle.codigo_pais),
+          safeInput(telefonoDetalle.numero),
+          safeInput(telefonoDetalle.ext),
+        ) || safeInput(contacto.telefono).trim(),
+        telefono_detalle: {
+          ...telefonoDetalle,
+          codigo_pais: safeInput(telefonoDetalle.codigo_pais).trim(),
+          numero: safeInput(telefonoDetalle.numero).trim(),
+          ext: safeInput(telefonoDetalle.ext).trim() || null,
+        },
+      },
       persona: {
         ...persona,
         nombres: safeInput(persona?.nombres).trim(),
@@ -1163,7 +1254,24 @@ function valueToCatalogKey(v: string) {
           safeInput(persona?.fecha_nacimiento).trim(),
         rfc: safeInput(persona?.rfc).trim().toUpperCase(),
         curp: safeInput(persona?.curp).trim().toUpperCase(),
-        actividad_economica: safeInput(persona?.actividad_economica).trim(),
+        actividad_economica: isPlainObject(actividad)
+          ? {
+              ...actividad,
+              clave: safeInput(actividad.clave).trim(),
+              descripcion: safeInput(actividad.descripcion).trim(),
+            }
+          : safeInput(actividad).trim(),
+        identificacion: {
+          ...identificacion,
+          fecha_expedicion:
+            normalizeToYYYYMMDD(safeInput(identificacion.fecha_expedicion)) ??
+            safeInput(identificacion.fecha_expedicion).trim(),
+          fecha_expiracion:
+            identificacion.sin_vigencia === true
+              ? null
+              : normalizeToYYYYMMDD(safeInput(identificacion.fecha_expiracion)) ??
+                safeInput(identificacion.fecha_expiracion).trim(),
+        },
       },
     };
   }
@@ -1241,7 +1349,7 @@ function valueToCatalogKey(v: string) {
     const base = {
       tipo_entidad: row.tipo_entidad,
       nombre_entidad: nombreEntidad,
-      nacionalidad: valueToCatalogKey(row.nacionalidad) || safeInput(row.nacionalidad).trim() || "MEX",
+      nacionalidad: valueToCatalogKey(row.nacionalidad) || safeInput(row.nacionalidad).trim(),
       relacion_con_cliente: safeInput(row.relacion_con_cliente).trim(),
       sin_documentacion: !!row.sin_documentacion,
       observaciones: safeInput(row.observaciones).trim(),
@@ -1359,7 +1467,7 @@ function valueToCatalogKey(v: string) {
       nombre_entidad:
         deriveRelatedNombreEntidad("persona_fisica", datos_completos) ||
         safeInput(row.nombre_razon_social).trim(),
-      nacionalidad: valueToCatalogKey(row.nacionalidad) || safeInput(row.nacionalidad).trim() || "MEX",
+      nacionalidad: valueToCatalogKey(row.nacionalidad) || safeInput(row.nacionalidad).trim(),
       relacion_con_cliente: safeInput(row.relacion_con_cliente).trim(),
       sin_documentacion: !!row.sin_documentacion,
       observaciones: safeInput(row.observaciones).trim(),
@@ -1383,7 +1491,7 @@ function valueToCatalogKey(v: string) {
         safeInput(persona.fecha_nacimiento).trim(),
       rfc: safeInput(persona.rfc).replace(/\s+/g, "").toUpperCase(),
       curp: safeInput(persona.curp).replace(/\s+/g, "").toUpperCase(),
-      nacionalidad: valueToCatalogKey(row.nacionalidad) || safeInput(row.nacionalidad).trim() || "MEX",
+      nacionalidad: valueToCatalogKey(row.nacionalidad) || safeInput(row.nacionalidad).trim(),
       relacion_con_cliente: safeInput(row.relacion_con_cliente).trim(),
       porcentaje_participacion: safeInput(row.porcentaje_participacion).trim(),
       sin_documentacion: !!row.sin_documentacion,
@@ -1393,7 +1501,7 @@ function valueToCatalogKey(v: string) {
   }
 
   function buildCanonicalDuenoRowFromLegacy(row: DuenoBeneficiarioItem) {
-    const datos_completos = buildCanonicalPFPayloadData({
+    const datos_completos = hydrateRelatedPFData(buildCanonicalPFPayloadData({
       contacto: { pais: row.nacionalidad || "MEX", email: "", telefono: "", domicilio: {} },
       persona: {
         nombres: row.nombres,
@@ -1404,7 +1512,11 @@ function valueToCatalogKey(v: string) {
         curp: row.curp,
         actividad_economica: "",
       },
-    });
+    }));
+    const legacyTipoNacionalidad = inferNacionalExtranjero(row.nacionalidad);
+    datos_completos.persona.tipo_nacionalidad = legacyTipoNacionalidad;
+    datos_completos.persona.nacional_extranjero = legacyTipoNacionalidad;
+    datos_completos.persona.nacionalidad = valueToCatalogKey(row.nacionalidad);
 
     return {
       tipo_entidad: "persona_fisica" as const,
@@ -1522,6 +1634,9 @@ function valueToCatalogKey(v: string) {
   function renderRelatedRecursoContactoFields(row: RelatedRecursoRow, index: number) {
     const contacto = (((row.datos_completos as Record<string, any>).contacto || {}) as Record<string, any>);
     const domicilio = ((contacto.domicilio || {}) as Record<string, any>);
+    const telefono = ((contacto.telefono_detalle || {}) as Record<string, any>);
+    const fieldError = (field: string) =>
+      errors[`beneficiarios_controladores.${index}.${field}`];
 
     return (
       <div className="space-y-3">
@@ -1948,7 +2063,7 @@ function valueToCatalogKey(v: string) {
 
   function updateBeneficiarioControladorDataField(
     index: number,
-    section: "persona" | "contacto",
+    section: "persona" | "contacto" | "cargo_publico",
     key: string,
     value: string,
   ) {
@@ -1985,9 +2100,172 @@ function valueToCatalogKey(v: string) {
     });
   }
 
+  function updateBeneficiarioControladorNestedField(
+    index: number,
+    section: "persona" | "contacto" | "cargo_publico",
+    nested: string,
+    key: string,
+    value: string | boolean,
+  ) {
+    updateBeneficiarioControlador(index, (row) => {
+      const root = row.datos_completos as Record<string, any>;
+      const sectionValue = (root[section] || {}) as Record<string, any>;
+      return {
+        ...row,
+        datos_completos: {
+          ...root,
+          [section]: {
+            ...sectionValue,
+            [nested]: {
+              ...((sectionValue[nested] || {}) as Record<string, any>),
+              [key]: value,
+            },
+          },
+        } as RelatedPFData,
+      };
+    });
+  }
+
+  function validateBeneficiariosOnBlur() {
+    const result = validateBeneficiariosControladores({
+      tipoCliente: tipo,
+      aplica: tipo === "persona_fisica" ? beneficiariosControladoresAplica : true,
+      beneficiarios: buildBeneficiariosControladoresPayload(),
+      clientePfRfc: pfRfc,
+      clientePfCurp: pfCurp,
+    });
+    setErrors((previous) => ({
+      ...Object.fromEntries(
+        Object.entries(previous).filter(([key]) => !key.startsWith("beneficiarios_controladores")),
+      ),
+      ...result.errors,
+    }));
+  }
+
+  async function lookupBeneficiarioCodigoPostal(index: number, cpValue: string, paisValue: string) {
+    beneficiarioCpRequestsRef.current[index]?.abort();
+    setErr(`beneficiarios_controladores.${index}.contacto.domicilio.codigo_postal`);
+    if (!isMexicoKey(paisValue) || !/^\d{5}$/.test(cpValue)) return;
+    const controller = new AbortController();
+    beneficiarioCpRequestsRef.current[index] = controller;
+    setBeneficiarioCpLoading((previous) => ({ ...previous, [index]: true }));
+    try {
+      const response = await api.get("/api/catalogos/codigos-postales", {
+        params: { cp: cpValue },
+        signal: controller.signal,
+      });
+      const resultados = Array.isArray(response.data?.resultados)
+        ? response.data.resultados
+        : [];
+      if (!resultados.length) {
+        setErr(`beneficiarios_controladores.${index}.contacto.domicilio.codigo_postal`, "Código postal no encontrado; captura manual habilitada");
+        return;
+      }
+      const first = resultados[0];
+      updateBeneficiarioControlador(index, (row) => {
+        const root = row.datos_completos as Record<string, any>;
+        const contacto = root.contacto || {};
+        const domicilio = contacto.domicilio || {};
+        if (String(domicilio.codigo_postal) !== cpValue) return row;
+        const colonias = Array.from(new Set(resultados.map((item: any) => String(item.colonia ?? "").trim()).filter(Boolean)));
+        return {
+          ...row,
+          datos_completos: {
+            ...root,
+            contacto: {
+              ...contacto,
+              domicilio: {
+                ...domicilio,
+                municipio: String(first.municipio ?? ""),
+                ciudad_delegacion: String(first.ciudad ?? first.ciudad_delegacion ?? ""),
+                estado: String(first.estado ?? ""),
+                colonia: colonias.length === 1 ? colonias[0] : "",
+                colonias_opciones: colonias,
+              },
+            },
+          } as RelatedPFData,
+        };
+      });
+      setErr(`beneficiarios_controladores.${index}.contacto.domicilio.codigo_postal`);
+    } catch (error: any) {
+      if (error?.code !== "ERR_CANCELED") {
+        setErr(
+          `beneficiarios_controladores.${index}.contacto.domicilio.codigo_postal`,
+          error?.response?.data?.error || "No se pudo consultar el código postal",
+        );
+      }
+    } finally {
+      if (!controller.signal.aborted) {
+        setBeneficiarioCpLoading((previous) => ({ ...previous, [index]: false }));
+      }
+    }
+  }
+
+  function changeBeneficiarioDomicilioPais(index: number, value: string) {
+    beneficiarioCpRequestsRef.current[index]?.abort();
+    setBeneficiarioCpLoading((previous) => ({ ...previous, [index]: false }));
+    setErr(`beneficiarios_controladores.${index}.contacto.domicilio.codigo_postal`);
+    updateBeneficiarioControlador(index, (row) => {
+      const root = row.datos_completos as Record<string, any>;
+      const contacto = root.contacto || {};
+      const domicilio = contacto.domicilio || {};
+      return {
+        ...row,
+        datos_completos: {
+          ...root,
+          contacto: {
+            ...contacto,
+            domicilio: {
+              ...domicilio,
+              pais: value,
+              codigo_postal: "",
+              colonia: "",
+              municipio: "",
+              ciudad_delegacion: "",
+              estado: "",
+              colonias_opciones: [],
+            },
+          },
+        } as RelatedPFData,
+      };
+    });
+  }
+
+  function changeBeneficiarioCodigoPostal(index: number, value: string) {
+    beneficiarioCpRequestsRef.current[index]?.abort();
+    setBeneficiarioCpLoading((previous) => ({ ...previous, [index]: false }));
+    setErr(`beneficiarios_controladores.${index}.contacto.domicilio.codigo_postal`);
+    updateBeneficiarioControlador(index, (row) => {
+      const root = row.datos_completos as Record<string, any>;
+      const contacto = root.contacto || {};
+      const domicilio = contacto.domicilio || {};
+      return {
+        ...row,
+        datos_completos: {
+          ...root,
+          contacto: {
+            ...contacto,
+            domicilio: {
+              ...domicilio,
+              codigo_postal: value,
+              colonia: "",
+              municipio: "",
+              ciudad_delegacion: "",
+              estado: "",
+              colonias_opciones: [],
+            },
+          },
+        } as RelatedPFData,
+      };
+    });
+  }
+
   function renderBeneficiarioControladorContactoFields(row: BeneficiarioControladorRow, index: number) {
     const contacto = (((row.datos_completos as Record<string, any>).contacto || {}) as Record<string, any>);
     const domicilio = ((contacto.domicilio || {}) as Record<string, any>);
+    const telefono = ((contacto.telefono_detalle || {}) as Record<string, any>);
+    const fieldError = (field: string) =>
+      errors[`beneficiarios_controladores.${index}.${field}`];
 
     return (
       <div className="space-y-3">
@@ -1998,31 +2276,53 @@ function valueToCatalogKey(v: string) {
               : "sm:grid-cols-3"
           }`}
         >
-          <div className="space-y-1">
-            <label className="text-sm font-medium">País</label>
-            <input
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-              value={safeInput(contacto.pais)}
-              onChange={(e) => updateBeneficiarioControladorDataField(index, "contacto", "pais", e.target.value)}
-            />
-          </div>
+          <SearchableSelect
+            label="País de contacto"
+            required
+            value={safeInput(contacto.pais)}
+            items={paises}
+            error={fieldError("contacto.pais")}
+            onChange={(value) => updateBeneficiarioControladorDataField(index, "contacto", "pais", value)}
+            onBlur={validateBeneficiariosOnBlur}
+          />
 
           <div className="space-y-1">
-            <label className="text-sm font-medium">Email</label>
+            <label className="text-sm font-medium">Email *</label>
             <input
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              type="email"
+              className={`w-full rounded border px-3 py-2 text-sm ${fieldError("contacto.email") ? "border-red-500" : "border-gray-300"}`}
               value={safeInput(contacto.email)}
               onChange={(e) => updateBeneficiarioControladorDataField(index, "contacto", "email", e.target.value)}
+              onBlur={validateBeneficiariosOnBlur}
             />
+            {fieldError("contacto.email") ? <p className="text-xs text-red-600">{fieldError("contacto.email")}</p> : null}
           </div>
 
           <div className="space-y-1">
-            <label className="text-sm font-medium">Teléfono</label>
+            <label className="text-sm font-medium">Código telefónico *</label>
             <input
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-              value={safeInput(contacto.telefono)}
-              onChange={(e) => updateBeneficiarioControladorDataField(index, "contacto", "telefono", e.target.value)}
+              className={`w-full rounded border px-3 py-2 text-sm ${fieldError("contacto.telefono_detalle.codigo_pais") ? "border-red-500" : "border-gray-300"}`}
+              value={safeInput(telefono.codigo_pais)}
+              onChange={(e) => updateBeneficiarioControladorNestedField(index, "contacto", "telefono_detalle", "codigo_pais", e.target.value)}
+              onBlur={validateBeneficiariosOnBlur}
             />
+            {fieldError("contacto.telefono_detalle.codigo_pais") ? <p className="text-xs text-red-600">{fieldError("contacto.telefono_detalle.codigo_pais")}</p> : null}
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Teléfono *</label>
+            <input className={`w-full rounded border px-3 py-2 text-sm ${fieldError("contacto.telefono_detalle.numero") ? "border-red-500" : "border-gray-300"}`}
+              value={safeInput(telefono.numero)}
+              onChange={(e) => updateBeneficiarioControladorNestedField(index, "contacto", "telefono_detalle", "numero", onlyDigits(e.target.value).slice(0, 15))}
+              onBlur={validateBeneficiariosOnBlur} />
+            {fieldError("contacto.telefono_detalle.numero") ? <p className="text-xs text-red-600">{fieldError("contacto.telefono_detalle.numero")}</p> : null}
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Extensión</label>
+            <input className={`w-full rounded border px-3 py-2 text-sm ${fieldError("contacto.telefono_detalle.ext") ? "border-red-500" : "border-gray-300"}`}
+              value={safeInput(telefono.ext)}
+              onChange={(e) => updateBeneficiarioControladorNestedField(index, "contacto", "telefono_detalle", "ext", onlyDigits(e.target.value).slice(0, 6))}
+              onBlur={validateBeneficiariosOnBlur} />
+            {fieldError("contacto.telefono_detalle.ext") ? <p className="text-xs text-red-600">{fieldError("contacto.telefono_detalle.ext")}</p> : null}
           </div>
         </div>
 
@@ -2033,76 +2333,108 @@ function valueToCatalogKey(v: string) {
               : "sm:grid-cols-4"
           }`}
         >
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Calle</label>
+          <div className="order-[7] space-y-1">
+            <label className="text-sm font-medium">Calle *</label>
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(domicilio.calle)}
               onChange={(e) => updateBeneficiarioControladorDomicilioField(index, "calle", e.target.value)}
+              onBlur={validateBeneficiariosOnBlur}
             />
+            {fieldError("contacto.domicilio.calle") ? <p className="text-xs text-red-600">{fieldError("contacto.domicilio.calle")}</p> : null}
           </div>
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Número</label>
+          <div className="order-[8] space-y-1">
+            <label className="text-sm font-medium">Número exterior *</label>
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(domicilio.numero)}
               onChange={(e) => updateBeneficiarioControladorDomicilioField(index, "numero", e.target.value)}
+              onBlur={validateBeneficiariosOnBlur}
             />
+            {fieldError("contacto.domicilio.numero") ? <p className="text-xs text-red-600">{fieldError("contacto.domicilio.numero")}</p> : null}
+          </div>
+          <div className="order-[9] space-y-1">
+            <label className="text-sm font-medium">Interior</label>
+            <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              value={safeInput(domicilio.interior)}
+              onChange={(e) => updateBeneficiarioControladorDomicilioField(index, "interior", e.target.value)}
+              onBlur={validateBeneficiariosOnBlur} />
           </div>
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Colonia</label>
-            <input
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-              value={safeInput(domicilio.colonia)}
-              onChange={(e) => updateBeneficiarioControladorDomicilioField(index, "colonia", e.target.value)}
-            />
+          <div className="order-[3] space-y-1">
+            <label className="text-sm font-medium">Colonia *</label>
+            {Array.isArray(domicilio.colonias_opciones) && domicilio.colonias_opciones.length > 1 ? (
+              <select className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={safeInput(domicilio.colonia)}
+                onChange={(e) => updateBeneficiarioControladorDomicilioField(index, "colonia", e.target.value)} onBlur={validateBeneficiariosOnBlur}>
+                <option value="">Selecciona colonia</option>
+                {domicilio.colonias_opciones.map((colonia: string) => <option key={colonia} value={colonia}>{colonia}</option>)}
+              </select>
+            ) : (
+              <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm" value={safeInput(domicilio.colonia)}
+                onChange={(e) => updateBeneficiarioControladorDomicilioField(index, "colonia", e.target.value)} onBlur={validateBeneficiariosOnBlur} />
+            )}
+            {fieldError("contacto.domicilio.colonia") ? <p className="text-xs text-red-600">{fieldError("contacto.domicilio.colonia")}</p> : null}
           </div>
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Municipio</label>
+          <div className="order-[4] space-y-1">
+            <label className="text-sm font-medium">Municipio *</label>
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(domicilio.municipio)}
               onChange={(e) => updateBeneficiarioControladorDomicilioField(index, "municipio", e.target.value)}
+              readOnly={isMexicoKey(domicilio.pais) && Array.isArray(domicilio.colonias_opciones) && domicilio.colonias_opciones.length > 0}
+              onBlur={validateBeneficiariosOnBlur}
             />
+            {fieldError("contacto.domicilio.municipio") ? <p className="text-xs text-red-600">{fieldError("contacto.domicilio.municipio")}</p> : null}
           </div>
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Ciudad / delegación</label>
+          <div className="order-[5] space-y-1">
+            <label className="text-sm font-medium">Ciudad / delegación *</label>
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(domicilio.ciudad_delegacion)}
               onChange={(e) => updateBeneficiarioControladorDomicilioField(index, "ciudad_delegacion", e.target.value)}
+              readOnly={isMexicoKey(domicilio.pais) && Array.isArray(domicilio.colonias_opciones) && domicilio.colonias_opciones.length > 0}
+              onBlur={validateBeneficiariosOnBlur}
             />
+            {fieldError("contacto.domicilio.ciudad_delegacion") ? <p className="text-xs text-red-600">{fieldError("contacto.domicilio.ciudad_delegacion")}</p> : null}
           </div>
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Código postal</label>
+          <div className="order-[2] space-y-1">
+            <label className="text-sm font-medium">Código postal *</label>
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(domicilio.codigo_postal)}
-              onChange={(e) => updateBeneficiarioControladorDomicilioField(index, "codigo_postal", e.target.value)}
+              disabled={!safeInput(domicilio.pais).trim()}
+              onChange={(e) => {
+                const next = isMexicoKey(domicilio.pais) ? normalizeCodigoPostalMx(e.target.value) : e.target.value;
+                changeBeneficiarioCodigoPostal(index, next);
+                void lookupBeneficiarioCodigoPostal(index, next, domicilio.pais);
+              }}
+              onBlur={validateBeneficiariosOnBlur}
             />
+            {beneficiarioCpLoading[index] ? <p className="text-xs text-blue-700" role="status">Consultando código postal…</p> : null}
+            {fieldError("contacto.domicilio.codigo_postal") ? <p className="text-xs text-red-600">{fieldError("contacto.domicilio.codigo_postal")}</p> : null}
           </div>
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Estado</label>
+          <div className="order-[6] space-y-1">
+            <label className="text-sm font-medium">Estado *</label>
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(domicilio.estado)}
               onChange={(e) => updateBeneficiarioControladorDomicilioField(index, "estado", e.target.value)}
+              readOnly={isMexicoKey(domicilio.pais) && Array.isArray(domicilio.colonias_opciones) && domicilio.colonias_opciones.length > 0}
+              onBlur={validateBeneficiariosOnBlur}
             />
+            {fieldError("contacto.domicilio.estado") ? <p className="text-xs text-red-600">{fieldError("contacto.domicilio.estado")}</p> : null}
           </div>
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium">País domicilio</label>
-            <input
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-              value={safeInput(domicilio.pais)}
-              onChange={(e) => updateBeneficiarioControladorDomicilioField(index, "pais", e.target.value)}
-            />
+          <div className="order-[1]">
+            <SearchableSelect label="País domicilio" required value={safeInput(domicilio.pais)}
+              items={paises} error={fieldError("contacto.domicilio.pais")}
+              onChange={(value) => changeBeneficiarioDomicilioPais(index, value)}
+              onBlur={validateBeneficiariosOnBlur} />
           </div>
         </div>
       </div>
@@ -2111,6 +2443,9 @@ function valueToCatalogKey(v: string) {
 
   function renderBeneficiarioControladorPFFields(row: BeneficiarioControladorRow, index: number) {
     const persona = ((((row.datos_completos as Record<string, any>).persona) || {}) as Record<string, any>);
+    const identificacion = ((persona.identificacion || {}) as Record<string, any>);
+    const cargoPublico = ((((row.datos_completos as Record<string, any>).cargo_publico) || {}) as Record<string, any>);
+    const beneficiarioNacional = persona.tipo_nacionalidad === "nacional";
     const fieldError = (field: string) =>
       errors[`beneficiarios_controladores.${index}.${field}`];
 
@@ -2131,6 +2466,7 @@ function valueToCatalogKey(v: string) {
               className={`w-full rounded border px-3 py-2 text-sm ${fieldError("nombres") ? "border-red-500" : "border-gray-300"}`}
               value={safeInput(persona.nombres)}
               onChange={(e) => updateBeneficiarioControladorDataField(index, "persona", "nombres", e.target.value)}
+              onBlur={validateBeneficiariosOnBlur}
             />
             {fieldError("nombres") ? (
               <p className="text-xs text-red-600">{fieldError("nombres")}</p>
@@ -2145,6 +2481,7 @@ function valueToCatalogKey(v: string) {
               className={`w-full rounded border px-3 py-2 text-sm ${fieldError("apellido_paterno") ? "border-red-500" : "border-gray-300"}`}
               value={safeInput(persona.apellido_paterno)}
               onChange={(e) => updateBeneficiarioControladorDataField(index, "persona", "apellido_paterno", e.target.value)}
+              onBlur={validateBeneficiariosOnBlur}
             />
             {fieldError("apellido_paterno") ? (
               <p className="text-xs text-red-600">
@@ -2155,12 +2492,15 @@ function valueToCatalogKey(v: string) {
 
           <div className="space-y-1">
             <label className="text-sm font-medium">
-              Apellido materno <span className="text-red-600">*</span>
+              Apellido materno {beneficiarioNacional
+                ? <span className="text-red-600">*</span>
+                : <span className="text-gray-500">(opcional)</span>}
             </label>
             <input
               className={`w-full rounded border px-3 py-2 text-sm ${fieldError("apellido_materno") ? "border-red-500" : "border-gray-300"}`}
               value={safeInput(persona.apellido_materno)}
               onChange={(e) => updateBeneficiarioControladorDataField(index, "persona", "apellido_materno", e.target.value)}
+              onBlur={validateBeneficiariosOnBlur}
             />
             {fieldError("apellido_materno") ? (
               <p className="text-xs text-red-600">
@@ -2171,12 +2511,14 @@ function valueToCatalogKey(v: string) {
 
           <div className="space-y-1">
             <label className="text-sm font-medium">
-              Fecha nac. (AAAAMMDD) <span className="text-red-600">*</span>
+              Fecha de nacimiento <span className="text-red-600">*</span>
             </label>
             <input
+              type="date"
               className={`w-full rounded border px-3 py-2 text-sm ${fieldError("fecha_nacimiento") ? "border-red-500" : "border-gray-300"}`}
               value={safeInput(persona.fecha_nacimiento)}
-              onChange={(e) => updateBeneficiarioControladorDataField(index, "persona", "fecha_nacimiento", onlyDigits(e.target.value).slice(0, 8))}
+              onChange={(e) => updateBeneficiarioControladorDataField(index, "persona", "fecha_nacimiento", e.target.value)}
+              onBlur={validateBeneficiariosOnBlur}
             />
             {fieldError("fecha_nacimiento") ? (
               <p className="text-xs text-red-600">
@@ -2186,11 +2528,12 @@ function valueToCatalogKey(v: string) {
           </div>
 
           <div className="space-y-1">
-            <label className="text-sm font-medium">RFC</label>
+            <label className="text-sm font-medium">RFC {beneficiarioNacional ? "*" : "(opcional)"}</label>
             <input
               className={`w-full rounded border px-3 py-2 text-sm ${fieldError("rfc") ? "border-red-500" : "border-gray-300"}`}
               value={safeInput(persona.rfc)}
               onChange={(e) => updateBeneficiarioControladorDataField(index, "persona", "rfc", e.target.value)}
+              onBlur={validateBeneficiariosOnBlur}
             />
             {fieldError("rfc") ? (
               <p className="text-xs text-red-600">{fieldError("rfc")}</p>
@@ -2198,30 +2541,111 @@ function valueToCatalogKey(v: string) {
           </div>
 
           <div className="space-y-1">
-            <label className="text-sm font-medium">CURP</label>
+            <label className="text-sm font-medium">CURP {beneficiarioNacional ? "*" : "(opcional)"}</label>
             <input
               className={`w-full rounded border px-3 py-2 text-sm ${fieldError("curp") ? "border-red-500" : "border-gray-300"}`}
               value={safeInput(persona.curp)}
               onChange={(e) => updateBeneficiarioControladorDataField(index, "persona", "curp", e.target.value)}
+              onBlur={validateBeneficiariosOnBlur}
             />
             {fieldError("curp") ? (
               <p className="text-xs text-red-600">{fieldError("curp")}</p>
             ) : null}
           </div>
 
-          <div
-            className={`space-y-1 ${
-              tipo === "persona_fisica"
-                ? "md:col-span-2 xl:col-span-3"
-                : "sm:col-span-3"
-            }`}
-          >
-            <label className="text-sm font-medium">Actividad económica</label>
-            <input
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-              value={safeInput(persona.actividad_economica)}
-              onChange={(e) => updateBeneficiarioControladorDataField(index, "persona", "actividad_economica", e.target.value)}
-            />
+          <SearchableSelect label="País de nacimiento" required
+            value={safeInput(persona.pais_nacimiento)} items={paises}
+            error={fieldError("pais_nacimiento")}
+            onChange={(value) => updateBeneficiarioControladorDataField(index, "persona", "pais_nacimiento", value)}
+            onBlur={validateBeneficiariosOnBlur} />
+          <SearchableSelect label="Actividad económica" required
+            value={isPlainObject(persona.actividad_economica) ? safeInput(persona.actividad_economica.clave) : safeInput(persona.actividad_economica)}
+            items={actividades} error={fieldError("actividad_economica")}
+            onChange={(value) => {
+              const item = actividades.find((activity) => activity.clave === value);
+              updateBeneficiarioControlador(index, (current) => ({
+                ...current,
+                datos_completos: {
+                  ...(current.datos_completos as any),
+                  persona: {
+                    ...(current.datos_completos as any).persona,
+                    actividad_economica: item ? { clave: item.clave, descripcion: item.descripcion } : value,
+                  },
+                },
+              }));
+            }}
+            onBlur={validateBeneficiariosOnBlur} />
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Residencia *</label>
+            <select className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              value={safeInput(persona.residencia)}
+              onChange={(e) => updateBeneficiarioControladorDataField(index, "persona", "residencia", e.target.value)}
+              onBlur={validateBeneficiariosOnBlur}>
+              <option value="">Selecciona</option>
+              <option value="temporal">Temporal</option>
+              <option value="permanente">Permanente</option>
+            </select>
+            {fieldError("residencia") ? (
+              <p className="text-xs text-red-600">{fieldError("residencia")}</p>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="space-y-3 rounded border border-gray-200 p-3">
+          <p className="text-sm font-medium">Identificación</p>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {(["tipo", "autoridad", "numero"] as const).map((key) => (
+              <div key={key} className="space-y-1">
+                <label className="text-sm font-medium">{key === "tipo" ? "Tipo o nombre del documento" : key === "autoridad" ? "Autoridad" : "Número"} *</label>
+                <input className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                  value={safeInput(identificacion[key])}
+                  onChange={(e) => updateBeneficiarioControladorNestedField(index, "persona", "identificacion", key, e.target.value)}
+                  onBlur={validateBeneficiariosOnBlur} />
+                {fieldError(`identificacion.${key}`) ? (
+                  <p className="text-xs text-red-600">{fieldError(`identificacion.${key}`)}</p>
+                ) : null}
+              </div>
+            ))}
+            {(["fecha_expedicion", "fecha_expiracion"] as const).map((key) => (
+              <div key={key} className="space-y-1">
+                <label className="text-sm font-medium">{key === "fecha_expedicion" ? "Expedición" : "Expiración"} {key === "fecha_expiracion" && identificacion.sin_vigencia ? "" : "*"}</label>
+                <input type="date" disabled={key === "fecha_expiracion" && identificacion.sin_vigencia === true}
+                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                  value={safeInput(identificacion[key])}
+                  onChange={(e) => updateBeneficiarioControladorNestedField(index, "persona", "identificacion", key, e.target.value)}
+                  onBlur={validateBeneficiariosOnBlur} />
+                {fieldError(`identificacion.${key}`) ? (
+                  <p className="text-xs text-red-600">{fieldError(`identificacion.${key}`)}</p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox"
+            checked={identificacion.sin_vigencia === true}
+            onChange={(e) => updateBeneficiarioControladorNestedField(index, "persona", "identificacion", "sin_vigencia", e.target.checked)} />Sin vigencia</label>
+        </div>
+
+        <div className="space-y-3 rounded border border-gray-200 p-3">
+          <p className="text-sm font-medium">Cargo público</p>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            {([
+              ["actual", "Actualmente desempeño un cargo público"],
+              ["previo", "He desempeñado un cargo público"],
+              ["familiar", "Un familiar desempeña o desempeñó un cargo público"],
+            ] as const).map(([key, label]) => (
+              <div key={key} className="flex h-full flex-col space-y-1">
+                <label className="flex min-h-12 items-end text-sm font-medium">{label} *</label>
+                <select className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                  value={safeInput(cargoPublico[key])}
+                  onChange={(e) => updateBeneficiarioControladorDataField(index, "cargo_publico" as any, key, e.target.value)}
+                  onBlur={validateBeneficiariosOnBlur}>
+                  <option value="">Selecciona</option><option value="si">Sí</option><option value="no">No</option>
+                </select>
+                {fieldError(`cargo_publico.${key}`) ? (
+                  <p className="text-xs text-red-600">{fieldError(`cargo_publico.${key}`)}</p>
+                ) : null}
+              </div>
+            ))}
           </div>
         </div>
 
@@ -2311,6 +2735,7 @@ function valueToCatalogKey(v: string) {
                       e.target.value,
                     )
                   }
+                  onBlur={validateBeneficiariosOnBlur}
                 />
                 {errors[
                   `beneficiarios_controladores.${index}.relacion_con_cliente`
@@ -2327,29 +2752,59 @@ function valueToCatalogKey(v: string) {
 
               <div className="space-y-1">
                 <label className="text-sm font-medium">
+                  Tipo de nacionalidad <span className="text-red-600">*</span>
+                </label>
+                <select
+                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                  value={safeInput((row.datos_completos as any).persona?.tipo_nacionalidad)}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    updateBeneficiarioControladorDataField(index, "persona", "tipo_nacionalidad", value);
+                    updateBeneficiarioControladorDataField(index, "persona", "nacional_extranjero", value);
+                    const nextNacionalidad = value === "nacional" ? MEXICO_CATALOGO_KEY : "";
+                    updateBeneficiarioControladorCommonField(index, "nacionalidad", nextNacionalidad);
+                    updateBeneficiarioControladorDataField(index, "persona", "nacionalidad", nextNacionalidad);
+                    updateBeneficiarioControladorNestedField(index, "contacto", "telefono_detalle", "codigo_pais", value === "nacional" ? "+52" : "");
+                  }}
+                  onBlur={validateBeneficiariosOnBlur}
+                >
+                  <option value="">Selecciona</option>
+                  <option value="nacional">Nacional</option>
+                  <option value="extranjero">Extranjero</option>
+                </select>
+                {errors[`beneficiarios_controladores.${index}.tipo_nacionalidad`] ? (
+                  <p className="text-xs text-red-600">
+                    {errors[`beneficiarios_controladores.${index}.tipo_nacionalidad`]}
+                  </p>
+                ) : null}
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">
                   Nacionalidad <span className="text-red-600">*</span>
                 </label>
-                <input
-                  className={`w-full rounded border px-3 py-2 text-sm ${errors[`beneficiarios_controladores.${index}.nacionalidad`] ? "border-red-500" : "border-gray-300"}`}
-                  value={row.nacionalidad}
-                  onChange={(e) =>
-                    updateBeneficiarioControladorCommonField(
-                      index,
-                      "nacionalidad",
-                      e.target.value,
-                    )
-                  }
-                />
-                {errors[
-                  `beneficiarios_controladores.${index}.nacionalidad`
-                ] ? (
-                  <p className="text-xs text-red-600">
-                    {
-                      errors[
-                        `beneficiarios_controladores.${index}.nacionalidad`
-                      ]
-                    }
-                  </p>
+                {(row.datos_completos as any).persona?.tipo_nacionalidad === "nacional" ? (
+                  <input
+                    className="mt-1 w-full rounded border border-gray-300 bg-gray-100 px-3 py-2 text-sm"
+                    value="México (MX)"
+                    readOnly
+                    aria-label="Nacionalidad México"
+                  />
+                ) : (
+                  <SearchableSelect label=""
+                    value={row.nacionalidad}
+                    items={paises.filter((pais) => !isMexicoKey(pais.clave))}
+                    error={errors[`beneficiarios_controladores.${index}.nacionalidad`]}
+                    onChange={(value) => {
+                      updateBeneficiarioControladorCommonField(index, "nacionalidad", value);
+                      updateBeneficiarioControladorDataField(index, "persona", "nacionalidad", value);
+                    }}
+                    onBlur={validateBeneficiariosOnBlur}
+                  />
+                )}
+                {(row.datos_completos as any).persona?.tipo_nacionalidad === "nacional" &&
+                errors[`beneficiarios_controladores.${index}.nacionalidad`] ? (
+                  <p className="text-xs text-red-600">{errors[`beneficiarios_controladores.${index}.nacionalidad`]}</p>
                 ) : null}
               </div>
 
@@ -2424,9 +2879,61 @@ function valueToCatalogKey(v: string) {
 
   function hydrateRelatedPFData(data: any): RelatedPFData {
     const empty = createEmptyRelatedPFData();
+    const contacto = mergeDeepRecord(empty.contacto as Record<string, any>, data?.contacto);
+    const persona = mergeDeepRecord(empty.persona as Record<string, any>, data?.persona);
+    const identificacion = isPlainObject(persona.identificacion)
+      ? persona.identificacion
+      : {};
     return {
-      contacto: mergeDeepRecord(empty.contacto as Record<string, any>, data?.contacto),
-      persona: mergeDeepRecord(empty.persona as Record<string, any>, data?.persona),
+      contacto,
+      persona: {
+        ...persona,
+        fecha_nacimiento: toDateInputValue(persona.fecha_nacimiento),
+        identificacion: {
+          ...identificacion,
+          fecha_expedicion: toDateInputValue(identificacion.fecha_expedicion),
+          fecha_expiracion: toDateInputValue(identificacion.fecha_expiracion),
+        },
+      },
+      cargo_publico: mergeDeepRecord(
+        empty.cargo_publico || {},
+        data?.cargo_publico,
+      ),
+    };
+  }
+
+  function hydrateBeneficiarioControladorPFData(data: any): RelatedPFData {
+    const empty = createEmptyRelatedPFData();
+    empty.contacto.pais = "";
+    empty.contacto.domicilio.pais = "";
+
+    const contacto = mergeDeepRecord(
+      empty.contacto as Record<string, any>,
+      data?.contacto,
+    );
+    const persona = mergeDeepRecord(
+      empty.persona as Record<string, any>,
+      data?.persona,
+    );
+    const identificacion = isPlainObject(persona.identificacion)
+      ? persona.identificacion
+      : {};
+
+    return {
+      contacto,
+      persona: {
+        ...persona,
+        fecha_nacimiento: toDateInputValue(persona.fecha_nacimiento),
+        identificacion: {
+          ...identificacion,
+          fecha_expedicion: toDateInputValue(identificacion.fecha_expedicion),
+          fecha_expiracion: toDateInputValue(identificacion.fecha_expiracion),
+        },
+      },
+      cargo_publico: mergeDeepRecord(
+        empty.cargo_publico || {},
+        data?.cargo_publico,
+      ),
     };
   }
 
@@ -2487,14 +2994,21 @@ function valueToCatalogKey(v: string) {
       return buildCanonicalDuenoRowFromLegacy(normalizeDuenoBeneficiarioRow(row));
     }
 
-    const datos_completos = hydrateRelatedPFData(row?.datos_completos);
+    const datos_completos = hydrateBeneficiarioControladorPFData(
+      row?.datos_completos,
+    );
 
     return {
       nombre_entidad:
         deriveRelatedNombreEntidad("persona_fisica", datos_completos) ||
         safeInput(row?.nombre_entidad).trim(),
-      nacionalidad: safeInput(row?.nacionalidad || "MEX").trim() || "MEX",
-      relacion_con_cliente: safeInput(row?.relacion_con_cliente).trim(),
+      nacionalidad: safeInput(
+        row?.nacionalidad ?? datos_completos.persona?.nacionalidad ?? "",
+      ).trim(),
+      relacion_con_cliente: safeInput(
+        row?.relacion_con_cliente ??
+        datos_completos.persona?.relacion_con_cliente,
+      ).trim(),
       porcentaje_participacion: safeInput(row?.porcentaje_participacion).trim(),
       sin_documentacion: !!row?.sin_documentacion,
       observaciones: safeInput(row?.observaciones).trim(),
@@ -2508,9 +3022,11 @@ function valueToCatalogKey(v: string) {
     const recursosRaw = Array.isArray(safeDatos?.recursos_terceros)
       ? safeDatos.recursos_terceros
       : [];
-    const duenosRaw = Array.isArray(safeDatos?.duenos_beneficiarios)
-      ? safeDatos.duenos_beneficiarios
-      : [];
+    const duenosRaw = Array.isArray(safeDatos?.beneficiarios_controladores)
+      ? safeDatos.beneficiarios_controladores
+      : Array.isArray(safeDatos?.duenos_beneficiarios)
+        ? safeDatos.duenos_beneficiarios
+        : [];
 
     const relatedRecursos = recursosRaw.map(hydrateRelatedRecursoRow);
     const beneficiariosControladores = duenosRaw.map(hydrateBeneficiarioControladorRow);
@@ -2520,7 +3036,9 @@ function valueToCatalogKey(v: string) {
         !!safeDatos?.recursos_terceros_aplica || relatedRecursos.length > 0,
       relatedRecursos,
       beneficiariosControladoresAplica:
-        !!safeDatos?.duenos_beneficiarios_aplica || beneficiariosControladores.length > 0,
+        !!safeDatos?.beneficiarios_controladores_aplica ||
+        !!safeDatos?.duenos_beneficiarios_aplica ||
+        beneficiariosControladores.length > 0,
       beneficiariosControladores,
     };
   }
@@ -2957,10 +3475,7 @@ persona: {
       }
     }
 
-    if (
-      tipo !== "persona_fisica" &&
-      !validateBeneficiariosControladoresBeforeSubmit()
-    ) {
+    if (!validateBeneficiariosControladoresBeforeSubmit()) {
       return;
     }
 
@@ -3304,8 +3819,8 @@ persona: {
         <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-4">
           <h2 className="text-lg font-semibold text-gray-900">Domicilio (contacto)</h2>
           <p className="text-xs text-gray-500">
-            Cuando la Nacionalidad es México, el código postal busca un catálogo local mínimo. Para Nacionalidad extranjera,
-            la captura permanece manual.
+            Para domicilios en México, el código postal se consulta en el catálogo oficial del sistema.
+            Para otros países, la captura permanece manual.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -3357,7 +3872,7 @@ persona: {
             </div>
 
             {aplicaCpMexico && domColoniasOpciones.length > 1 ? (
-              <div className={`${tipo === "persona_fisica" ? "order-[2]" : ""} space-y-1`}>
+              <div className={`${tipo === "persona_fisica" ? "order-[3]" : ""} space-y-1`}>
                 <label className="text-sm font-medium">
                   Colonia <span className="text-red-600">*</span>
                 </label>
@@ -3388,7 +3903,7 @@ persona: {
                 ) : null}
               </div>
             ) : (
-              <div className={`${tipo === "persona_fisica" ? "order-[2]" : ""} space-y-1`}>
+              <div className={`${tipo === "persona_fisica" ? "order-[3]" : ""} space-y-1`}>
                 <label className="text-sm font-medium">
                   Colonia <span className="text-red-600">*</span>
                 </label>
@@ -3413,7 +3928,7 @@ persona: {
               </div>
             )}
 
-            <div className={`${tipo === "persona_fisica" ? "order-[3]" : ""} space-y-1`}>
+            <div className={`${tipo === "persona_fisica" ? "order-[4]" : ""} space-y-1`}>
               <label className="text-sm font-medium">
                 Municipio <span className="text-red-600">*</span>
               </label>
@@ -3421,6 +3936,7 @@ persona: {
                 className={`w-full rounded border px-3 py-2 text-sm ${errors["contacto.domicilio.municipio"] ? "border-red-500" : "border-gray-300"}`}
                 value={domMunicipio}
                 onChange={(e) => setDomMunicipio(e.target.value)}
+                readOnly={aplicaCpMexico && domColoniasOpciones.length > 0}
                 onBlur={() =>
                   validator.validateField("contacto.domicilio.municipio")
                 }
@@ -3432,7 +3948,7 @@ persona: {
               ) : null}
             </div>
 
-            <div className={`${tipo === "persona_fisica" ? "order-[4]" : ""} space-y-1`}>
+            <div className={`${tipo === "persona_fisica" ? "order-[5]" : ""} space-y-1`}>
               <label className="text-sm font-medium">
                 Ciudad/Delegación <span className="text-red-600">*</span>
               </label>
@@ -3440,6 +3956,7 @@ persona: {
                 className={`w-full rounded border px-3 py-2 text-sm ${errors["contacto.domicilio.ciudad_delegacion"] ? "border-red-500" : "border-gray-300"}`}
                 value={domCiudadDelegacion}
                 onChange={(e) => setDomCiudadDelegacion(e.target.value)}
+                readOnly={aplicaCpMexico && domColoniasOpciones.length > 0}
                 onBlur={() =>
                   validator.validateField(
                     "contacto.domicilio.ciudad_delegacion",
@@ -3453,7 +3970,7 @@ persona: {
               ) : null}
             </div>
 
-            <div className={`${tipo === "persona_fisica" ? "order-[1]" : ""} space-y-1`}>
+            <div className={`${tipo === "persona_fisica" ? "order-[2]" : ""} space-y-1`}>
               <label className="text-sm font-medium">
                 Código Postal <span className="text-red-600">*</span>
               </label>
@@ -3463,6 +3980,7 @@ persona: {
                 }`}
                 value={domCP}
                 onChange={(e) => handleDomCPChange(e.target.value)}
+                disabled={tipo === "persona_fisica" && !domPais.trim()}
                 onBlur={() =>
                   validator.validateField("contacto.domicilio.codigo_postal")
                 }
@@ -3473,12 +3991,14 @@ persona: {
                   {b1Errors["contacto.domicilio.codigo_postal"] || errors["contacto.domicilio.codigo_postal"]}
                 </p>
               ) : null}
-              {domCpAviso ? (
+              {domCpLoading ? (
+                <p className="text-xs text-blue-700" role="status">Consultando código postal…</p>
+              ) : domCpAviso ? (
                 <p className="text-xs text-amber-700">{domCpAviso}</p>
               ) : null}
             </div>
 
-            <div className={`${tipo === "persona_fisica" ? "order-[5]" : ""} space-y-1`}>
+            <div className={`${tipo === "persona_fisica" ? "order-[6]" : ""} space-y-1`}>
               <label className="text-sm font-medium">
                 Estado <span className="text-red-600">*</span>
               </label>
@@ -3486,6 +4006,7 @@ persona: {
                 className={`w-full rounded border px-3 py-2 text-sm ${errors["contacto.domicilio.estado"] ? "border-red-500" : "border-gray-300"}`}
                 value={domEstado}
                 onChange={(e) => setDomEstado(e.target.value)}
+                readOnly={aplicaCpMexico && domColoniasOpciones.length > 0}
                 onBlur={() =>
                   validator.validateField("contacto.domicilio.estado")
                 }
@@ -3497,31 +4018,17 @@ persona: {
                 </p>
               ) : null}
             </div>
-            <div className={`${tipo === "persona_fisica" ? "order-[6]" : ""} space-y-1`}>
-              <label className="text-sm font-medium">
-                País{" "}
-                {tipo === "persona_fisica" ? (
-                  <span className="text-red-600">*</span>
-                ) : null}
-              </label>
-              <input
-                className={`w-full rounded border px-3 py-2 text-sm ${errors["contacto.domicilio.pais"] ? "border-red-500" : "border-gray-300"}`}
+            <div className={`${tipo === "persona_fisica" ? "order-[1]" : ""}`}>
+              <SearchableSelect
+                label="País del domicilio"
+                required
                 value={domPais}
-                onChange={(e) => setDomPais(e.target.value)}
-                onBlur={() =>
-                  validator.validateField("contacto.domicilio.pais")
-                }
-                placeholder="México"
+                items={paises}
+                error={errors["contacto.domicilio.pais"]}
+                placeholder="Selecciona un país"
+                onChange={handleDomPaisChange}
+                onBlur={() => validator.validateField("contacto.domicilio.pais")}
               />
-              {errors["contacto.domicilio.pais"] ? (
-                <p className="text-xs text-red-600">
-                  {errors["contacto.domicilio.pais"]}
-                </p>
-              ) : (
-                <p className="text-xs text-gray-500">
-                  País del domicilio/contacto. Se captura manualmente y no modifica la regla de Código Postal.
-                </p>
-              )}
             </div>
 
 
@@ -3859,8 +4366,8 @@ persona: {
               Cargo público
             </h2>
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">
+                <div className="flex h-full flex-col space-y-1">
+                  <label className="flex min-h-12 items-end text-sm font-medium">
                     Actualmente desempeño un cargo público *
                   </label>
                   <select
@@ -3882,8 +4389,8 @@ persona: {
                   ) : null}
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">
+                <div className="flex h-full flex-col space-y-1">
+                  <label className="flex min-h-12 items-end text-sm font-medium">
                     He desempeñado un cargo público *
                   </label>
                   <select
@@ -3905,8 +4412,8 @@ persona: {
                   ) : null}
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">
+                <div className="flex h-full flex-col space-y-1">
+                  <label className="flex min-h-12 items-end text-sm font-medium">
                     Algún familiar desempeña o ha desempeñado *
                   </label>
                   <select
