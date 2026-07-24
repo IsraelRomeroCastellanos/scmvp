@@ -5,6 +5,11 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import {
+  getCurrentUser,
+  normalizeRole,
+  type NormalizedRole,
+} from "@/lib/auth";
 import { loadCatalogo, type CatalogItem } from "@/lib/catalogos";
 import {
   findCodigoPostalMx,
@@ -23,6 +28,10 @@ export default function ClientPage() {
   type TipoCliente = "persona_fisica" | "persona_moral" | "fideicomiso";
 
   type Errors = Record<string, string>;
+  type EmpresaOption = {
+    id: number;
+    nombre_legal: string;
+  };
 
   type RecursoTerceroItem = {
     tipo_tercero: string;
@@ -325,6 +334,11 @@ function valueToCatalogKey(v: string) {
 
   // form base
   const [empresaId, setEmpresaId] = useState("");
+  const [empresaNombre, setEmpresaNombre] = useState("");
+  const [empresas, setEmpresas] = useState<EmpresaOption[]>([]);
+  const [empresaLoading, setEmpresaLoading] = useState(true);
+  const [empresaError, setEmpresaError] = useState("");
+  const [sessionRole, setSessionRole] = useState<NormalizedRole | null>(null);
   const [nombreEntidad, setNombreEntidad] = useState("");
   const [pmRazonSocial, setPmRazonSocial] = useState("");
   const [nacionalidad, setNacionalidad] = useState(""); // clave catálogo
@@ -775,11 +789,98 @@ function valueToCatalogKey(v: string) {
     }
 
     (async () => {
+      let empresaResolved = false;
+
       try {
         setFatal(null);
+        setEmpresaError("");
+        setEmpresaId("");
+        setEmpresaNombre("");
+        setEmpresas([]);
+        setEmpresaLoading(true);
+
         const apiBase =
           process.env.NEXT_PUBLIC_API_BASE_URL ||
           "https://scmvp-1jhq.onrender.com";
+        const storedUser = getCurrentUser();
+        const role = normalizeRole(storedUser?.rol ?? storedUser?.role);
+
+        if (!role) {
+          throw new Error("La sesión no contiene un rol válido");
+        }
+
+        setSessionRole(role);
+
+        if (role === "cliente") {
+          const sessionEmpresaId = Number(storedUser?.empresa_id);
+          if (!Number.isInteger(sessionEmpresaId) || sessionEmpresaId < 1) {
+            throw new Error("Usuario sin empresa asignada");
+          }
+
+          const empresaResponse = await fetch(
+            `${apiBase}/api/cliente/mi-empresa`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+              cache: "no-store",
+            },
+          );
+          const empresaData = await empresaResponse.json().catch(() => null);
+
+          if (!empresaResponse.ok) {
+            throw new Error(
+              empresaData?.error || "No se pudo cargar la empresa de la sesión",
+            );
+          }
+
+          const empresa = empresaData?.empresa;
+          const id = Number(empresa?.id);
+          const nombreLegal = String(empresa?.nombre_legal ?? "").trim();
+
+          if (!Number.isInteger(id) || id < 1 || !nombreLegal) {
+            throw new Error("La respuesta de la empresa no es válida");
+          }
+
+          setEmpresaId(String(id));
+          setEmpresaNombre(nombreLegal);
+        } else {
+          const empresasResponse = await fetch(
+            `${apiBase}/api/admin/empresas`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+              cache: "no-store",
+            },
+          );
+          const empresasData = await empresasResponse.json().catch(() => null);
+
+          if (!empresasResponse.ok) {
+            throw new Error(
+              empresasData?.error || "No se pudo cargar el catálogo de empresas",
+            );
+          }
+
+          if (!Array.isArray(empresasData?.empresas)) {
+            throw new Error("La respuesta del catálogo de empresas no es válida");
+          }
+
+          const empresasApi: EmpresaOption[] = empresasData.empresas
+            .map((empresa: any) => ({
+              id: Number(empresa?.id),
+              nombre_legal: String(empresa?.nombre_legal ?? "").trim(),
+            }))
+            .filter(
+              (empresa: EmpresaOption) =>
+                Number.isInteger(empresa.id) &&
+                empresa.id > 0 &&
+                Boolean(empresa.nombre_legal),
+            );
+
+          setEmpresas(empresasApi);
+        }
+        empresaResolved = true;
 
         const paisesResponse = await fetch(`${apiBase}/api/catalogos/paises`, {
           headers: {
@@ -847,7 +948,15 @@ function valueToCatalogKey(v: string) {
         setActividades(a);
         setGiros(g);
       } catch (e: any) {
-        setFatal(e?.message ?? "No se pudieron cargar catálogos");
+        const message = e?.message ?? "No se pudieron cargar los datos del formulario";
+        if (!empresaResolved) {
+          setEmpresaId("");
+          setEmpresaNombre("");
+          setEmpresaError(message);
+        }
+        setFatal(message);
+      } finally {
+        setEmpresaLoading(false);
       }
     })();
   }, [router]);
@@ -2761,6 +2870,21 @@ persona: {
     });
     setFatal(null);
 
+    const parsedEmpresaId = Number(empresaId);
+    if (
+      empresaLoading ||
+      empresaError ||
+      !sessionRole ||
+      !Number.isInteger(parsedEmpresaId) ||
+      parsedEmpresaId < 1
+    ) {
+      setErr("empresa_id", "Empresa es obligatoria");
+      setFatal(
+        empresaError || "Selecciona una empresa válida antes de registrar",
+      );
+      return;
+    }
+
     const focusFirstInvalidField = () => {
       window.setTimeout(() => {
         const firstInvalid = document.querySelector<HTMLElement>(
@@ -2985,15 +3109,39 @@ persona: {
 
           <div className="space-y-1">
             <label className="text-sm font-medium">
-              Empresa ID <span className="text-red-600">*</span>
+              Empresa <span className="text-red-600">*</span>
             </label>
-            <input
-              className={`w-full rounded border px-3 py-2 text-sm ${errors["empresa_id"] ? "border-red-500" : "border-gray-300"}`}
-              value={empresaId}
-              onChange={(e) => setEmpresaId(e.target.value)}
-              onBlur={() => validator.validateField("empresa_id")}
-              placeholder="Ej. 32"
-            />
+
+            {empresaLoading ? (
+              <div className="rounded border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                Cargando empresa...
+              </div>
+            ) : sessionRole === "cliente" && empresaId ? (
+              <div className="rounded border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900">
+                {empresaNombre} (ID: {empresaId})
+              </div>
+            ) : sessionRole === "admin" || sessionRole === "consultor" ? (
+              <select
+                className={`w-full rounded border px-3 py-2 text-sm ${errors["empresa_id"] || empresaError ? "border-red-500" : "border-gray-300"}`}
+                value={empresaId}
+                onChange={(e) => {
+                  setEmpresaId(e.target.value);
+                  setErr("empresa_id");
+                }}
+                onBlur={() => validator.validateField("empresa_id")}
+              >
+                <option value="">Selecciona una empresa</option>
+                {empresas.map((empresa) => (
+                  <option key={empresa.id} value={empresa.id}>
+                    {empresa.nombre_legal} (ID: {empresa.id})
+                  </option>
+                ))}
+              </select>
+            ) : null}
+
+            {empresaError ? (
+              <p className="text-xs text-red-600">{empresaError}</p>
+            ) : null}
             {errors["empresa_id"] ? (
               <p className="text-xs text-red-600">{errors["empresa_id"]}</p>
             ) : null}
@@ -5154,7 +5302,12 @@ persona: {
         <div className="flex items-center gap-3">
           <button
             type="submit"
-            disabled={loading}
+            disabled={
+              loading ||
+              empresaLoading ||
+              Boolean(empresaError) ||
+              !sessionRole
+            }
             className="rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
           >
             {loading ? "Guardando..." : "Registrar"}

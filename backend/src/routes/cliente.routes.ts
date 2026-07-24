@@ -1267,6 +1267,42 @@ function validateDatosCompletosOr400(
 
 /**
  * ===============================
+ * OBTENER EMPRESA DE LA SESIÓN
+ * ===============================
+ */
+router.get('/mi-empresa', authenticate, async (req: Request, res: Response) => {
+  const empresaId = parsePositiveInt(req.user?.empresa_id);
+
+  if (!empresaId) {
+    return res.status(403).json({
+      error: 'Acceso denegado: empresa no asignada'
+    });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT id, nombre_legal
+       FROM public.empresas
+       WHERE id=$1
+       LIMIT 1`,
+      [empresaId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Empresa no encontrada' });
+    }
+
+    return res.json({ empresa: result.rows[0] });
+  } catch (error) {
+    console.error('Error al obtener empresa de la sesión:', error);
+    return res.status(500).json({
+      error: 'Error al obtener empresa de la sesión'
+    });
+  }
+});
+
+/**
+ * ===============================
  * LISTAR CLIENTES
  * ===============================
  */
@@ -1383,7 +1419,7 @@ router.get('/clientes/:id', authenticate, async (req: Request, res: Response) =>
  * REGISTRAR CLIENTE (Contrato Único)
  * ===============================
  */
-router.post('/registrar-cliente', authenticate, authorizeRoles('admin', 'cliente'), authorizeClienteEmpresaBody, async (req: Request, res: Response) => {
+router.post('/registrar-cliente', authenticate, authorizeRoles('admin', 'consultor', 'cliente'), authorizeClienteEmpresaBody, async (req: Request, res: Response) => {
   const client = await pool.connect();
   try {
     const empresa_id = parsePositiveInt(req.body.empresa_id);
