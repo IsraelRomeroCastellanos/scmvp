@@ -28,7 +28,7 @@ export function createRegistrarClienteValidator(ctx: RegistrarClienteValidatorCt
   function validatePersonaFisicaField(field: string): string | undefined {
     const values = ctx.values;
     const required: Record<string, string> = {
-      empresa_id: "Empresa ID es obligatorio",
+      empresa_id: "Empresa es obligatoria",
       nacionalidad: "Nacionalidad es obligatoria",
       "contacto.pais": "País de nacimiento es obligatorio",
       "contacto.email": "Email es obligatorio",
@@ -73,7 +73,7 @@ export function createRegistrarClienteValidator(ctx: RegistrarClienteValidatorCt
 
     if (field === "empresa_id") {
       const id = Number(value);
-      if (!Number.isInteger(id) || id <= 0) return "Empresa ID inválido";
+      if (!Number.isInteger(id) || id <= 0) return "Empresa inválida";
     }
 
     if (
