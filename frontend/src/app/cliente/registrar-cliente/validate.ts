@@ -29,6 +29,7 @@ export function createRegistrarClienteValidator(ctx: RegistrarClienteValidatorCt
     const values = ctx.values;
     const required: Record<string, string> = {
       empresa_id: "Empresa es obligatoria",
+      tipoNacionalidad: "Tipo de nacionalidad es obligatorio",
       nacionalidad: "Nacionalidad es obligatoria",
       "contacto.pais": "País de nacimiento es obligatorio",
       "contacto.email": "Email es obligatorio",
@@ -66,6 +67,21 @@ export function createRegistrarClienteValidator(ctx: RegistrarClienteValidatorCt
     };
 
     const value = values[field];
+
+    if (
+      field === "tipoNacionalidad" &&
+      !["nacional", "extranjero"].includes(String(value ?? ""))
+    ) {
+      return "Selecciona nacional o extranjero";
+    }
+
+    if (
+      field === "persona.apellido_materno" &&
+      values.tipoNacionalidad === "nacional" &&
+      !isNonEmptyString(value)
+    ) {
+      return "Apellido materno es obligatorio para una persona mexicana";
+    }
 
     if (required[field] && !isNonEmptyString(value)) {
       return required[field];
@@ -124,17 +140,34 @@ export function createRegistrarClienteValidator(ctx: RegistrarClienteValidatorCt
     if (
       field === "contacto.telefono.codigo_pais" &&
       isNonEmptyString(value) &&
-      !/^\+\d{1,4}$/.test(String(value).trim())
+      (values.tipoNacionalidad === "nacional"
+        ? String(value).trim() !== "+52"
+        : !/^\+\d{1,4}$/.test(String(value).trim()))
     ) {
-      return "Código de país inválido";
+      return values.tipoNacionalidad === "nacional"
+        ? "Para una persona nacional el código de país debe ser +52"
+        : "Código de país inválido";
     }
 
     if (
       field === "contacto.telefono.numero" &&
       isNonEmptyString(value) &&
-      !/^\d{7,15}$/.test(String(value).trim())
+      !(values.tipoNacionalidad === "nacional"
+        ? /^\d{10}$/
+        : /^\d{7,15}$/).test(String(value).trim())
     ) {
-      return "Teléfono inválido";
+      return values.tipoNacionalidad === "nacional"
+        ? "El teléfono nacional debe tener exactamente 10 dígitos"
+        : "El teléfono extranjero debe tener de 7 a 15 dígitos";
+    }
+
+    if (
+      field === "contacto.domicilio.codigo_postal" &&
+      isMexicoKey(values["contacto.domicilio.pais"]) &&
+      isNonEmptyString(value) &&
+      !/^\d{5}$/.test(String(value).trim())
+    ) {
+      return "Para un domicilio en México el código postal debe tener 5 dígitos";
     }
 
     if (
@@ -166,6 +199,7 @@ export function createRegistrarClienteValidator(ctx: RegistrarClienteValidatorCt
 
     const fields = [
       "empresa_id",
+      "tipoNacionalidad",
       "nacionalidad",
       "contacto.pais",
       "contacto.email",
@@ -185,6 +219,7 @@ export function createRegistrarClienteValidator(ctx: RegistrarClienteValidatorCt
       "persona.fecha_nacimiento",
       "persona.nombres",
       "persona.apellido_paterno",
+      "persona.apellido_materno",
       "persona.actividad_economica",
       "persona.residencia",
       "persona.identificacion.tipo",
@@ -235,6 +270,12 @@ function isNonEmptyString(value: any): boolean {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function isMexicoKey(value: any): boolean {
+  return ["mx", "mex", "mexico-mx", "méxico", "mexico"].includes(
+    String(value ?? "").trim().toLowerCase(),
+  );
+}
+
 export function normalizeBeneficiarioControladorIdentity(value: any): string {
   return String(value ?? "")
     .trim()
@@ -283,13 +324,27 @@ function getBeneficiarioPersona(item: any): Record<string, any> {
     ...nested,
     nacionalidad: nested.nacionalidad ?? item?.nacionalidad,
     relacion_con_cliente:
-      nested.relacion_con_cliente ??
-      nested.relacion ??
       item?.relacion_con_cliente ??
-      item?.relacion,
+      item?.relacion ??
+      nested.relacion_con_cliente ??
+      nested.relacion,
     porcentaje_participacion:
       nested.porcentaje_participacion ?? item?.porcentaje_participacion,
   };
+}
+
+function getBeneficiarioNacionalidad(item: any, persona: Record<string, any>): string {
+  return String(item?.nacionalidad ?? persona?.nacionalidad ?? "").trim();
+}
+
+function getBeneficiarioRelacion(item: any, persona: Record<string, any>): string {
+  return String(
+    item?.relacion_con_cliente ??
+    persona?.relacion_con_cliente ??
+    item?.relacion ??
+    persona?.relacion ??
+    "",
+  ).trim();
 }
 
 function isBeneficiarioPersonaFisica(item: any): boolean {
@@ -362,6 +417,8 @@ export function validateBeneficiariosControladores(
   lista.forEach((item, index) => {
     const prefix = `beneficiarios_controladores.${index}`;
     const persona = getBeneficiarioPersona(item);
+    const nacionalidad = getBeneficiarioNacionalidad(item, persona);
+    const relacionConCliente = getBeneficiarioRelacion(item, persona);
 
     if (!isBeneficiarioPersonaFisica(item)) {
       errors[`${prefix}.tipo_entidad`] =
@@ -371,6 +428,17 @@ export function validateBeneficiariosControladores(
 
     const bcRfc = normalizeBeneficiarioControladorIdentity(persona.rfc);
     const bcCurp = normalizeBeneficiarioControladorIdentity(persona.curp);
+    const tipoNacionalidad = String(
+      persona.tipo_nacionalidad ?? persona.nacional_extranjero ?? "",
+    ).trim().toLowerCase();
+    const fullContract = input.tipoCliente === "persona_fisica";
+    const nacional = fullContract && tipoNacionalidad === "nacional";
+    const contacto = item?.datos_completos?.contacto ?? {};
+    const telefono = contacto?.telefono_detalle ?? {};
+    const domicilio = contacto?.domicilio ?? contacto?.domicilio_mexico ?? {};
+    const identificacion = persona?.identificacion ?? {};
+    const cargoPublico =
+      item?.datos_completos?.cargo_publico ?? persona?.cargo_publico ?? {};
 
     if (
       input.tipoCliente === "persona_fisica" &&
@@ -400,7 +468,7 @@ export function validateBeneficiariosControladores(
       errors[`${prefix}.apellido_paterno`] = "Apellido paterno es obligatorio";
     }
 
-    if (!isNonEmptyString(persona.apellido_materno)) {
+    if ((fullContract ? nacional : true) && !isNonEmptyString(persona.apellido_materno)) {
       errors[`${prefix}.apellido_materno`] = "Apellido materno es obligatorio";
     }
 
@@ -412,17 +480,91 @@ export function validateBeneficiariosControladores(
         "Fecha de nacimiento inválida (AAAAMMDD)";
     }
 
-    if (!isNonEmptyString(persona.nacionalidad)) {
+    if (!isNonEmptyString(nacionalidad)) {
       errors[`${prefix}.nacionalidad`] = "Nacionalidad es obligatoria";
     }
+    if (fullContract && !["nacional", "extranjero"].includes(tipoNacionalidad)) {
+      errors[`${prefix}.tipo_nacionalidad`] =
+        "Tipo de nacionalidad es obligatorio";
+    }
+    if (fullContract && !isNonEmptyString(persona.pais_nacimiento)) {
+      errors[`${prefix}.pais_nacimiento`] =
+        "País de nacimiento es obligatorio";
+    }
 
-    if (!isNonEmptyString(persona.relacion_con_cliente)) {
+    if (!isNonEmptyString(relacionConCliente)) {
       errors[`${prefix}.relacion_con_cliente`] =
         "Relación con cliente es obligatoria";
     }
 
+    if (fullContract && tipoNacionalidad === "nacional" && !isMexicoKey(nacionalidad)) {
+      errors[`${prefix}.nacionalidad`] =
+        "Para nacional, la nacionalidad debe ser México";
+    }
+    if (fullContract && tipoNacionalidad === "extranjero" && isMexicoKey(nacionalidad)) {
+      errors[`${prefix}.nacionalidad`] =
+        "Para extranjero, la nacionalidad no puede ser México";
+    }
+
     if (bcRfc && !isRfc(bcRfc) && !errors[`${prefix}.rfc`]) {
       errors[`${prefix}.rfc`] = "RFC inválido";
+    }
+    if (nacional && !bcRfc) errors[`${prefix}.rfc`] = "RFC es obligatorio";
+    if (nacional && !bcCurp) errors[`${prefix}.curp`] = "CURP es obligatoria";
+
+    const actividad = persona.actividad_economica;
+    if (fullContract) {
+    if (
+      !isNonEmptyString(actividad) &&
+      !(isPlainObject(actividad) &&
+        isNonEmptyString(actividad.clave) &&
+        isNonEmptyString(actividad.descripcion))
+    ) errors[`${prefix}.actividad_economica`] = "Actividad económica es obligatoria";
+    if (!isNonEmptyString(persona.residencia))
+      errors[`${prefix}.residencia`] = "Residencia es obligatoria";
+
+    if (!isNonEmptyString(contacto.email))
+      errors[`${prefix}.contacto.email`] = "Email es obligatorio";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contacto.email.trim()))
+      errors[`${prefix}.contacto.email`] = "Email inválido";
+    if (!isNonEmptyString(contacto.pais))
+      errors[`${prefix}.contacto.pais`] = "País de contacto es obligatorio";
+    if (!/^\+\d{1,4}$/.test(String(telefono.codigo_pais ?? "").trim()))
+      errors[`${prefix}.contacto.telefono_detalle.codigo_pais`] = "Código de país inválido";
+    else if (nacional && telefono.codigo_pais.trim() !== "+52")
+      errors[`${prefix}.contacto.telefono_detalle.codigo_pais`] = "Debe ser +52";
+    if (!(nacional ? /^\d{10}$/ : /^\d{7,15}$/).test(String(telefono.numero ?? "").trim()))
+      errors[`${prefix}.contacto.telefono_detalle.numero`] = nacional
+        ? "Debe tener exactamente 10 dígitos"
+        : "Debe tener de 7 a 15 dígitos";
+    if (isNonEmptyString(telefono.ext) && !/^\d{1,6}$/.test(telefono.ext.trim()))
+      errors[`${prefix}.contacto.telefono_detalle.ext`] = "Extensión inválida";
+
+    ["pais", "codigo_postal", "colonia", "municipio", "ciudad_delegacion", "estado", "calle", "numero"].forEach((key) => {
+      if (!isNonEmptyString(domicilio[key]))
+        errors[`${prefix}.contacto.domicilio.${key}`] = "Campo obligatorio";
+    });
+    if (isMexicoKey(domicilio.pais) && !/^\d{5}$/.test(String(domicilio.codigo_postal ?? "").trim()))
+      errors[`${prefix}.contacto.domicilio.codigo_postal`] =
+        "Para México debe tener 5 dígitos";
+
+    ["tipo", "autoridad", "numero", "fecha_expedicion"].forEach((key) => {
+      if (!isNonEmptyString(identificacion[key]))
+        errors[`${prefix}.identificacion.${key}`] = "Campo obligatorio";
+    });
+    if (isNonEmptyString(identificacion.fecha_expedicion) &&
+        !isYyyyMmDd(String(identificacion.fecha_expedicion).replaceAll("-", "")))
+      errors[`${prefix}.identificacion.fecha_expedicion`] = "Fecha inválida";
+    if (identificacion.sin_vigencia !== true) {
+      if (!isNonEmptyString(identificacion.fecha_expiracion))
+        errors[`${prefix}.identificacion.fecha_expiracion`] = "Campo obligatorio";
+      else if (!isYyyyMmDd(String(identificacion.fecha_expiracion).replaceAll("-", "")))
+        errors[`${prefix}.identificacion.fecha_expiracion`] = "Fecha inválida";
+    }
+    ["actual", "previo", "familiar"].forEach((key) => {
+      if (!["si", "no"].includes(String(cargoPublico[key] ?? "")))
+        errors[`${prefix}.cargo_publico.${key}`] = "Selecciona una opción";
+    });
     }
 
     if (bcCurp && !isCurp(bcCurp) && !errors[`${prefix}.curp`]) {

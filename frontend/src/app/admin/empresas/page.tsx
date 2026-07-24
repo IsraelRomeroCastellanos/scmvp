@@ -61,6 +61,7 @@ function EmpresaDetails({ empresa }: { empresa: Empresa }) {
   return (
     <div className="min-w-0">
       <div className="font-semibold text-text-primary">{mostrar(empresa.nombre_legal)}</div>
+      <div className="mt-1 text-xs text-text-secondary">ID: {empresa.id}</div>
       <div className="mt-1 text-xs text-text-secondary">RFC: {mostrar(empresa.rfc)}</div>
     </div>
   );
@@ -333,6 +334,10 @@ export default function EmpresasPage() {
               <div className="rounded-card bg-surface-muted p-3 sm:col-span-2">
                 <dt className="text-xs font-medium uppercase tracking-wide text-text-secondary">Nombre legal</dt>
                 <dd className="mt-1 break-words font-medium text-text-primary">{mostrar(selectedEmpresa.nombre_legal)}</dd>
+              </div>
+              <div className="rounded-card bg-surface-muted p-3">
+                <dt className="text-xs font-medium uppercase tracking-wide text-text-secondary">ID</dt>
+                <dd className="mt-1 text-text-primary">{selectedEmpresa.id}</dd>
               </div>
               <div className="rounded-card bg-surface-muted p-3">
                 <dt className="text-xs font-medium uppercase tracking-wide text-text-secondary">RFC</dt>

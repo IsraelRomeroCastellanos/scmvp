@@ -193,6 +193,40 @@ function normalizeIdentityValue(v: any): string | null {
   return v.replace(/\s+/g, '').toUpperCase();
 }
 
+function isMexicoValue(v: any): boolean {
+  return ['mx', 'mex', 'mexico-mx', 'méxico', 'mexico'].includes(
+    String(v ?? '').trim().toLowerCase(),
+  );
+}
+
+function isNacionalPersona(persona: any, fallbackNacionalidad?: any): boolean {
+  const tipo = String(
+    persona?.tipo_nacionalidad ??
+    persona?.nacional_extranjero ??
+    persona?.tipoNacionalidad ??
+    '',
+  ).trim().toLowerCase();
+  if (tipo === 'nacional') return true;
+  if (tipo === 'extranjero') return false;
+  return isMexicoValue(persona?.nacionalidad ?? fallbackNacionalidad);
+}
+
+function beneficiarioNacionalidad(item: any): string | null {
+  return trimOrNull(
+    item?.nacionalidad ??
+    item?.datos_completos?.persona?.nacionalidad,
+  );
+}
+
+function beneficiarioRelacion(item: any): string | null {
+  return trimOrNull(
+    item?.relacion_con_cliente ??
+    item?.datos_completos?.persona?.relacion_con_cliente ??
+    item?.relacion ??
+    item?.datos_completos?.persona?.relacion,
+  );
+}
+
 function canonicalPersonaSource(item: any): any {
   const nestedPersona = item?.datos_completos?.persona;
   if (!isPlainObject(nestedPersona)) return item ?? {};
@@ -201,10 +235,13 @@ function canonicalPersonaSource(item: any): any {
     ...(isPlainObject(item) ? item : {}),
     ...nestedPersona,
     relacion_con_cliente:
-      nestedPersona?.relacion_con_cliente ??
-      nestedPersona?.relacion ??
       item?.relacion_con_cliente ??
-      item?.relacion,
+      item?.relacion ??
+      nestedPersona?.relacion_con_cliente ??
+      nestedPersona?.relacion,
+    nacionalidad:
+      item?.nacionalidad ??
+      nestedPersona?.nacionalidad,
     porcentaje_participacion:
       nestedPersona?.porcentaje_participacion ?? item?.porcentaje_participacion,
   };
@@ -247,17 +284,45 @@ function extractRfcPrincipal(tipo: any, datos_completos: any): string | null {
 }
 
 function normalizeDuenoBeneficiarioItem(item: any) {
+  const source = isPlainObject(item) ? item : {};
+  const nestedPersona = isPlainObject(source?.datos_completos?.persona)
+    ? source.datos_completos.persona
+    : null;
+  const tipoNacionalidad = String(
+    item?.tipo_nacionalidad ??
+    item?.nacional_extranjero ??
+    nestedPersona?.tipo_nacionalidad ??
+    nestedPersona?.nacional_extranjero ??
+    '',
+  ).trim().toLowerCase();
+  const rawNacionalidad = beneficiarioNacionalidad(item);
+  const nacionalidad =
+    tipoNacionalidad === 'nacional' && isMexicoValue(rawNacionalidad)
+      ? 'MX'
+      : rawNacionalidad;
   return {
+    ...source,
     nombres: trimOrNull(item?.nombres),
     apellido_paterno: trimOrNull(item?.apellido_paterno),
     apellido_materno: trimOrNull(item?.apellido_materno),
     fecha_nacimiento: trimOrNull(item?.fecha_nacimiento),
-    nacionalidad: trimOrNull(item?.nacionalidad),
-    relacion_con_cliente: trimOrNull(item?.relacion_con_cliente ?? item?.relacion),
+    nacionalidad,
+    relacion_con_cliente: beneficiarioRelacion(item),
     rfc: upperOrNull(item?.rfc),
     curp: upperOrNull(item?.curp),
     porcentaje_participacion: numberOrNull(item?.porcentaje_participacion),
     observaciones: trimOrNull(item?.observaciones),
+    ...(nestedPersona
+      ? {
+          datos_completos: {
+            ...source.datos_completos,
+            persona: {
+              ...nestedPersona,
+              nacionalidad,
+            },
+          },
+        }
+      : {}),
   };
 }
 
@@ -349,27 +414,101 @@ function duenoBeneficiarioValidationError(
   idx: number,
   mode: 'canonical' | 'legacy',
   prefixBase = 'duenos_beneficiarios',
+  fullContract = false,
 ): string | null {
   const prefix = `${prefixBase}[${idx}]`;
+  const persona = isPlainObject(item?.datos_completos?.persona)
+    ? { ...item, ...item.datos_completos.persona }
+    : item;
+  const contacto = item?.datos_completos?.contacto ?? item?.contacto ?? {};
+  const domicilio = contacto?.domicilio_mexico ?? contacto?.domicilio ?? {};
+  const identificacion = persona?.identificacion ?? {};
+  const cargoPublico =
+    item?.datos_completos?.cargo_publico ??
+    persona?.cargo_publico ??
+    item?.cargo_publico ??
+    {};
+  const nacionalidad = beneficiarioNacionalidad(item);
+  const relacionConCliente = beneficiarioRelacion(item);
+  const tipoNacionalidad = String(
+    persona?.tipo_nacionalidad ?? persona?.nacional_extranjero ?? '',
+  ).trim().toLowerCase();
+  const nacional = fullContract && tipoNacionalidad === 'nacional';
 
-  if (!isNonEmptyString(item?.nombres)) return `${prefix}.nombres es obligatorio`;
-  if (!isNonEmptyString(item?.apellido_paterno)) return `${prefix}.apellido_paterno es obligatorio`;
-  if (!isNonEmptyString(item?.apellido_materno)) return `${prefix}.apellido_materno es obligatorio`;
+  if (!isNonEmptyString(persona?.nombres)) return `${prefix}.nombres es obligatorio`;
+  if (!isNonEmptyString(persona?.apellido_paterno)) return `${prefix}.apellido_paterno es obligatorio`;
+  if ((fullContract ? nacional : true) && !isNonEmptyString(persona?.apellido_materno))
+    return `${prefix}.apellido_materno es obligatorio para nacional`;
 
   if (mode === 'canonical') {
-    if (!isNonEmptyString(item?.fecha_nacimiento)) return `${prefix}.fecha_nacimiento es obligatoria`;
-    if (!isYYYYMMDD(item?.fecha_nacimiento)) return `${prefix}.fecha_nacimiento inválida (AAAAMMDD)`;
-    if (!isNonEmptyString(item?.nacionalidad)) return `${prefix}.nacionalidad es obligatoria`;
-    if (!isNonEmptyString(item?.relacion_con_cliente)) return `${prefix}.relacion_con_cliente es obligatoria`;
+    if (!isNonEmptyString(persona?.fecha_nacimiento)) return `${prefix}.fecha_nacimiento es obligatoria`;
+    if (!isYYYYMMDD(persona?.fecha_nacimiento)) return `${prefix}.fecha_nacimiento inválida (AAAAMMDD)`;
+    if (!isNonEmptyString(nacionalidad)) return `${prefix}.nacionalidad es obligatoria`;
+    if (!isNonEmptyString(relacionConCliente)) return `${prefix}.relacion_con_cliente es obligatoria`;
+    if (fullContract && !['nacional', 'extranjero'].includes(tipoNacionalidad))
+      return `${prefix}.tipo_nacionalidad debe ser nacional o extranjero`;
+    if (fullContract && nacional && !isMexicoValue(nacionalidad))
+      return `${prefix}.nacionalidad debe ser MX para nacional`;
+    if (fullContract && tipoNacionalidad === 'extranjero' && isMexicoValue(nacionalidad))
+      return `${prefix}.nacionalidad no puede ser México para extranjero`;
+    if (fullContract && !isNonEmptyString(persona?.pais_nacimiento))
+      return `${prefix}.pais_nacimiento es obligatorio`;
+    const actividad = persona?.actividad_economica;
+    if (fullContract &&
+      !isNonEmptyString(actividad) &&
+      !(isPlainObject(actividad) &&
+        isNonEmptyString(actividad.clave) &&
+        isNonEmptyString(actividad.descripcion))
+    ) return `${prefix}.actividad_economica es obligatoria`;
+    if (fullContract && !isNonEmptyString(persona?.residencia)) return `${prefix}.residencia es obligatoria`;
   } else {
-    if (isNonEmptyString(item?.fecha_nacimiento) && !isYYYYMMDD(item?.fecha_nacimiento))
+    if (isNonEmptyString(persona?.fecha_nacimiento) && !isYYYYMMDD(persona?.fecha_nacimiento))
       return `${prefix}.fecha_nacimiento inválida (AAAAMMDD)`;
     if (item?.relacion_con_cliente && !isNonEmptyString(item?.relacion_con_cliente))
       return `${prefix}.relacion_con_cliente inválida`;
   }
 
-  if (isNonEmptyString(item?.rfc) && !isRFC(item?.rfc)) return `${prefix}.rfc inválido`;
-  if (isNonEmptyString(item?.curp) && !isCURP(item?.curp)) return `${prefix}.curp inválido`;
+  if (nacional && !isNonEmptyString(persona?.rfc)) return `${prefix}.rfc es obligatorio para nacional`;
+  if (isNonEmptyString(persona?.rfc) && !isRFC(persona?.rfc)) return `${prefix}.rfc inválido`;
+  if (nacional && !isNonEmptyString(persona?.curp)) return `${prefix}.curp es obligatoria para nacional`;
+  if (isNonEmptyString(persona?.curp) && !isCURP(persona?.curp)) return `${prefix}.curp inválido`;
+
+  if (mode === 'canonical' && fullContract) {
+    if (!isNonEmptyString(contacto?.pais))
+      return `${prefix}.contacto.pais es obligatorio`;
+    if (!isNonEmptyString(contacto?.email) || !isEmail(contacto.email))
+      return `${prefix}.contacto.email inválido`;
+    const telefonoDetalle = contacto?.telefono_detalle ?? {};
+    const codigoPais = telefonoDetalle?.codigo_pais;
+    const numero = telefonoDetalle?.numero;
+    const ext = telefonoDetalle?.ext;
+    if (!isNonEmptyString(codigoPais) || !/^\+\d{1,4}$/.test(codigoPais.trim()))
+      return `${prefix}.contacto.telefono_detalle.codigo_pais inválido`;
+    if (nacional && codigoPais.trim() !== '+52')
+      return `${prefix}.contacto.telefono_detalle.codigo_pais debe ser +52`;
+    if (!isNonEmptyString(numero) || !(nacional ? /^\d{10}$/ : /^\d{7,15}$/).test(numero.trim()))
+      return `${prefix}.contacto.telefono_detalle.numero inválido`;
+    if (isNonEmptyString(ext) && !/^\d{1,6}$/.test(ext.trim()))
+      return `${prefix}.contacto.telefono_detalle.ext inválida`;
+    for (const key of ['pais', 'codigo_postal', 'colonia', 'municipio', 'ciudad_delegacion', 'estado', 'calle', 'numero']) {
+      if (!isNonEmptyString(domicilio?.[key])) return `${prefix}.contacto.domicilio.${key} es obligatorio`;
+    }
+    if (isMexicoValue(domicilio?.pais) && !/^\d{5}$/.test(String(domicilio.codigo_postal).trim()))
+      return `${prefix}.contacto.domicilio.codigo_postal inválido`;
+    for (const key of ['tipo', 'autoridad', 'numero', 'fecha_expedicion']) {
+      if (!isNonEmptyString(identificacion?.[key])) return `${prefix}.identificacion.${key} es obligatorio`;
+    }
+    if (!isYYYYMMDD(identificacion.fecha_expedicion))
+      return `${prefix}.identificacion.fecha_expedicion inválida (AAAAMMDD)`;
+    if (parseBooleanLike(identificacion.sin_vigencia) !== true) {
+      if (!isYYYYMMDD(identificacion.fecha_expiracion))
+        return `${prefix}.identificacion.fecha_expiracion inválida (AAAAMMDD)`;
+    }
+    for (const key of ['actual', 'previo', 'familiar']) {
+      if (!['si', 'no'].includes(String(cargoPublico?.[key] ?? '').trim().toLowerCase()))
+        return `${prefix}.cargo_publico.${key} inválido`;
+    }
+  }
 
   if (item?.porcentaje_participacion !== null && item?.porcentaje_participacion !== undefined) {
     const n = Number(item?.porcentaje_participacion);
@@ -498,6 +637,7 @@ export function prepareCanonicalBeneficiarios(
         i,
         'canonical',
         'beneficiarios_controladores',
+        tipo === 'persona_fisica',
       );
       if (validationError) {
         return { isCanonical: true, ok: false, error: validationError, datosCompletos: dc };
@@ -1169,16 +1309,15 @@ function validateDatosCompletosOr400(
   const contacto = datos_completos?.contacto ?? {};
   if (!isNonEmptyString(contacto?.pais)) return (badRequest(res, 'contacto.pais es obligatorio'), false);
 
-  const contactoPaisKey = String(contacto?.pais ?? '').trim().toLowerCase();
-  const contactoPaisEsMexico = contactoPaisKey === 'mexico-mx' || contactoPaisKey === 'mex';
-
   if (!isNonEmptyString(contacto?.email)) return (badRequest(res, 'contacto.email es obligatorio'), false);
   if (!isEmail(contacto?.email)) return (badRequest(res, 'contacto.email inválido'), false);
 
   if (!isNonEmptyString(contacto?.telefono)) return (badRequest(res, 'contacto.telefono es obligatorio'), false);
+  const telefonoDetalle = contacto?.telefono_detalle ?? {};
 
   // domicilio (contacto) - México (captura manual por ahora)
   const dom = contacto?.domicilio_mexico ?? contacto?.domicilio ?? {};
+  const domicilioEsMexico = isMexicoValue(dom?.pais);
   if (!isNonEmptyString(dom?.calle)) return (badRequest(res, 'contacto.domicilio.calle es obligatoria'), false);
   if (!isNonEmptyString(dom?.numero)) return (badRequest(res, 'contacto.domicilio.numero es obligatorio'), false);
   if (!isNonEmptyString(dom?.colonia)) return (badRequest(res, 'contacto.domicilio.colonia es obligatoria'), false);
@@ -1186,7 +1325,7 @@ function validateDatosCompletosOr400(
   if (!isNonEmptyString(dom?.ciudad_delegacion))
     return (badRequest(res, 'contacto.domicilio.ciudad_delegacion es obligatoria'), false);
   if (!isNonEmptyString(dom?.codigo_postal)) return (badRequest(res, 'contacto.domicilio.codigo_postal es obligatorio'), false);
-  if (contactoPaisEsMexico && !/^\d{5}$/.test(String(dom?.codigo_postal).trim()))
+  if (domicilioEsMexico && !/^\d{5}$/.test(String(dom?.codigo_postal).trim()))
     return (badRequest(res, 'contacto.domicilio.codigo_postal inválido'), false);
   if (!isNonEmptyString(dom?.estado)) return (badRequest(res, 'contacto.domicilio.estado es obligatorio'), false);
   if (!isNonEmptyString(dom?.pais)) return (badRequest(res, 'contacto.domicilio.pais es obligatorio'), false);
@@ -1194,16 +1333,33 @@ function validateDatosCompletosOr400(
   // Validaciones por tipo
   if (tipo === 'persona_fisica') {
     const persona = datos_completos?.persona ?? {};
+    const tipoNacionalidad = String(
+      persona?.tipo_nacionalidad ?? persona?.nacional_extranjero ?? '',
+    ).trim().toLowerCase();
+    if (!['nacional', 'extranjero'].includes(tipoNacionalidad))
+      return (badRequest(res, 'persona.tipo_nacionalidad debe ser nacional o extranjero'), false);
+    const nacional = tipoNacionalidad === 'nacional';
 
     if (!isNonEmptyString(persona?.nombres)) return (badRequest(res, 'persona.nombres es obligatorio'), false);
     if (!isNonEmptyString(persona?.apellido_paterno)) return (badRequest(res, 'persona.apellido_paterno es obligatorio'), false);
-    if (!isNonEmptyString(persona?.apellido_materno)) return (badRequest(res, 'persona.apellido_materno es obligatorio'), false);
+    if (nacional && !isNonEmptyString(persona?.apellido_materno))
+      return (badRequest(res, 'persona.apellido_materno es obligatorio para nacional'), false);
 
-    if (!isNonEmptyString(persona?.rfc)) return (badRequest(res, 'persona.rfc es obligatorio'), false);
-    if (!isRFC(persona?.rfc)) return (badRequest(res, 'persona.rfc inválido'), false);
+    if (nacional && !isNonEmptyString(persona?.rfc)) return (badRequest(res, 'persona.rfc es obligatorio para nacional'), false);
+    if (isNonEmptyString(persona?.rfc) && !isRFC(persona?.rfc)) return (badRequest(res, 'persona.rfc inválido'), false);
 
-    if (!isNonEmptyString(persona?.curp)) return (badRequest(res, 'persona.curp es obligatorio'), false);
-    if (!isCURP(persona?.curp)) return (badRequest(res, 'persona.curp inválido'), false);
+    if (nacional && !isNonEmptyString(persona?.curp)) return (badRequest(res, 'persona.curp es obligatorio para nacional'), false);
+    if (isNonEmptyString(persona?.curp) && !isCURP(persona?.curp)) return (badRequest(res, 'persona.curp inválido'), false);
+
+    if (!isNonEmptyString(telefonoDetalle?.codigo_pais) || !/^\+\d{1,4}$/.test(telefonoDetalle.codigo_pais.trim()))
+      return (badRequest(res, 'contacto.telefono_detalle.codigo_pais inválido'), false);
+    if (nacional && telefonoDetalle.codigo_pais.trim() !== '+52')
+      return (badRequest(res, 'contacto.telefono_detalle.codigo_pais debe ser +52 para nacional'), false);
+    if (!isNonEmptyString(telefonoDetalle?.numero) ||
+        !(nacional ? /^\d{10}$/ : /^\d{7,15}$/).test(telefonoDetalle.numero.trim()))
+      return (badRequest(res, 'contacto.telefono_detalle.numero inválido'), false);
+    if (isNonEmptyString(telefonoDetalle?.ext) && !/^\d{1,6}$/.test(telefonoDetalle.ext.trim()))
+      return (badRequest(res, 'contacto.telefono_detalle.ext inválida'), false);
 
     if (!isNonEmptyString(persona?.fecha_nacimiento)) return (badRequest(res, 'persona.fecha_nacimiento es obligatoria'), false);
     if (!isYYYYMMDD(persona?.fecha_nacimiento))
@@ -1214,6 +1370,21 @@ function validateDatosCompletosOr400(
       (act && typeof act === 'object' && isNonEmptyString((act as any).clave) && isNonEmptyString((act as any).descripcion)) ||
       isNonEmptyString(act);
     if (!actOk) return (badRequest(res, 'persona.actividad_economica es obligatoria'), false);
+
+    if (!isNonEmptyString(persona?.residencia)) return (badRequest(res, 'persona.residencia es obligatoria'), false);
+    const identificacion = persona?.identificacion ?? {};
+    if (!isNonEmptyString(identificacion?.tipo)) return (badRequest(res, 'persona.identificacion.tipo es obligatorio'), false);
+    if (!isNonEmptyString(identificacion?.autoridad)) return (badRequest(res, 'persona.identificacion.autoridad es obligatoria'), false);
+    if (!isNonEmptyString(identificacion?.numero)) return (badRequest(res, 'persona.identificacion.numero es obligatorio'), false);
+    if (!isYYYYMMDD(identificacion?.fecha_expedicion))
+      return (badRequest(res, 'persona.identificacion.fecha_expedicion inválida (AAAAMMDD)'), false);
+    if (parseBooleanLike(identificacion?.sin_vigencia) !== true && !isYYYYMMDD(identificacion?.fecha_expiracion))
+      return (badRequest(res, 'persona.identificacion.fecha_expiracion inválida (AAAAMMDD)'), false);
+    const cargoPublico = datos_completos?.cargo_publico ?? persona?.cargo_publico ?? {};
+    for (const key of ['actual', 'previo', 'familiar']) {
+      if (!['si', 'no'].includes(String(cargoPublico?.[key] ?? '').trim().toLowerCase()))
+        return (badRequest(res, `cargo_publico.${key} inválido`), false);
+    }
   }
 
   if (tipo === 'persona_moral') {
