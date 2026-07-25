@@ -40,8 +40,12 @@ export function createRegistrarClienteValidator(ctx: RegistrarClienteValidatorCt
       "contacto.domicilio.numero": "Número exterior es obligatorio",
       "contacto.domicilio.colonia": "Colonia es obligatoria",
       "contacto.domicilio.municipio": "Municipio es obligatorio",
-      "contacto.domicilio.ciudad_delegacion":
-        "Ciudad o delegación es obligatoria",
+      ...(ctx.tipoCliente !== "persona_fisica"
+        ? {
+            "contacto.domicilio.ciudad_delegacion":
+              "Ciudad o delegación es obligatoria",
+          }
+        : {}),
       "contacto.domicilio.codigo_postal": "Código postal es obligatorio",
       "contacto.domicilio.estado": "Estado es obligatorio",
       "contacto.domicilio.pais": "País del domicilio es obligatorio",
@@ -182,7 +186,10 @@ export function createRegistrarClienteValidator(ctx: RegistrarClienteValidatorCt
   }
 
   function validateField(field: string): boolean {
-    if (ctx.tipoCliente !== "persona_fisica") return true;
+    if (
+      ctx.tipoCliente !== "persona_fisica" &&
+      field !== "contacto.domicilio.ciudad_delegacion"
+    ) return true;
 
     const message = validatePersonaFisicaField(field);
     ctx.setErrors((previous) => {
@@ -195,7 +202,17 @@ export function createRegistrarClienteValidator(ctx: RegistrarClienteValidatorCt
   }
 
   function validateAll(): boolean {
-    if (ctx.tipoCliente !== "persona_fisica") return true;
+    if (ctx.tipoCliente !== "persona_fisica") {
+      const field = "contacto.domicilio.ciudad_delegacion";
+      const message = validatePersonaFisicaField(field);
+      ctx.setErrors((previous) => {
+        const next = { ...previous };
+        if (message) next[field] = message;
+        else delete next[field];
+        return next;
+      });
+      return !message;
+    }
 
     const fields = [
       "empresa_id",
@@ -509,8 +526,8 @@ export function validateBeneficiariosControladores(
     if (bcRfc && !isRfc(bcRfc) && !errors[`${prefix}.rfc`]) {
       errors[`${prefix}.rfc`] = "RFC inválido";
     }
-    if (nacional && !bcRfc) errors[`${prefix}.rfc`] = "RFC es obligatorio";
-    if (nacional && !bcCurp) errors[`${prefix}.curp`] = "CURP es obligatoria";
+    if (fullContract && !bcRfc) errors[`${prefix}.rfc`] = "RFC es obligatorio";
+    if (fullContract && !bcCurp) errors[`${prefix}.curp`] = "CURP es obligatoria";
 
     const actividad = persona.actividad_economica;
     if (fullContract) {
@@ -540,7 +557,7 @@ export function validateBeneficiariosControladores(
     if (isNonEmptyString(telefono.ext) && !/^\d{1,6}$/.test(telefono.ext.trim()))
       errors[`${prefix}.contacto.telefono_detalle.ext`] = "Extensión inválida";
 
-    ["pais", "codigo_postal", "colonia", "municipio", "ciudad_delegacion", "estado", "calle", "numero"].forEach((key) => {
+    ["pais", "codigo_postal", "colonia", "municipio", "estado", "calle", "numero"].forEach((key) => {
       if (!isNonEmptyString(domicilio[key]))
         errors[`${prefix}.contacto.domicilio.${key}`] = "Campo obligatorio";
     });

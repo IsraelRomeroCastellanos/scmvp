@@ -421,15 +421,32 @@ function valueToCatalogKey(v: string) {
   const [domColoniasOpciones, setDomColoniasOpciones] = useState<string[]>([]);
   const [domCpAviso, setDomCpAviso] = useState("");
   const [domCpLoading, setDomCpLoading] = useState(false);
+  const [domCatalogoTerritorial, setDomCatalogoTerritorial] = useState({
+    municipio: false,
+    ciudad_delegacion: false,
+    estado: false,
+  });
   const [b1Errors, setB1Errors] = useState<Record<string, string>>({});
   const domCpRequestRef = useRef<AbortController | null>(null);
   const beneficiarioCpRequestsRef = useRef<Record<number, AbortController>>({});
   const [beneficiarioCpLoading, setBeneficiarioCpLoading] = useState<Record<number, boolean>>({});
+  const [beneficiarioCatalogoTerritorial, setBeneficiarioCatalogoTerritorial] =
+    useState<
+      Record<
+        number,
+        { municipio: boolean; ciudad_delegacion: boolean; estado: boolean }
+      >
+    >({});
 
   const aplicaCpMexico = isMexicoKey(domPais);
 
   useEffect(() => {
     domCpRequestRef.current?.abort();
+    setDomCatalogoTerritorial({
+      municipio: false,
+      ciudad_delegacion: false,
+      estado: false,
+    });
     setB1Errors({});
 
     if (!aplicaCpMexico) {
@@ -473,9 +490,19 @@ function valueToCatalogKey(v: string) {
           return;
         }
         const first = resultados[0];
-        setDomEstado(String(first.estado ?? ""));
-        setDomMunicipio(String(first.municipio ?? ""));
-        setDomCiudadDelegacion(String(first.ciudad ?? first.ciudad_delegacion ?? ""));
+        const estado = String(first.estado ?? "").trim();
+        const municipio = String(first.municipio ?? "").trim();
+        const ciudadDelegacion = String(
+          first.ciudad ?? first.ciudad_delegacion ?? "",
+        ).trim();
+        setDomEstado(estado);
+        setDomMunicipio(municipio);
+        setDomCiudadDelegacion(ciudadDelegacion);
+        setDomCatalogoTerritorial({
+          municipio: Boolean(municipio),
+          ciudad_delegacion: Boolean(ciudadDelegacion),
+          estado: Boolean(estado),
+        });
         const colonias = Array.from(
           new Set(resultados.map((item: any) => String(item.colonia ?? "").trim()).filter(Boolean)),
         ) as string[];
@@ -523,6 +550,11 @@ function valueToCatalogKey(v: string) {
 
     domCpRequestRef.current?.abort();
     setDomCpLoading(false);
+    setDomCatalogoTerritorial({
+      municipio: false,
+      ciudad_delegacion: false,
+      estado: false,
+    });
     setDomColonia("");
     setDomMunicipio("");
     setDomCiudadDelegacion("");
@@ -2144,6 +2176,14 @@ function valueToCatalogKey(v: string) {
 
   async function lookupBeneficiarioCodigoPostal(index: number, cpValue: string, paisValue: string) {
     beneficiarioCpRequestsRef.current[index]?.abort();
+    setBeneficiarioCatalogoTerritorial((previous) => ({
+      ...previous,
+      [index]: {
+        municipio: false,
+        ciudad_delegacion: false,
+        estado: false,
+      },
+    }));
     setErr(`beneficiarios_controladores.${index}.contacto.domicilio.codigo_postal`);
     if (!isMexicoKey(paisValue) || !/^\d{5}$/.test(cpValue)) return;
     const controller = new AbortController();
@@ -2161,7 +2201,24 @@ function valueToCatalogKey(v: string) {
         setErr(`beneficiarios_controladores.${index}.contacto.domicilio.codigo_postal`, "Código postal no encontrado; captura manual habilitada");
         return;
       }
+      if (
+        beneficiarioCpRequestsRef.current[index] !== controller ||
+        controller.signal.aborted
+      ) return;
       const first = resultados[0];
+      const municipio = String(first.municipio ?? "").trim();
+      const ciudadDelegacion = String(
+        first.ciudad ?? first.ciudad_delegacion ?? "",
+      ).trim();
+      const estado = String(first.estado ?? "").trim();
+      setBeneficiarioCatalogoTerritorial((previous) => ({
+        ...previous,
+        [index]: {
+          municipio: Boolean(municipio),
+          ciudad_delegacion: Boolean(ciudadDelegacion),
+          estado: Boolean(estado),
+        },
+      }));
       updateBeneficiarioControlador(index, (row) => {
         const root = row.datos_completos as Record<string, any>;
         const contacto = root.contacto || {};
@@ -2176,9 +2233,9 @@ function valueToCatalogKey(v: string) {
               ...contacto,
               domicilio: {
                 ...domicilio,
-                municipio: String(first.municipio ?? ""),
-                ciudad_delegacion: String(first.ciudad ?? first.ciudad_delegacion ?? ""),
-                estado: String(first.estado ?? ""),
+                municipio,
+                ciudad_delegacion: ciudadDelegacion,
+                estado,
                 colonia: colonias.length === 1 ? colonias[0] : "",
                 colonias_opciones: colonias,
               },
@@ -2204,6 +2261,14 @@ function valueToCatalogKey(v: string) {
   function changeBeneficiarioDomicilioPais(index: number, value: string) {
     beneficiarioCpRequestsRef.current[index]?.abort();
     setBeneficiarioCpLoading((previous) => ({ ...previous, [index]: false }));
+    setBeneficiarioCatalogoTerritorial((previous) => ({
+      ...previous,
+      [index]: {
+        municipio: false,
+        ciudad_delegacion: false,
+        estado: false,
+      },
+    }));
     setErr(`beneficiarios_controladores.${index}.contacto.domicilio.codigo_postal`);
     updateBeneficiarioControlador(index, (row) => {
       const root = row.datos_completos as Record<string, any>;
@@ -2234,6 +2299,14 @@ function valueToCatalogKey(v: string) {
   function changeBeneficiarioCodigoPostal(index: number, value: string) {
     beneficiarioCpRequestsRef.current[index]?.abort();
     setBeneficiarioCpLoading((previous) => ({ ...previous, [index]: false }));
+    setBeneficiarioCatalogoTerritorial((previous) => ({
+      ...previous,
+      [index]: {
+        municipio: false,
+        ciudad_delegacion: false,
+        estado: false,
+      },
+    }));
     setErr(`beneficiarios_controladores.${index}.contacto.domicilio.codigo_postal`);
     updateBeneficiarioControlador(index, (row) => {
       const root = row.datos_completos as Record<string, any>;
@@ -2383,19 +2456,34 @@ function valueToCatalogKey(v: string) {
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(domicilio.municipio)}
               onChange={(e) => updateBeneficiarioControladorDomicilioField(index, "municipio", e.target.value)}
-              readOnly={isMexicoKey(domicilio.pais) && Array.isArray(domicilio.colonias_opciones) && domicilio.colonias_opciones.length > 0}
+              readOnly={
+                tipo === "persona_fisica"
+                  ? beneficiarioCatalogoTerritorial[index]?.municipio === true
+                  : isMexicoKey(domicilio.pais) &&
+                    Array.isArray(domicilio.colonias_opciones) &&
+                    domicilio.colonias_opciones.length > 0
+              }
               onBlur={validateBeneficiariosOnBlur}
             />
             {fieldError("contacto.domicilio.municipio") ? <p className="text-xs text-red-600">{fieldError("contacto.domicilio.municipio")}</p> : null}
           </div>
 
           <div className="order-[5] space-y-1">
-            <label className="text-sm font-medium">Ciudad / delegación *</label>
+            <label className="text-sm font-medium">
+              Ciudad / delegación
+              {tipo === "persona_fisica" ? null : " *"}
+            </label>
             <input
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(domicilio.ciudad_delegacion)}
               onChange={(e) => updateBeneficiarioControladorDomicilioField(index, "ciudad_delegacion", e.target.value)}
-              readOnly={isMexicoKey(domicilio.pais) && Array.isArray(domicilio.colonias_opciones) && domicilio.colonias_opciones.length > 0}
+              readOnly={
+                tipo === "persona_fisica"
+                  ? beneficiarioCatalogoTerritorial[index]?.ciudad_delegacion === true
+                  : isMexicoKey(domicilio.pais) &&
+                    Array.isArray(domicilio.colonias_opciones) &&
+                    domicilio.colonias_opciones.length > 0
+              }
               onBlur={validateBeneficiariosOnBlur}
             />
             {fieldError("contacto.domicilio.ciudad_delegacion") ? <p className="text-xs text-red-600">{fieldError("contacto.domicilio.ciudad_delegacion")}</p> : null}
@@ -2424,7 +2512,13 @@ function valueToCatalogKey(v: string) {
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               value={safeInput(domicilio.estado)}
               onChange={(e) => updateBeneficiarioControladorDomicilioField(index, "estado", e.target.value)}
-              readOnly={isMexicoKey(domicilio.pais) && Array.isArray(domicilio.colonias_opciones) && domicilio.colonias_opciones.length > 0}
+              readOnly={
+                tipo === "persona_fisica"
+                  ? beneficiarioCatalogoTerritorial[index]?.estado === true
+                  : isMexicoKey(domicilio.pais) &&
+                    Array.isArray(domicilio.colonias_opciones) &&
+                    domicilio.colonias_opciones.length > 0
+              }
               onBlur={validateBeneficiariosOnBlur}
             />
             {fieldError("contacto.domicilio.estado") ? <p className="text-xs text-red-600">{fieldError("contacto.domicilio.estado")}</p> : null}
@@ -2528,7 +2622,9 @@ function valueToCatalogKey(v: string) {
           </div>
 
           <div className="space-y-1">
-            <label className="text-sm font-medium">RFC {beneficiarioNacional ? "*" : "(opcional)"}</label>
+            <label className="text-sm font-medium">
+              RFC {tipo === "persona_fisica" ? "*" : beneficiarioNacional ? "*" : "(opcional)"}
+            </label>
             <input
               className={`w-full rounded border px-3 py-2 text-sm ${fieldError("rfc") ? "border-red-500" : "border-gray-300"}`}
               value={safeInput(persona.rfc)}
@@ -2541,7 +2637,9 @@ function valueToCatalogKey(v: string) {
           </div>
 
           <div className="space-y-1">
-            <label className="text-sm font-medium">CURP {beneficiarioNacional ? "*" : "(opcional)"}</label>
+            <label className="text-sm font-medium">
+              CURP {tipo === "persona_fisica" ? "*" : beneficiarioNacional ? "*" : "(opcional)"}
+            </label>
             <input
               className={`w-full rounded border px-3 py-2 text-sm ${fieldError("curp") ? "border-red-500" : "border-gray-300"}`}
               value={safeInput(persona.curp)}
@@ -3936,7 +4034,11 @@ persona: {
                 className={`w-full rounded border px-3 py-2 text-sm ${errors["contacto.domicilio.municipio"] ? "border-red-500" : "border-gray-300"}`}
                 value={domMunicipio}
                 onChange={(e) => setDomMunicipio(e.target.value)}
-                readOnly={aplicaCpMexico && domColoniasOpciones.length > 0}
+                readOnly={
+                  tipo === "persona_fisica"
+                    ? domCatalogoTerritorial.municipio
+                    : aplicaCpMexico && domColoniasOpciones.length > 0
+                }
                 onBlur={() =>
                   validator.validateField("contacto.domicilio.municipio")
                 }
@@ -3950,13 +4052,20 @@ persona: {
 
             <div className={`${tipo === "persona_fisica" ? "order-[5]" : ""} space-y-1`}>
               <label className="text-sm font-medium">
-                Ciudad/Delegación <span className="text-red-600">*</span>
+                Ciudad/Delegación{" "}
+                {tipo === "persona_fisica" ? null : (
+                  <span className="text-red-600">*</span>
+                )}
               </label>
               <input
                 className={`w-full rounded border px-3 py-2 text-sm ${errors["contacto.domicilio.ciudad_delegacion"] ? "border-red-500" : "border-gray-300"}`}
                 value={domCiudadDelegacion}
                 onChange={(e) => setDomCiudadDelegacion(e.target.value)}
-                readOnly={aplicaCpMexico && domColoniasOpciones.length > 0}
+                readOnly={
+                  tipo === "persona_fisica"
+                    ? domCatalogoTerritorial.ciudad_delegacion
+                    : aplicaCpMexico && domColoniasOpciones.length > 0
+                }
                 onBlur={() =>
                   validator.validateField(
                     "contacto.domicilio.ciudad_delegacion",
@@ -4006,7 +4115,11 @@ persona: {
                 className={`w-full rounded border px-3 py-2 text-sm ${errors["contacto.domicilio.estado"] ? "border-red-500" : "border-gray-300"}`}
                 value={domEstado}
                 onChange={(e) => setDomEstado(e.target.value)}
-                readOnly={aplicaCpMexico && domColoniasOpciones.length > 0}
+                readOnly={
+                  tipo === "persona_fisica"
+                    ? domCatalogoTerritorial.estado
+                    : aplicaCpMexico && domColoniasOpciones.length > 0
+                }
                 onBlur={() =>
                   validator.validateField("contacto.domicilio.estado")
                 }
