@@ -468,9 +468,9 @@ function duenoBeneficiarioValidationError(
       return `${prefix}.relacion_con_cliente inválida`;
   }
 
-  if (nacional && !isNonEmptyString(persona?.rfc)) return `${prefix}.rfc es obligatorio para nacional`;
+  if (fullContract && !isNonEmptyString(persona?.rfc)) return `${prefix}.rfc es obligatorio`;
   if (isNonEmptyString(persona?.rfc) && !isRFC(persona?.rfc)) return `${prefix}.rfc inválido`;
-  if (nacional && !isNonEmptyString(persona?.curp)) return `${prefix}.curp es obligatoria para nacional`;
+  if (fullContract && !isNonEmptyString(persona?.curp)) return `${prefix}.curp es obligatoria`;
   if (isNonEmptyString(persona?.curp) && !isCURP(persona?.curp)) return `${prefix}.curp inválido`;
 
   if (mode === 'canonical' && fullContract) {
@@ -490,7 +490,7 @@ function duenoBeneficiarioValidationError(
       return `${prefix}.contacto.telefono_detalle.numero inválido`;
     if (isNonEmptyString(ext) && !/^\d{1,6}$/.test(ext.trim()))
       return `${prefix}.contacto.telefono_detalle.ext inválida`;
-    for (const key of ['pais', 'codigo_postal', 'colonia', 'municipio', 'ciudad_delegacion', 'estado', 'calle', 'numero']) {
+    for (const key of ['pais', 'codigo_postal', 'colonia', 'municipio', 'estado', 'calle', 'numero']) {
       if (!isNonEmptyString(domicilio?.[key])) return `${prefix}.contacto.domicilio.${key} es obligatorio`;
     }
     if (isMexicoValue(domicilio?.pais) && !/^\d{5}$/.test(String(domicilio.codigo_postal).trim()))
@@ -1322,7 +1322,7 @@ function validateDatosCompletosOr400(
   if (!isNonEmptyString(dom?.numero)) return (badRequest(res, 'contacto.domicilio.numero es obligatorio'), false);
   if (!isNonEmptyString(dom?.colonia)) return (badRequest(res, 'contacto.domicilio.colonia es obligatoria'), false);
   if (!isNonEmptyString(dom?.municipio)) return (badRequest(res, 'contacto.domicilio.municipio es obligatorio'), false);
-  if (!isNonEmptyString(dom?.ciudad_delegacion))
+  if (tipo !== 'persona_fisica' && !isNonEmptyString(dom?.ciudad_delegacion))
     return (badRequest(res, 'contacto.domicilio.ciudad_delegacion es obligatoria'), false);
   if (!isNonEmptyString(dom?.codigo_postal)) return (badRequest(res, 'contacto.domicilio.codigo_postal es obligatorio'), false);
   if (domicilioEsMexico && !/^\d{5}$/.test(String(dom?.codigo_postal).trim()))
