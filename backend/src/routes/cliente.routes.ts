@@ -27,26 +27,6 @@ function parsePositiveInt(v: any): number | null {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
-async function obtenerActividadesVulnerablesEmpresa(empresaId: number) {
-  const result = await pool.query(
-    `SELECT
-       av.clave,
-       av.fraccion,
-       av.nombre,
-       av.descripcion
-     FROM public.empresa_actividades_vulnerables eav
-     INNER JOIN public.cat_actividades_vulnerables av
-       ON av.id = eav.actividad_vulnerable_id
-     WHERE eav.empresa_id = $1
-       AND eav.activo = true
-       AND av.activo = true
-     ORDER BY av.nombre, av.clave`,
-    [empresaId]
-  );
-
-  return result.rows;
-}
-
 function authorizeClienteEmpresaBody(
   req: Request,
   res: Response,
@@ -1483,15 +1463,7 @@ router.get('/mi-empresa', authenticate, async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Empresa no encontrada' });
     }
 
-    const actividadesVulnerables =
-      await obtenerActividadesVulnerablesEmpresa(empresaId);
-
-    return res.json({
-      empresa: {
-        ...result.rows[0],
-        actividades_vulnerables: actividadesVulnerables
-      }
-    });
+    return res.json({ empresa: result.rows[0] });
   } catch (error) {
     console.error('Error al obtener empresa de la sesión:', error);
     return res.status(500).json({

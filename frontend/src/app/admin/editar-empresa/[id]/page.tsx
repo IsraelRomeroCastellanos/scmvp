@@ -7,31 +7,6 @@ import { useParams, useRouter } from 'next/navigation';
 type TipoEntidad = 'persona_moral' | 'persona_fisica';
 type Estado = 'activo' | 'suspendido' | 'inactivo';
 
-type ActividadVulnerable = {
-  clave: string;
-  fraccion: string;
-  nombre: string;
-  descripcion: string | null;
-};
-
-type EmpresaDetalle = {
-  nombre_legal: string | null;
-  rfc: string | null;
-  tipo_entidad: TipoEntidad | null;
-  domicilio: string | null;
-  calle: string | null;
-  numero: string | null;
-  entidad: string | null;
-  municipio: string | null;
-  pais: string | null;
-  colonia: string | null;
-  codigo_postal: string | null;
-  ciudad_delegacion: string | null;
-  estado_provincia: string | null;
-  estado: Estado | null;
-  actividades_vulnerables: ActividadVulnerable[];
-};
-
 async function getEmpresaErrorMessage(res: Response, action: 'cargar' | 'guardar'): Promise<string> {
   const data = await res.json().catch(() => null);
   const detail = typeof data?.error === 'string' ? data.error : '';
@@ -100,12 +75,6 @@ export default function EditarEmpresaPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [actividades, setActividades] = useState<ActividadVulnerable[]>([]);
-  const [loadingActividades, setLoadingActividades] = useState(true);
-  const [actividadesCatalogError, setActividadesCatalogError] = useState('');
-  const [actividadesSeleccionadas, setActividadesSeleccionadas] = useState<string[]>([]);
-  const [actividadesTouched, setActividadesTouched] = useState(false);
-  const [actividadesValidationError, setActividadesValidationError] = useState('');
 
   const [form, setForm] = useState<FormState>({
     nombre_legal: '',
@@ -130,16 +99,6 @@ export default function EditarEmpresaPage() {
       setForm((prev) => ({ ...prev, [key]: e.target.value as any }));
     };
 
-  const toggleActividad = (clave: string) => {
-    setActividadesTouched(true);
-    setActividadesSeleccionadas((prev) =>
-      prev.includes(clave)
-        ? prev.filter((item) => item !== clave)
-        : [...prev, clave],
-    );
-    setActividadesValidationError('');
-  };
-
   useEffect(() => {
     const fetchEmpresa = async () => {
       try {
@@ -158,18 +117,9 @@ export default function EditarEmpresaPage() {
         if (!res.ok) throw new Error(await getEmpresaErrorMessage(res, 'cargar'));
 
         const data = await res.json();
-        const empresa = data?.empresa as Partial<EmpresaDetalle> | undefined;
+        const empresa = data?.empresa;
 
         const domicilioParts = splitDomicilio(empresa?.domicilio);
-        const actividadesGuardadas = Array.isArray(empresa?.actividades_vulnerables)
-          ? Array.from(
-              new Set(
-                empresa.actividades_vulnerables
-                  .map((actividad) => String(actividad?.clave ?? '').trim())
-                  .filter(Boolean),
-              ),
-            )
-          : [];
 
         setForm({
           nombre_legal: empresa?.nombre_legal ?? '',
@@ -187,9 +137,6 @@ export default function EditarEmpresaPage() {
           estado_provincia: empresa?.estado_provincia ?? '',
           estado: (empresa?.estado ?? 'activo') as Estado,
         });
-        setActividadesSeleccionadas(actividadesGuardadas);
-        setActividadesTouched(false);
-        setActividadesValidationError('');
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Error al cargar la empresa');
       } finally {
@@ -200,71 +147,9 @@ export default function EditarEmpresaPage() {
     fetchEmpresa();
   }, [id]);
 
-  useEffect(() => {
-    let active = true;
-
-    const fetchActividadesVulnerables = async () => {
-      try {
-        setLoadingActividades(true);
-        setActividadesCatalogError('');
-
-        const token = localStorage.getItem('token');
-        const base = process.env.NEXT_PUBLIC_API_BASE_URL;
-        if (!base) throw new Error('Falta NEXT_PUBLIC_API_BASE_URL');
-
-        const res = await fetch(`${base}/api/catalogos/actividades-vulnerables`, {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: 'no-store',
-        });
-        const data = await res.json().catch(() => null);
-
-        if (!res.ok) {
-          throw new Error(data?.error || 'No se pudo cargar el catálogo de actividades vulnerables');
-        }
-        if (!Array.isArray(data?.actividades_vulnerables)) {
-          throw new Error('La respuesta del catálogo de actividades vulnerables no es válida');
-        }
-
-        const catalogo: ActividadVulnerable[] = data.actividades_vulnerables
-          .map((item: any) => ({
-            clave: String(item?.clave ?? '').trim(),
-            fraccion: String(item?.fraccion ?? '').trim(),
-            nombre: String(item?.nombre ?? '').trim(),
-            descripcion:
-              typeof item?.descripcion === 'string' && item.descripcion.trim()
-                ? item.descripcion.trim()
-                : null,
-          }))
-          .filter((item: ActividadVulnerable) => item.clave && item.fraccion && item.nombre);
-
-        if (active) setActividades(catalogo);
-      } catch (e) {
-        if (!active) return;
-        setActividades([]);
-        setActividadesCatalogError(
-          e instanceof Error
-            ? e.message
-            : 'No se pudo cargar el catálogo de actividades vulnerables',
-        );
-      } finally {
-        if (active) setLoadingActividades(false);
-      }
-    };
-
-    fetchActividadesVulnerables();
-    return () => {
-      active = false;
-    };
-  }, []);
-
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (saving || success) return;
-
-    if (actividadesTouched && actividadesSeleccionadas.length === 0) {
-      setActividadesValidationError('Selecciona al menos una actividad vulnerable.');
-      return;
-    }
 
     setSaving(true);
     setError('');
@@ -290,11 +175,6 @@ export default function EditarEmpresaPage() {
         ciudad_delegacion: form.ciudad_delegacion.trim(),
         estado_provincia: form.estado_provincia.trim(),
         estado: form.estado,
-        ...(actividadesTouched &&
-        !actividadesCatalogError &&
-        actividadesSeleccionadas.length > 0
-          ? { actividades_vulnerables: actividadesSeleccionadas }
-          : {}),
       };
 
       const res = await fetch(`${base}/api/admin/empresas/${id}`, {
@@ -377,64 +257,6 @@ export default function EditarEmpresaPage() {
               <option value="persona_fisica">Persona física</option>
             </select>
           </div>
-
-          <fieldset className="rounded border border-gray-200 p-4">
-            <legend className="px-1 text-sm font-semibold text-gray-700">
-              Actividades vulnerables
-            </legend>
-
-            {!actividadesTouched && actividadesSeleccionadas.length === 0 ? (
-              <div className="mb-3 rounded border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-800">
-                Actividad vulnerable pendiente
-              </div>
-            ) : null}
-
-            {loadingActividades ? (
-              <p className="text-sm text-gray-500">Cargando actividades vulnerables…</p>
-            ) : actividadesCatalogError ? (
-              <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                <p>{actividadesCatalogError}</p>
-                <p className="mt-1">
-                  Puedes guardar otros cambios; las actividades actuales se conservarán.
-                </p>
-              </div>
-            ) : (
-              <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
-                {actividades.map((actividad) => {
-                  const inputId = `actividad-vulnerable-${actividad.clave}`;
-                  return (
-                    <div key={actividad.clave} className="rounded border border-gray-200 p-3">
-                      <div className="flex items-start gap-3">
-                        <input
-                          id={inputId}
-                          type="checkbox"
-                          checked={actividadesSeleccionadas.includes(actividad.clave)}
-                          onChange={() => toggleActividad(actividad.clave)}
-                          className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        <label htmlFor={inputId} className="min-w-0 cursor-pointer">
-                          <span className="block text-sm font-medium text-gray-800">
-                            {actividad.fraccion} — {actividad.nombre}
-                          </span>
-                          {actividad.descripcion ? (
-                            <span className="mt-1 block text-xs leading-5 text-gray-500">
-                              {actividad.descripcion}
-                            </span>
-                          ) : null}
-                        </label>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {actividadesValidationError ? (
-              <p className="mt-2 text-sm text-red-600" role="alert">
-                {actividadesValidationError}
-              </p>
-            ) : null}
-          </fieldset>
 
           <div className="pt-2">
             <h2 className="text-sm font-semibold text-gray-700 mb-2">Domicilio</h2>
