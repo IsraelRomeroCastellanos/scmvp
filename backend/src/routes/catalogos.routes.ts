@@ -56,6 +56,24 @@ router.get('/giros-mercantiles', authenticate, async (_req, res) => {
   }
 });
 
+router.get('/actividades-vulnerables', authenticate, async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT clave, fraccion, nombre, descripcion
+       FROM public.cat_actividades_vulnerables
+       WHERE activo = true
+       ORDER BY nombre, clave`
+    );
+
+    return res.json({ actividades_vulnerables: result.rows });
+  } catch (error) {
+    console.error('Error al listar catálogo de actividades vulnerables:', error);
+    return res.status(500).json({
+      error: 'Error al listar catálogo de actividades vulnerables'
+    });
+  }
+});
+
 router.get('/codigos-postales', authenticate, async (req, res) => {
   const cp = req.query.cp;
 
