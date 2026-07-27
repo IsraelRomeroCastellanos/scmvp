@@ -13,13 +13,6 @@ import {
 } from '@/components/ui';
 import { getCurrentUser, isAdmin } from '@/lib/auth';
 
-type ActividadVulnerable = {
-  clave: string;
-  fraccion: string;
-  nombre: string;
-  descripcion: string | null;
-};
-
 interface Empresa {
   id: number;
   nombre_legal: string;
@@ -29,7 +22,6 @@ interface Empresa {
   entidad: string | null;
   municipio: string | null;
   codigo_postal: string | null;
-  actividades_vulnerables: ActividadVulnerable[];
 }
 
 function mostrar(value: string | null | undefined) {
@@ -84,36 +76,6 @@ function UbicacionDetails({ empresa }: { empresa: Empresa }) {
   );
 }
 
-function actividadesDeEmpresa(empresa: Empresa): ActividadVulnerable[] {
-  return Array.isArray(empresa.actividades_vulnerables)
-    ? empresa.actividades_vulnerables
-    : [];
-}
-
-function ActividadesSummary({ empresa }: { empresa: Empresa }) {
-  const actividades = actividadesDeEmpresa(empresa);
-
-  if (actividades.length === 0) {
-    return <Badge variant="warning">Pendiente</Badge>;
-  }
-
-  const visibles = actividades.slice(0, 2);
-  const restantes = actividades.length - visibles.length;
-
-  return (
-    <div className="space-y-1">
-      {visibles.map((actividad) => (
-        <div key={actividad.clave} className="text-sm text-text-primary">
-          {actividad.nombre}
-        </div>
-      ))}
-      {restantes > 0 ? (
-        <div className="text-xs font-medium text-text-secondary">+{restantes} más</div>
-      ) : null}
-    </div>
-  );
-}
-
 export default function EmpresasPage() {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [loading, setLoading] = useState(true);
@@ -144,15 +106,7 @@ export default function EmpresasPage() {
       if (!res.ok) throw new Error('No se pudo cargar empresas');
 
       const data = await res.json();
-      const empresasApi = Array.isArray(data?.empresas)
-        ? data.empresas.map((empresa: any) => ({
-            ...empresa,
-            actividades_vulnerables: Array.isArray(empresa?.actividades_vulnerables)
-              ? empresa.actividades_vulnerables
-              : [],
-          }))
-        : [];
-      setEmpresas(empresasApi);
+      setEmpresas(Array.isArray(data?.empresas) ? data.empresas : []);
     } catch (_error) {
       setEmpresas([]);
       setError('Error al cargar empresas');
@@ -251,7 +205,6 @@ export default function EmpresasPage() {
                     <tr>
                       <th>Empresa</th>
                       <th>Ubicación</th>
-                      <th>Actividades vulnerables</th>
                       <th>Tipo</th>
                       <th>Estado</th>
                       <th>Acciones</th>
@@ -265,9 +218,6 @@ export default function EmpresasPage() {
                         </td>
                         <td className="min-w-52">
                           <UbicacionDetails empresa={empresa} />
-                        </td>
-                        <td className="min-w-56">
-                          <ActividadesSummary empresa={empresa} />
                         </td>
                         <td>{tipoEntidadLabel(empresa.tipo_entidad)}</td>
                         <td>
@@ -320,14 +270,6 @@ export default function EmpresasPage() {
                         <dt className="text-xs font-medium uppercase tracking-wide text-text-secondary">Ubicación</dt>
                         <dd className="mt-1">
                           <UbicacionDetails empresa={empresa} />
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs font-medium uppercase tracking-wide text-text-secondary">
-                          Actividades vulnerables
-                        </dt>
-                        <dd className="mt-1">
-                          <ActividadesSummary empresa={empresa} />
                         </dd>
                       </div>
                     </dl>
@@ -422,33 +364,6 @@ export default function EmpresasPage() {
               <div className="rounded-card bg-surface-muted p-3">
                 <dt className="text-xs font-medium uppercase tracking-wide text-text-secondary">Código postal</dt>
                 <dd className="mt-1 break-words text-text-primary">{mostrar(selectedEmpresa.codigo_postal)}</dd>
-              </div>
-              <div className="rounded-card bg-surface-muted p-3 sm:col-span-2">
-                <dt className="text-xs font-medium uppercase tracking-wide text-text-secondary">
-                  Actividades vulnerables
-                </dt>
-                <dd className="mt-2">
-                  {actividadesDeEmpresa(selectedEmpresa).length === 0 ? (
-                    <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-800">
-                      Actividad vulnerable pendiente
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {actividadesDeEmpresa(selectedEmpresa).map((actividad) => (
-                        <div key={actividad.clave} className="rounded border border-border-light bg-white p-3">
-                          <div className="text-sm font-semibold text-text-primary">
-                            {actividad.fraccion} — {actividad.nombre}
-                          </div>
-                          {actividad.descripcion ? (
-                            <div className="mt-1 text-sm leading-5 text-text-secondary">
-                              {actividad.descripcion}
-                            </div>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </dd>
               </div>
             </dl>
           </div>
