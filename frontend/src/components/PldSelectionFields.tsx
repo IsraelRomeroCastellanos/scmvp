@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   getApiErrorMessage,
   isApiRequestCanceled,
@@ -21,6 +21,7 @@ type Props = {
   onActividadChange: (clave: string) => void;
   onOperacionChange: (clave: string) => void;
   onTouched?: () => void;
+  onOperacionOptionsChange?: (operaciones: OperacionVulnerable[]) => void;
 };
 
 export default function PldSelectionFields({
@@ -33,6 +34,7 @@ export default function PldSelectionFields({
   onActividadChange,
   onOperacionChange,
   onTouched,
+  onOperacionOptionsChange,
 }: Props) {
   const instanceId = useId().replace(/:/g, '');
   const titleId = `pld-title-${instanceId}`;
@@ -44,17 +46,27 @@ export default function PldSelectionFields({
   const [operaciones, setOperaciones] = useState<OperacionVulnerable[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const optionsCallbackRef = useRef(onOperacionOptionsChange);
+
+  useEffect(() => {
+    optionsCallbackRef.current = onOperacionOptionsChange;
+  }, [onOperacionOptionsChange]);
 
   useEffect(() => {
     setOperaciones([]);
+    optionsCallbackRef.current?.([]);
     setError('');
+    setLoading(false);
     if (!actividadClave) return;
 
     const controller = new AbortController();
     setLoading(true);
     obtenerOperacionesVulnerables(actividadClave, controller.signal)
       .then((items) => {
-        if (!controller.signal.aborted) setOperaciones(items);
+        if (!controller.signal.aborted) {
+          setOperaciones(items);
+          optionsCallbackRef.current?.(items);
+        }
       })
       .catch((requestError) => {
         if (!controller.signal.aborted && !isApiRequestCanceled(requestError)) {

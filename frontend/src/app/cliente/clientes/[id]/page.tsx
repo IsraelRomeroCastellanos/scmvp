@@ -496,6 +496,7 @@ export default function ClienteDetallePage() {
         )}
       </Card>
 
+      <div id="perfil-transaccional" className="scroll-mt-6">
       <Card title="Perfil Transaccional">
         {perfilTransaccional ? (
           <div className="space-y-4">
@@ -588,6 +589,7 @@ export default function ClienteDetallePage() {
           )
         ) : null}
       </Card>
+      </div>
 
       <Card title="Evaluación de Riesgo">
         {matrizRiesgo ? (

@@ -19,9 +19,11 @@ import api, {
   registrarCliente,
 } from "@/lib/api";
 import PldSelectionFields from "@/components/PldSelectionFields";
+import { EmpresaConfirmationModal } from "@/components/EmpresaDomicilioConfirmacion";
 import type {
   ActividadVulnerableGeneral,
   MiEmpresaPld,
+  OperacionVulnerable,
   PldSelectionWritePayload,
 } from "@/types/actividades-vulnerables";
 
@@ -346,6 +348,9 @@ function valueToCatalogKey(v: string) {
   const [loading, setLoading] = useState(false);
   const [fatal, setFatal] = useState<string | null>(null);
   const [errors, setErrors] = useState<Errors>({});
+  const [pfConfirmationOpen, setPfConfirmationOpen] = useState(false);
+  const [pfSuccessClientId, setPfSuccessClientId] = useState<number | null>(null);
+  const registrationLockRef = useRef(false);
 
   const [tipo, setTipo] = useState<TipoCliente>("persona_fisica");
 
@@ -365,6 +370,7 @@ function valueToCatalogKey(v: string) {
   const [empresaActividades, setEmpresaActividades] = useState<ActividadVulnerableGeneral[]>([]);
   const [actividadVulnerableClave, setActividadVulnerableClave] = useState("");
   const [operacionVulnerableClave, setOperacionVulnerableClave] = useState("");
+  const [operacionesVulnerables, setOperacionesVulnerables] = useState<OperacionVulnerable[]>([]);
   const [pldSelectionError, setPldSelectionError] = useState("");
   const [nombreEntidad, setNombreEntidad] = useState("");
   const [pmRazonSocial, setPmRazonSocial] = useState("");
@@ -861,6 +867,7 @@ function valueToCatalogKey(v: string) {
       "persona.fecha_nacimiento": pfFechaNac,
       "persona.nombres": pfNombres,
       "persona.apellido_paterno": pfApPat,
+      "persona.apellido_materno": pfApMat,
       "persona.actividad_economica": pfActividad,
       "persona.residencia": pfResidencia,
       "persona.identificacion.tipo": pfIdTipo,
@@ -3473,8 +3480,99 @@ persona: {
     };
   }
 
+  async function executeRegistration() {
+    if (registrationLockRef.current || loading) return;
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
+    registrationLockRef.current = true;
+    setFatal(null);
+    const payload = buildPayload();
+
+    if (sessionRole === "cliente") {
+      delete (payload as Record<string, unknown>).empresa_id;
+    }
+
+    if (sessionRole !== "consultor" && operacionVulnerableClave) {
+      const pldPayload: PldSelectionWritePayload = {
+        operacion_vulnerable_clave: operacionVulnerableClave,
+      };
+      if (empresaActividades.length > 1 && actividadVulnerableClave) {
+        pldPayload.actividad_vulnerable_clave = actividadVulnerableClave;
+      }
+      Object.assign(payload, pldPayload);
+    }
+
+    if (tipo === "persona_fisica") {
+      payload.nombre_entidad = [pfNombres, pfApPat, pfApMat]
+        .map((v) => safeInput(v).trim())
+        .filter(Boolean)
+        .join(" ");
+    }
+
+    if (tipo === "persona_moral") {
+      payload.nombre_entidad = safeInput(pmRazonSocial).trim();
+      const datosCompletosPm = (payload.datos_completos || {}) as Record<string, any>;
+      datosCompletosPm.empresa = {
+        ...(datosCompletosPm.empresa || {}),
+        razon_social: safeInput(pmRazonSocial).trim(),
+        nombre_entidad: safeInput(pmRazonSocial).trim(),
+      };
+      (payload as any).datos_completos = datosCompletosPm;
+    }
+
+    if (tipo === "fideicomiso") {
+      payload.nombre_entidad = safeInput(fidNombre).trim();
+      const datosCompletosFid = (payload.datos_completos || {}) as Record<string, any>;
+      datosCompletosFid.fideicomiso = {
+        ...(datosCompletosFid.fideicomiso || {}),
+        nombre_fideicomiso: safeInput(fidNombre).trim(),
+        nombre_entidad: safeInput(fidNombre).trim(),
+      };
+      (payload as any).datos_completos = datosCompletosFid;
+    }
+
+    try {
+      setLoading(true);
+      const data = await registrarCliente<{
+        ok: boolean;
+        cliente?: { id?: number };
+      }>(payload as Record<string, unknown>);
+
+      const id = data?.cliente?.id;
+      if (!id) {
+        setFatal(
+          "Registrado, pero no se recibió id. Revisa respuesta del backend.",
+        );
+        return;
+      }
+
+      if (tipo === "persona_fisica") {
+        setPfConfirmationOpen(false);
+        setPfSuccessClientId(id);
+      } else {
+        router.push(`/cliente/clientes/${id}`);
+      }
+    } catch (requestError) {
+      const message = getApiErrorMessage(requestError, "Error inesperado");
+      if (/actividad|operaci[oó]n|configuraci[oó]n pld/i.test(message)) {
+        setPldSelectionError(message);
+      }
+      setFatal(message);
+      setPfConfirmationOpen(false);
+    } finally {
+      registrationLockRef.current = false;
+      setLoading(false);
+    }
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading || pfConfirmationOpen || pfSuccessClientId) return;
     console.log("[DEBUG tipo submit]", {
       tipo,
       tipoRef: tipoRef.current?.value,
@@ -3587,94 +3685,18 @@ persona: {
       return;
     }
 
-    const token = localStorage.getItem("token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
-
-    console.log("TIPO_ANTES_DE_ENVIAR", tipo);
-
     if (!validatePmAccionistaFields()) {
       setFatal("Corrige los datos del representante accionista para continuar.");
       return;
     }
 
-    setFatal(null);
-    const payload = buildPayload();
-
-      if (sessionRole === "cliente") {
-        delete (payload as Record<string, unknown>).empresa_id;
-      }
-
-      if (sessionRole !== "consultor" && operacionVulnerableClave) {
-        const pldPayload: PldSelectionWritePayload = {
-          operacion_vulnerable_clave: operacionVulnerableClave,
-        };
-        if (empresaActividades.length > 1 && actividadVulnerableClave) {
-          pldPayload.actividad_vulnerable_clave = actividadVulnerableClave;
-        }
-        Object.assign(payload, pldPayload);
-      }
-
-      if (tipo === "persona_fisica") {
-        payload.nombre_entidad = [pfNombres, pfApPat, pfApMat]
-          .map((v) => safeInput(v).trim())
-          .filter(Boolean)
-          .join(" ");
-      }
-
-      if (tipo === "persona_moral") {
-        payload.nombre_entidad = safeInput(pmRazonSocial).trim();
-        const datosCompletosPm = (payload.datos_completos || {}) as Record<string, any>;
-        datosCompletosPm.empresa = {
-          ...(datosCompletosPm.empresa || {}),
-          razon_social: safeInput(pmRazonSocial).trim(),
-          nombre_entidad: safeInput(pmRazonSocial).trim(),
-        };
-        (payload as any).datos_completos = datosCompletosPm;
-      }
-
-      if (tipo === "fideicomiso") {
-        payload.nombre_entidad = safeInput(fidNombre).trim();
-        const datosCompletosFid = (payload.datos_completos || {}) as Record<string, any>;
-        datosCompletosFid.fideicomiso = {
-          ...(datosCompletosFid.fideicomiso || {}),
-          nombre_fideicomiso: safeInput(fidNombre).trim(),
-          nombre_entidad: safeInput(fidNombre).trim(),
-        };
-        (payload as any).datos_completos = datosCompletosFid;
-      }
-
-      console.log('[P1-1 payload]', payload);
-
-
-    try {
-      setLoading(true);
-      const data = await registrarCliente<{
-        ok: boolean;
-        cliente?: { id?: number };
-      }>(payload as Record<string, unknown>);
-
-      // API regresa { ok:true, cliente:{id...} }
-      const id = data?.cliente?.id;
-      if (id)
-        router.push(`/cliente/clientes/${id}`); // sin auto-impresión
-      else
-        setFatal(
-          "Registrado, pero no se recibió id. Revisa respuesta del backend.",
-        );
-    } catch (requestError) {
-      const message = getApiErrorMessage(requestError, "Error inesperado");
-      if (/actividad|operaci[oó]n|configuraci[oó]n pld/i.test(message)) {
-        setPldSelectionError(message);
-      }
-      setFatal(message);
-    } finally {
-      setLoading(false);
+    if (tipo === "persona_fisica") {
+      setPfConfirmationOpen(true);
+      return;
     }
 
-}
+    await executeRegistration();
+  }
 
     useEffect(() => {
     if (tipo === "persona_fisica") {
@@ -3693,6 +3715,46 @@ persona: {
 
 
   const showAviso = tipo === "persona_fisica" || tipo === "persona_moral" || tipo === "fideicomiso";
+  const selectedActivityName =
+    empresaActividades.find(
+      (actividad) => actividad.clave === actividadVulnerableClave,
+    )?.nombre || "Pendiente";
+  const selectedOperationName =
+    operacionesVulnerables.find(
+      (operacion) => operacion.clave === operacionVulnerableClave,
+    )?.nombre || "Pendiente";
+  const pfFullName = [pfNombres, pfApPat, pfApMat]
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .join(" ");
+  const pfDomicilioResumen = [
+    domCalle.trim(),
+    domNumero.trim(),
+    domInterior.trim() ? `Int ${domInterior.trim()}` : "",
+    domColonia.trim(),
+    domMunicipio.trim(),
+    domCiudadDelegacion.trim(),
+    domEstado.trim(),
+    domCP.trim(),
+    domPais.trim(),
+  ].filter(Boolean).join(", ");
+  const pfIdentificacionResumen = [
+    pfIdTipo.trim(),
+    pfIdNumero.trim(),
+    pfIdAutoridad.trim(),
+    pfIdExpedicion.trim(),
+    pfIdSinVigencia ? "Sin vigencia" : pfIdExpiracion.trim(),
+  ].filter(Boolean).join(" · ");
+  const beneficiariosResumen = beneficiariosControladoresAplica
+    ? beneficiariosControladores.length > 0
+      ? beneficiariosControladores
+          .map((row) =>
+            deriveRelatedNombreEntidad("persona_fisica", row.datos_completos),
+          )
+          .filter(Boolean)
+          .join(", ")
+      : "Pendiente de captura"
+    : "No aplica";
 
   // 🔴 GUARD GLOBAL — evita render en build/prerender
   if (!mounted) return <></>;
@@ -3802,6 +3864,7 @@ persona: {
                   setOperacionVulnerableClave(clave);
                   setPldSelectionError("");
                 }}
+                onOperacionOptionsChange={setOperacionesVulnerables}
               />
             </div>
           ) : null}
@@ -4313,16 +4376,26 @@ persona: {
               <div className="space-y-1">
                 <label className="text-sm font-medium">
                   Apellido materno{" "}
-                  <span className="text-gray-500">(opcional)</span>
+                  {tipoNacionalidad === "nacional" ? (
+                    <span className="text-red-600">*</span>
+                  ) : (
+                    <span className="text-gray-500">(opcional)</span>
+                  )}
                 </label>
                 <input
+                  name="persona.apellido_materno"
                   className={`w-full rounded border px-3 py-2 text-sm ${
                     errors["persona.apellido_materno"]
                       ? "border-red-500"
                       : "border-gray-300"
                   }`}
                   value={pfApMat}
-                  onChange={(e) => setPfApMat(e.target.value)}
+                  onChange={(e) => {
+                    setPfApMat(e.target.value);
+                    if (e.target.value.trim()) {
+                      setErr("persona.apellido_materno");
+                    }
+                  }}
                   onBlur={() =>
                     validator.validateField("persona.apellido_materno")
                   }
@@ -5969,6 +6042,8 @@ persona: {
             type="submit"
             disabled={
               loading ||
+              pfConfirmationOpen ||
+              pfSuccessClientId !== null ||
               empresaLoading ||
               Boolean(empresaError) ||
               !sessionRole
@@ -5987,6 +6062,58 @@ persona: {
           </button>
         </div>
       </form>
+      <EmpresaConfirmationModal
+        open={pfConfirmationOpen}
+        title="Confirmar alta de Persona Física"
+        busy={loading}
+        confirmLabel="Confirmar alta"
+        busyLabel="Registrando..."
+        onCancel={() => setPfConfirmationOpen(false)}
+        onConfirm={() => void executeRegistration()}
+      >
+        <dl className="grid gap-3 text-sm sm:grid-cols-2">
+          <div><dt className="font-medium">Empresa</dt><dd>{empresaNombre || empresaId}</dd></div>
+          <div><dt className="font-medium">Actividad vulnerable</dt><dd>{selectedActivityName}</dd></div>
+          <div><dt className="font-medium">Operación específica</dt><dd>{selectedOperationName}</dd></div>
+          <div><dt className="font-medium">Nombre completo</dt><dd>{pfFullName}</dd></div>
+          <div><dt className="font-medium">RFC</dt><dd>{pfRfc.trim().toUpperCase() || "No capturado"}</dd></div>
+          <div><dt className="font-medium">CURP</dt><dd>{pfCurp.trim().toUpperCase() || "No capturada"}</dd></div>
+          <div><dt className="font-medium">Correo</dt><dd>{email.trim()}</dd></div>
+          <div>
+            <dt className="font-medium">Teléfono</dt>
+            <dd>{buildTelefonoE164Like(telCodigoPais, telNumero, telExt)}</dd>
+          </div>
+          <div className="sm:col-span-2"><dt className="font-medium">Domicilio</dt><dd>{pfDomicilioResumen}</dd></div>
+          <div className="sm:col-span-2"><dt className="font-medium">Identificación</dt><dd>{pfIdentificacionResumen}</dd></div>
+          <div className="sm:col-span-2"><dt className="font-medium">Beneficiario controlador</dt><dd>{beneficiariosResumen}</dd></div>
+        </dl>
+      </EmpresaConfirmationModal>
+      <EmpresaConfirmationModal
+        open={pfSuccessClientId !== null}
+        title="Persona Física registrada correctamente"
+        busy={false}
+        cancelLabel="Dejarlo pendiente"
+        confirmLabel="Generar Perfil Transaccional"
+        busyLabel="Generar Perfil Transaccional"
+        onCancel={() => {
+          if (pfSuccessClientId) {
+            router.push(`/cliente/clientes/${pfSuccessClientId}`);
+          }
+        }}
+        onConfirm={() => {
+          if (pfSuccessClientId) {
+            router.push(
+              `/cliente/clientes/${pfSuccessClientId}#perfil-transaccional`,
+            );
+          }
+        }}
+      >
+        <p className="text-sm text-gray-700">
+          El expediente de la Persona Física fue creado correctamente. Puedes
+          continuar con el Perfil Transaccional o dejarlo pendiente para
+          completarlo después.
+        </p>
+      </EmpresaConfirmationModal>
     </div>
   );
 }
