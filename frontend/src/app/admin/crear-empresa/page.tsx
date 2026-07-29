@@ -39,6 +39,7 @@ export default function CrearEmpresaPage() {
   const [catalogError, setCatalogError] = useState('');
   const [actividadesError, setActividadesError] = useState('');
   const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [successOpen, setSuccessOpen] = useState(false);
   const submitLockRef = useRef(false);
 
   const [form, setForm] = useState({
@@ -158,7 +159,7 @@ export default function CrearEmpresaPage() {
 
       setSuccess('Empresa creada correctamente');
       setConfirmationOpen(false);
-      window.setTimeout(() => router.push('/admin/empresas'), 700);
+      setSuccessOpen(true);
     } catch (e) {
       const message = getApiErrorMessage(e, 'Error al crear la empresa');
       if (message.toLowerCase().includes('activ')) setActividadesError(message);
@@ -358,6 +359,20 @@ export default function CrearEmpresaPage() {
             <dd>{selectedActivityNames.join(', ')}</dd>
           </div>
         </dl>
+      </EmpresaConfirmationModal>
+      <EmpresaConfirmationModal
+        open={successOpen}
+        title="Empresa creada correctamente"
+        busy={false}
+        confirmLabel="Aceptar"
+        busyLabel="Aceptar"
+        hideCancel
+        onCancel={() => router.push('/admin/empresas')}
+        onConfirm={() => router.push('/admin/empresas')}
+      >
+        <p className="text-sm text-gray-700">
+          La empresa fue registrada. Confirma para regresar al listado.
+        </p>
       </EmpresaConfirmationModal>
     </div>
   );

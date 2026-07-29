@@ -247,6 +247,8 @@ type ConfirmationModalProps = {
   onCancel: () => void;
   onConfirm: () => void;
   children: React.ReactNode;
+  cancelLabel?: string;
+  hideCancel?: boolean;
 };
 
 export function EmpresaConfirmationModal({
@@ -258,13 +260,20 @@ export function EmpresaConfirmationModal({
   onCancel,
   onConfirm,
   children,
+  cancelLabel = 'Cancelar',
+  hideCancel = false,
 }: ConfirmationModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const confirmRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
-    cancelRef.current?.focus();
+    if (hideCancel) {
+      confirmRef.current?.focus();
+    } else {
+      cancelRef.current?.focus();
+    }
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !busy) {
@@ -290,7 +299,7 @@ export function EmpresaConfirmationModal({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [busy, onCancel, open]);
+  }, [busy, hideCancel, onCancel, open]);
 
   if (!open) return null;
 
@@ -313,16 +322,19 @@ export function EmpresaConfirmationModal({
         </h2>
         <div className="mt-4">{children}</div>
         <div className="mt-6 flex justify-end gap-3">
+          {!hideCancel ? (
+            <button
+              ref={cancelRef}
+              type="button"
+              onClick={onCancel}
+              disabled={busy}
+              className="rounded border px-4 py-2 hover:bg-gray-50 disabled:opacity-60"
+            >
+              {cancelLabel}
+            </button>
+          ) : null}
           <button
-            ref={cancelRef}
-            type="button"
-            onClick={onCancel}
-            disabled={busy}
-            className="rounded border px-4 py-2 hover:bg-gray-50 disabled:opacity-60"
-          >
-            Cancelar
-          </button>
-          <button
+            ref={confirmRef}
             type="button"
             onClick={onConfirm}
             disabled={busy}
