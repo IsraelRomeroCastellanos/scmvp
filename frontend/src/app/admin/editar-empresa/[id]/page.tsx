@@ -1,7 +1,7 @@
 // frontend/src/app/admin/editar-empresa/[id]/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getCurrentUser, isAdmin } from '@/lib/auth';
 import {
@@ -12,6 +12,12 @@ import {
   obtenerEmpresaAdmin,
 } from '@/lib/api';
 import type { ActividadVulnerableGeneral } from '@/types/actividades-vulnerables';
+import {
+  buildDomicilioCompleto,
+  buildDomicilioLegacy,
+  EmpresaConfirmationModal,
+  EmpresaDomicilioConfirmacion,
+} from '@/components/EmpresaDomicilioConfirmacion';
 
 type TipoEntidad = 'persona_moral' | 'persona_fisica';
 type Estado = 'activo' | 'suspendido' | 'inactivo';
@@ -64,14 +70,6 @@ function splitDomicilio(domicilio: string | null | undefined) {
   return { calle, numero, interior };
 }
 
-function buildDomicilio(calle: string, numero: string, interior: string) {
-  const parts: string[] = [];
-  if (calle.trim()) parts.push(calle.trim());
-  if (numero.trim()) parts.push(numero.trim());
-  if (interior.trim()) parts.push(`Int ${interior.trim()}`);
-  return parts.join(' ').trim();
-}
-
 export default function EditarEmpresaPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -89,6 +87,9 @@ export default function EditarEmpresaPage() {
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState('');
   const [actividadesError, setActividadesError] = useState('');
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [cpEdited, setCpEdited] = useState(false);
+  const submitLockRef = useRef(false);
 
   const [form, setForm] = useState<FormState>({
     nombre_legal: '',
@@ -173,6 +174,7 @@ export default function EditarEmpresaPage() {
         setActividadesSeleccionadas(assignedKeys);
         setActividadesIniciales(assignedKeys);
         setActividadesTouched(false);
+        setCpEdited(false);
 
         setForm({
           nombre_legal: empresa?.nombre_legal ?? '',
@@ -215,10 +217,12 @@ export default function EditarEmpresaPage() {
     setActividadesError('');
   };
 
-  const onSubmit = async (e: React.FormEvent) => {
+  const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (saving || success) return;
+    if (saving || success || confirmationOpen) return;
 
+    setError('');
+    setActividadesError('');
     if (!canManage) {
       setError('No tienes permiso para guardar cambios en esta empresa');
       return;
@@ -227,22 +231,20 @@ export default function EditarEmpresaPage() {
       setActividadesError('Selecciona al menos una actividad vulnerable.');
       return;
     }
-
-    const removedActivities = actividadesIniciales.filter(
-      (clave) => !actividadesSeleccionadas.includes(clave),
-    );
     if (
-      actividadesTouched
-      && !catalogLoading
-      && !catalogError
-      && removedActivities.length > 0
-      && !window.confirm(
-        'Esta actividad dejará de estar disponible para nuevas selecciones. Los historiales existentes no se eliminarán.',
-      )
+      cpEdited
+      && ['méxico', 'mexico', 'mx', 'mex'].includes(form.pais.trim().toLowerCase())
+      && !/^\d{5}$/.test(form.codigo_postal)
     ) {
+      setError('Para México, el código postal debe tener 5 dígitos.');
       return;
     }
+    setConfirmationOpen(true);
+  };
 
+  const confirmUpdate = async () => {
+    if (submitLockRef.current || saving || success) return;
+    submitLockRef.current = true;
     setSaving(true);
     setError('');
     setSuccess('');
@@ -252,7 +254,7 @@ export default function EditarEmpresaPage() {
         nombre_legal: form.nombre_legal.trim(),
         rfc: form.rfc.trim().toUpperCase() || null,
         tipo_entidad: form.tipo_entidad,
-        domicilio: buildDomicilio(form.calle, form.numero, form.interior),
+        domicilio: buildDomicilioLegacy(form),
         entidad: form.entidad.trim(),
         municipio: form.municipio.trim(),
         pais: form.pais.trim(),
@@ -276,15 +278,29 @@ export default function EditarEmpresaPage() {
       await actualizarEmpresa(id, body);
 
       setSuccess('Empresa actualizada correctamente');
+      setConfirmationOpen(false);
       window.setTimeout(() => router.push('/admin/empresas'), 700);
     } catch (e) {
       const message = getApiErrorMessage(e, 'Error al guardar cambios');
       if (message.toLowerCase().includes('activ')) setActividadesError(message);
       setError(message);
+      setConfirmationOpen(false);
     } finally {
+      submitLockRef.current = false;
       setSaving(false);
     }
   };
+
+  const removedActivityNames = actividadesIniciales
+    .filter((clave) => !actividadesSeleccionadas.includes(clave))
+    .map((clave) => (
+      actividades.find((actividad) => actividad.clave === clave)
+      ?? actividadesAsignadas.find((actividad) => actividad.clave === clave)
+    )?.nombre ?? clave);
+  const resultingActivityNames = actividadesSeleccionadas.map((clave) => (
+    actividades.find((actividad) => actividad.clave === clave)
+    ?? actividadesAsignadas.find((actividad) => actividad.clave === clave)
+  )?.nombre ?? clave);
 
   if (loading) {
     return (
@@ -320,6 +336,7 @@ export default function EditarEmpresaPage() {
             <input
               value={form.nombre_legal}
               onChange={onChange('nombre_legal')}
+              disabled={!canManage}
               className="w-full rounded border px-3 py-2"
               required
             />
@@ -330,6 +347,7 @@ export default function EditarEmpresaPage() {
             <input
               value={form.rfc}
               onChange={onChange('rfc')}
+              disabled={!canManage}
               className="w-full rounded border px-3 py-2"
             />
           </div>
@@ -339,6 +357,7 @@ export default function EditarEmpresaPage() {
             <select
               value={form.tipo_entidad}
               onChange={onChange('tipo_entidad')}
+              disabled={!canManage}
               className="w-full rounded border px-3 py-2"
               required
             >
@@ -350,66 +369,13 @@ export default function EditarEmpresaPage() {
           <div className="pt-2">
             <h2 className="text-sm font-semibold text-gray-700 mb-2">Domicilio</h2>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Calle *</label>
-                <input
-                  value={form.calle}
-                  onChange={onChange('calle')}
-                  className="w-full rounded border px-3 py-2"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Número *</label>
-                <input
-                  value={form.numero}
-                  onChange={onChange('numero')}
-                  className="w-full rounded border px-3 py-2"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Interior</label>
-                <input
-                  value={form.interior}
-                  onChange={onChange('interior')}
-                  className="w-full rounded border px-3 py-2"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Entidad *</label>
-                <input
-                  value={form.entidad}
-                  onChange={onChange('entidad')}
-                  className="w-full rounded border px-3 py-2"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Municipio *</label>
-                <input
-                  value={form.municipio}
-                  onChange={onChange('municipio')}
-                  className="w-full rounded border px-3 py-2"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Código Postal *</label>
-                <input
-                  value={form.codigo_postal}
-                  onChange={onChange('codigo_postal')}
-                  className="w-full rounded border px-3 py-2"
-                  required
-                />
-              </div>
-            </div>
+            <EmpresaDomicilioConfirmacion
+              form={form}
+              setForm={setForm}
+              lookupEnabled={cpEdited}
+              onCpEdited={() => setCpEdited(true)}
+              disabled={!canManage}
+            />
           </div>
 
           <fieldset className="rounded border border-gray-200 p-4">
@@ -515,6 +481,7 @@ export default function EditarEmpresaPage() {
             <select
               value={form.estado}
               onChange={onChange('estado')}
+              disabled={!canManage}
               className="w-full rounded border px-3 py-2"
               required
             >
@@ -535,7 +502,7 @@ export default function EditarEmpresaPage() {
               }
               className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-60"
             >
-              {saving ? 'Guardando…' : 'Guardar cambios'}
+              Guardar cambios
             </button>
 
             <button
@@ -548,6 +515,33 @@ export default function EditarEmpresaPage() {
           </div>
         </form>
       </div>
+      <EmpresaConfirmationModal
+        open={confirmationOpen}
+        title="Confirmar cambios de empresa"
+        busy={saving}
+        confirmLabel="Guardar cambios"
+        busyLabel="Guardando cambios..."
+        onCancel={() => setConfirmationOpen(false)}
+        onConfirm={() => void confirmUpdate()}
+      >
+        <dl className="space-y-3 text-sm">
+          <div><dt className="font-medium">Nombre legal</dt><dd>{form.nombre_legal.trim()}</dd></div>
+          <div><dt className="font-medium">RFC</dt><dd>{form.rfc.trim().toUpperCase() || 'Sin RFC'}</dd></div>
+          <div><dt className="font-medium">Domicilio</dt><dd>{buildDomicilioCompleto(form)}</dd></div>
+          <div>
+            <dt className="font-medium">Actividades vulnerables resultantes</dt>
+            <dd>{resultingActivityNames.length ? resultingActivityNames.join(', ') : 'Sin actividades'}</dd>
+          </div>
+        </dl>
+        {removedActivityNames.length > 0 && (
+          <div className="mt-4 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <p className="font-medium">Actividades retiradas: {removedActivityNames.join(', ')}</p>
+            <p className="mt-1">
+              Esta actividad dejará de estar disponible para nuevas selecciones. Los historiales existentes no se eliminarán.
+            </p>
+          </div>
+        )}
+      </EmpresaConfirmationModal>
     </div>
   );
 }

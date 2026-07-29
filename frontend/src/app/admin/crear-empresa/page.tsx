@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, isAdmin } from '@/lib/auth';
 import {
@@ -10,6 +10,12 @@ import {
   obtenerActividadesVulnerables,
 } from '@/lib/api';
 import type { ActividadVulnerableGeneral } from '@/types/actividades-vulnerables';
+import {
+  buildDomicilioCompleto,
+  buildDomicilioLegacy,
+  EmpresaConfirmationModal,
+  EmpresaDomicilioConfirmacion,
+} from '@/components/EmpresaDomicilioConfirmacion';
 
 type TipoEntidad = 'persona_moral' | 'persona_fisica';
 
@@ -32,6 +38,8 @@ export default function CrearEmpresaPage() {
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState('');
   const [actividadesError, setActividadesError] = useState('');
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const submitLockRef = useRef(false);
 
   const [form, setForm] = useState({
     nombre_legal: '',
@@ -40,8 +48,11 @@ export default function CrearEmpresaPage() {
     calle: '',
     numero: '',
     interior: '',
+    pais: 'México',
     entidad: '',
     municipio: '',
+    ciudad_delegacion: '',
+    colonia: '',
     codigo_postal: '',
   });
 
@@ -87,18 +98,12 @@ export default function CrearEmpresaPage() {
     setActividadesError('');
   };
 
-  const buildDomicilio = () => {
-    const parts: string[] = [];
-    if (form.calle.trim()) parts.push(form.calle.trim());
-    if (form.numero.trim()) parts.push(form.numero.trim());
-    if (form.interior.trim()) parts.push(`Int ${form.interior.trim()}`);
-    return parts.join(' ').trim();
-  };
-
-  const onSubmit = async (e: React.FormEvent) => {
+  const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (saving || success) return;
+    if (saving || success || confirmationOpen) return;
 
+    setError('');
+    setActividadesError('');
     if (!canManage) {
       setError('No tienes permiso para crear empresas');
       return;
@@ -115,7 +120,19 @@ export default function CrearEmpresaPage() {
       setActividadesError('Selecciona al menos una actividad vulnerable.');
       return;
     }
+    if (
+      ['méxico', 'mexico', 'mx', 'mex'].includes(form.pais.trim().toLowerCase())
+      && !/^\d{5}$/.test(form.codigo_postal)
+    ) {
+      setError('Para México, el código postal debe tener 5 dígitos.');
+      return;
+    }
+    setConfirmationOpen(true);
+  };
 
+  const confirmCreate = async () => {
+    if (submitLockRef.current || saving || success) return;
+    submitLockRef.current = true;
     setSaving(true);
     setError('');
     setSuccess('');
@@ -125,25 +142,37 @@ export default function CrearEmpresaPage() {
         nombre_legal: form.nombre_legal.trim(),
         rfc: form.rfc.trim().toUpperCase() || null,
         tipo_entidad: form.tipo_entidad,
-        domicilio: buildDomicilio(),
+        domicilio: buildDomicilioLegacy(form),
+        pais: form.pais.trim(),
         entidad: form.entidad.trim(),
         municipio: form.municipio.trim(),
+        ciudad_delegacion: form.ciudad_delegacion.trim(),
+        colonia: form.colonia.trim(),
         codigo_postal: form.codigo_postal.trim(),
+        calle: form.calle.trim(),
+        numero: form.numero.trim(),
         actividades_vulnerables: actividadesSeleccionadas,
       };
 
       await crearEmpresa(body);
 
       setSuccess('Empresa creada correctamente');
+      setConfirmationOpen(false);
       window.setTimeout(() => router.push('/admin/empresas'), 700);
     } catch (e) {
       const message = getApiErrorMessage(e, 'Error al crear la empresa');
       if (message.toLowerCase().includes('activ')) setActividadesError(message);
       setError(message);
+      setConfirmationOpen(false);
     } finally {
+      submitLockRef.current = false;
       setSaving(false);
     }
   };
+
+  const selectedActivityNames = actividades
+    .filter((actividad) => actividadesSeleccionadas.includes(actividad.clave))
+    .map((actividad) => actividad.nombre);
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -169,6 +198,7 @@ export default function CrearEmpresaPage() {
             <input
               value={form.nombre_legal}
               onChange={onChange('nombre_legal')}
+              disabled={!canManage}
               className="w-full rounded border px-3 py-2"
               required
             />
@@ -179,6 +209,7 @@ export default function CrearEmpresaPage() {
             <input
               value={form.rfc}
               onChange={onChange('rfc')}
+              disabled={!canManage}
               className="w-full rounded border px-3 py-2"
             />
           </div>
@@ -188,6 +219,7 @@ export default function CrearEmpresaPage() {
             <select
               value={form.tipo_entidad}
               onChange={onChange('tipo_entidad')}
+              disabled={!canManage}
               className="w-full rounded border px-3 py-2"
               required
             >
@@ -199,66 +231,12 @@ export default function CrearEmpresaPage() {
           <div className="pt-2">
             <h2 className="text-sm font-semibold text-gray-700 mb-2">Domicilio</h2>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Calle *</label>
-                <input
-                  value={form.calle}
-                  onChange={onChange('calle')}
-                  className="w-full rounded border px-3 py-2"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Número *</label>
-                <input
-                  value={form.numero}
-                  onChange={onChange('numero')}
-                  className="w-full rounded border px-3 py-2"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Interior</label>
-                <input
-                  value={form.interior}
-                  onChange={onChange('interior')}
-                  className="w-full rounded border px-3 py-2"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Entidad *</label>
-                <input
-                  value={form.entidad}
-                  onChange={onChange('entidad')}
-                  className="w-full rounded border px-3 py-2"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Municipio *</label>
-                <input
-                  value={form.municipio}
-                  onChange={onChange('municipio')}
-                  className="w-full rounded border px-3 py-2"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Código Postal *</label>
-                <input
-                  value={form.codigo_postal}
-                  onChange={onChange('codigo_postal')}
-                  className="w-full rounded border px-3 py-2"
-                  required
-                />
-              </div>
-            </div>
+            <EmpresaDomicilioConfirmacion
+              form={form}
+              setForm={setForm}
+              lookupEnabled
+              disabled={!canManage}
+            />
           </div>
 
           <fieldset className="rounded border border-gray-200 p-4">
@@ -348,7 +326,7 @@ export default function CrearEmpresaPage() {
               }
               className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-60"
             >
-              {saving ? 'Creando…' : 'Crear empresa'}
+              Crear empresa
             </button>
 
             <button
@@ -361,6 +339,26 @@ export default function CrearEmpresaPage() {
           </div>
         </form>
       </div>
+      <EmpresaConfirmationModal
+        open={confirmationOpen}
+        title="Confirmar alta de empresa"
+        busy={saving}
+        confirmLabel="Confirmar alta"
+        busyLabel="Creando empresa..."
+        onCancel={() => setConfirmationOpen(false)}
+        onConfirm={() => void confirmCreate()}
+      >
+        <dl className="space-y-3 text-sm">
+          <div><dt className="font-medium">Nombre legal</dt><dd>{form.nombre_legal.trim()}</dd></div>
+          <div><dt className="font-medium">RFC</dt><dd>{form.rfc.trim().toUpperCase() || 'Sin RFC'}</dd></div>
+          <div><dt className="font-medium">Tipo de entidad</dt><dd>{form.tipo_entidad === 'persona_moral' ? 'Persona moral' : 'Persona física'}</dd></div>
+          <div><dt className="font-medium">Domicilio completo</dt><dd>{buildDomicilioCompleto(form)}</dd></div>
+          <div>
+            <dt className="font-medium">Actividades vulnerables</dt>
+            <dd>{selectedActivityNames.join(', ')}</dd>
+          </div>
+        </dl>
+      </EmpresaConfirmationModal>
     </div>
   );
 }
