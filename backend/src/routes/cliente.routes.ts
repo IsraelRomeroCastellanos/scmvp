@@ -4,6 +4,16 @@ import { PoolClient } from 'pg';
 import pool from '../db';
 import { authenticate } from '../middleware/auth.middleware';
 import { authorizeRoles } from '../middleware/role.middleware';
+import {
+  ActividadesVulnerablesError,
+  applyClientPldSelection,
+  assertCurrentSelectionIsUsable,
+  getActiveCompanyActivities,
+  getClientPldConfiguration,
+  getProfilePldContext,
+  hasOwnProperty,
+  normalizeKeyProperty,
+} from '../services/actividades-vulnerables.service';
 
 const router = Router();
 
@@ -25,6 +35,95 @@ function conflict(res: Response, msg: string) {
 function parsePositiveInt(v: any): number | null {
   const n = Number(v);
   return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+const PERFIL_TRANSACCIONAL_FIELDS = new Set([
+  'tipo_servicio',
+  'actividad_esperada',
+  'monto_mensual_estimado',
+  'frecuencia_operacion',
+  'origen_recursos',
+  'destino_recursos',
+  'instrumentos_pago',
+]);
+
+function normalizeNullableProfileString(
+  body: Record<string, unknown>,
+  field: string,
+): string | null {
+  if (!hasOwnProperty(body, field) || body[field] === null) return null;
+  if (typeof body[field] !== 'string') {
+    throw new ActividadesVulnerablesError(400, `${field} debe ser string o null`);
+  }
+  return body[field].trim();
+}
+
+function normalizeProfilePayload(body: unknown) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new ActividadesVulnerablesError(400, 'El payload debe ser un objeto');
+  }
+
+  const source = body as Record<string, unknown>;
+  const unknownFields = Object.keys(source).filter(
+    (field) => !PERFIL_TRANSACCIONAL_FIELDS.has(field),
+  );
+  if (unknownFields.length > 0) {
+    throw new ActividadesVulnerablesError(
+      400,
+      `Campos no permitidos: ${unknownFields.join(', ')}`,
+    );
+  }
+
+  let monto_mensual_estimado: number | null = null;
+  if (
+    hasOwnProperty(source, 'monto_mensual_estimado')
+    && source.monto_mensual_estimado !== null
+  ) {
+    if (
+      typeof source.monto_mensual_estimado !== 'number'
+      || !Number.isFinite(source.monto_mensual_estimado)
+      || source.monto_mensual_estimado < 0
+    ) {
+      throw new ActividadesVulnerablesError(
+        400,
+        'monto_mensual_estimado debe ser numérico y mayor o igual a 0',
+      );
+    }
+    monto_mensual_estimado = source.monto_mensual_estimado;
+  }
+
+  let instrumentos_pago: unknown[] | Record<string, unknown> | null = null;
+  if (hasOwnProperty(source, 'instrumentos_pago') && source.instrumentos_pago !== null) {
+    const candidate = source.instrumentos_pago;
+    if (
+      candidate === null
+      || typeof candidate !== 'object'
+    ) {
+      throw new ActividadesVulnerablesError(
+        400,
+        'instrumentos_pago debe ser arreglo, objeto o null',
+      );
+    }
+    try {
+      JSON.stringify(candidate);
+    } catch {
+      throw new ActividadesVulnerablesError(
+        400,
+        'instrumentos_pago debe ser JSON serializable',
+      );
+    }
+    instrumentos_pago = candidate as unknown[] | Record<string, unknown>;
+  }
+
+  return {
+    tipo_servicio: normalizeNullableProfileString(source, 'tipo_servicio'),
+    actividad_esperada: normalizeNullableProfileString(source, 'actividad_esperada'),
+    monto_mensual_estimado,
+    frecuencia_operacion: normalizeNullableProfileString(source, 'frecuencia_operacion'),
+    origen_recursos: normalizeNullableProfileString(source, 'origen_recursos'),
+    destino_recursos: normalizeNullableProfileString(source, 'destino_recursos'),
+    instrumentos_pago,
+  };
 }
 
 function authorizeClienteEmpresaBody(
@@ -1463,7 +1562,19 @@ router.get('/mi-empresa', authenticate, async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Empresa no encontrada' });
     }
 
-    return res.json({ empresa: result.rows[0] });
+    const activities = await getActiveCompanyActivities(pool, empresaId);
+    return res.json({
+      empresa: {
+        ...result.rows[0],
+        actividades_vulnerables: activities.map((activity) => ({
+          clave: activity.clave,
+          nombre: activity.nombre,
+          fraccion: activity.fraccion,
+          descripcion: activity.descripcion,
+        })),
+        configuracion_pld_pendiente: activities.length === 0,
+      },
+    });
   } catch (error) {
     console.error('Error al obtener empresa de la sesión:', error);
     return res.status(500).json({
@@ -1551,6 +1662,7 @@ router.get('/clientes/:id', authenticate, async (req: Request, res: Response) =>
         stripEmbeddedChildCollections(row.tipo_cliente, row.datos_completos),
       ),
     );
+    const configuracion_pld = await getClientPldConfiguration(pool, row.id);
 
     const perfilResult = await pool.query(
       `SELECT *
@@ -1561,7 +1673,25 @@ router.get('/clientes/:id', authenticate, async (req: Request, res: Response) =>
       [id]
     );
 
-    const perfil_transaccional = perfilResult.rows[0] ?? null;
+    const perfilRow = perfilResult.rows[0] ?? null;
+    const perfilPublico = perfilRow
+      ? Object.fromEntries(
+          Object.entries(perfilRow).filter(
+            ([field]) => field !== 'seleccion_pld_cliente_id',
+          ),
+        )
+      : null;
+    const perfil_transaccional = perfilRow
+      ? {
+          ...perfilPublico,
+          ...(await getProfilePldContext(
+            pool,
+            perfilRow.seleccion_pld_cliente_id
+              ? Number(perfilRow.seleccion_pld_cliente_id)
+              : null,
+          )),
+        }
+      : null;
 
     const matrizResult = await pool.query(
       `SELECT *
@@ -1576,6 +1706,7 @@ router.get('/clientes/:id', authenticate, async (req: Request, res: Response) =>
 
     return res.json({
       cliente: row,
+      configuracion_pld,
       perfil_transaccional,
       matriz_riesgo
     });
@@ -1591,9 +1722,41 @@ router.get('/clientes/:id', authenticate, async (req: Request, res: Response) =>
  * ===============================
  */
 router.post('/registrar-cliente', authenticate, authorizeRoles('admin', 'consultor', 'cliente'), authorizeClienteEmpresaBody, async (req: Request, res: Response) => {
-  const client = await pool.connect();
+  let actividadProperty;
+  let operacionProperty;
   try {
-    const empresa_id = parsePositiveInt(req.body.empresa_id);
+    actividadProperty = normalizeKeyProperty(
+      req.body,
+      'actividad_vulnerable_clave',
+      'actividad',
+    );
+    operacionProperty = normalizeKeyProperty(
+      req.body,
+      'operacion_vulnerable_clave',
+      'operacion',
+    );
+  } catch (error) {
+    if (error instanceof ActividadesVulnerablesError) {
+      return res.status(error.status).json({ error: error.message });
+    }
+    return res.status(500).json({ error: 'Error al validar configuración PLD' });
+  }
+
+  if (
+    req.user?.rol === 'consultor'
+    && (actividadProperty.present || operacionProperty.present)
+  ) {
+    return res.status(403).json({
+      error: 'El consultor solo puede consultar la configuración PLD',
+    });
+  }
+
+  let client: PoolClient | null = null;
+  let transactionStarted = false;
+  try {
+    const empresa_id = req.user?.rol === 'cliente'
+      ? parsePositiveInt(req.user.empresa_id)
+      : parsePositiveInt(req.body.empresa_id);
     const tipo = req.body.tipo_cliente;
     const nombre_entidad = req.body.nombre_entidad;
     const nacionalidad = req.body.nacionalidad;
@@ -1612,7 +1775,9 @@ router.post('/registrar-cliente', authenticate, authorizeRoles('admin', 'consult
 
     const rfc_principal = extractRfcPrincipal(tipo, preparedDatos);
 
+    client = await pool.connect();
     await client.query('BEGIN');
+    transactionStarted = true;
 
     if (rfc_principal) {
       const dupRfc = await client.query(
@@ -1621,6 +1786,7 @@ router.post('/registrar-cliente', authenticate, authorizeRoles('admin', 'consult
       );
       if (dupRfc.rows.length > 0) {
         await client.query('ROLLBACK');
+        transactionStarted = false;
         return conflict(res, 'RFC ya existe en el registro');
       }
     }
@@ -1631,6 +1797,7 @@ router.post('/registrar-cliente', authenticate, authorizeRoles('admin', 'consult
     );
     if (dupName.rows.length > 0) {
       await client.query('ROLLBACK');
+      transactionStarted = false;
       return res.status(409).json({ error: 'Cliente duplicado para esa empresa' });
     }
 
@@ -1646,16 +1813,171 @@ router.post('/registrar-cliente', authenticate, authorizeRoles('admin', 'consult
     const childSync = await replaceChildCollectionsForTipo(client, insert.rows[0].id, tipo, preparedDatos);
     await assertRelacionadosPersistedForTipo(client, insert.rows[0].id, tipo, preparedDatos, childSync);
 
+    const configuracion_pld = await applyClientPldSelection(
+      client,
+      Number(insert.rows[0].id),
+      empresa_id,
+      {
+        mode: 'post',
+        actividad: actividadProperty,
+        operacion: operacionProperty,
+      },
+    );
+
     await client.query('COMMIT');
-    return res.status(201).json({ ok: true, cliente: insert.rows[0] });
+    transactionStarted = false;
+    return res.status(201).json({
+      ok: true,
+      cliente: insert.rows[0],
+      configuracion_pld,
+    });
   } catch (error) {
-    await client.query('ROLLBACK').catch(() => {});
+    if (client && transactionStarted) {
+      await client.query('ROLLBACK').catch(() => {});
+      transactionStarted = false;
+    }
+    if (error instanceof ActividadesVulnerablesError) {
+      return res.status(error.status).json({ error: error.message });
+    }
     console.error('Error al registrar cliente:', error);
     return res.status(500).json({ error: 'Error al registrar cliente' });
   } finally {
-    client.release();
+    client?.release();
   }
 });
+
+router.post(
+  '/clientes/:id/perfil-transaccional',
+  authenticate,
+  authorizeRoles('admin', 'cliente'),
+  authorizeClienteEmpresaRecurso,
+  async (req: Request, res: Response) => {
+    const id = parsePositiveInt(req.params.id);
+    if (!id) return badRequest(res, 'id inválido');
+
+    let payload;
+    try {
+      payload = normalizeProfilePayload(req.body);
+    } catch (error) {
+      if (error instanceof ActividadesVulnerablesError) {
+        return res.status(error.status).json({ error: error.message });
+      }
+      return res.status(500).json({ error: 'Error al validar Perfil Transaccional' });
+    }
+
+    let client: PoolClient | null = null;
+    let transactionStarted = false;
+    try {
+      client = await pool.connect();
+      await client.query('BEGIN');
+      transactionStarted = true;
+
+      const clientResult = await client.query(
+        `SELECT id, empresa_id
+         FROM public.clientes
+         WHERE id = $1
+         LIMIT 1
+         FOR UPDATE`,
+        [id],
+      );
+      if (clientResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        transactionStarted = false;
+        return res.status(404).json({ error: 'Cliente no encontrado' });
+      }
+
+      const empresaId = Number(clientResult.rows[0].empresa_id);
+      if (req.user?.rol === 'cliente') {
+        if (!req.user.empresa_id || req.user.empresa_id !== empresaId) {
+          await client.query('ROLLBACK');
+          transactionStarted = false;
+          return res.status(403).json({
+            error: 'Acceso denegado: empresa no autorizada',
+          });
+        }
+      }
+
+      const selection = await assertCurrentSelectionIsUsable(
+        client,
+        id,
+        empresaId,
+      );
+
+      const versionResult = await client.query(
+        `SELECT COALESCE(MAX(version), 0) + 1 AS next_version
+         FROM public.cliente_perfil_transaccional
+         WHERE cliente_id = $1`,
+        [id],
+      );
+      const nextVersion = Number(versionResult.rows[0].next_version);
+
+      const insertResult = await client.query(
+        `INSERT INTO public.cliente_perfil_transaccional (
+           cliente_id,
+           empresa_id,
+           tipo_servicio,
+           actividad_esperada,
+           monto_mensual_estimado,
+           frecuencia_operacion,
+           origen_recursos,
+           destino_recursos,
+           instrumentos_pago,
+           version,
+           estado,
+           seleccion_pld_cliente_id
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'activo', $11)
+         RETURNING *`,
+        [
+          id,
+          empresaId,
+          payload.tipo_servicio,
+          payload.actividad_esperada,
+          payload.monto_mensual_estimado,
+          payload.frecuencia_operacion,
+          payload.origen_recursos,
+          payload.destino_recursos,
+          payload.instrumentos_pago,
+          nextVersion,
+          selection.id,
+        ],
+      );
+
+      const context = await getProfilePldContext(
+        client,
+        Number(selection.id),
+      );
+      const perfilPublico = Object.fromEntries(
+        Object.entries(insertResult.rows[0]).filter(
+          ([field]) => field !== 'seleccion_pld_cliente_id',
+        ),
+      );
+
+      await client.query('COMMIT');
+      transactionStarted = false;
+      return res.status(201).json({
+        perfil_transaccional: {
+          ...perfilPublico,
+          ...context,
+        },
+      });
+    } catch (error) {
+      if (client && transactionStarted) {
+        await client.query('ROLLBACK').catch(() => {});
+        transactionStarted = false;
+      }
+      if (error instanceof ActividadesVulnerablesError) {
+        return res.status(error.status).json({ error: error.message });
+      }
+      console.error('Error al crear Perfil Transaccional:', error);
+      return res.status(500).json({
+        error: 'Error al crear Perfil Transaccional',
+      });
+    } finally {
+      client?.release();
+    }
+  },
+);
 
 /**
  * ===============================
@@ -1667,26 +1989,72 @@ router.post('/registrar-cliente', authenticate, authorizeRoles('admin', 'consult
  * ===============================
  */
 router.put('/clientes/:id', authenticate, authorizeRoles('admin', 'consultor', 'cliente'), authorizeClienteEmpresaRecurso, async (req: Request, res: Response) => {
-  const client = await pool.connect();
+  let actividadProperty;
+  let operacionProperty;
+  try {
+    actividadProperty = normalizeKeyProperty(
+      req.body,
+      'actividad_vulnerable_clave',
+      'actividad',
+    );
+    operacionProperty = normalizeKeyProperty(
+      req.body,
+      'operacion_vulnerable_clave',
+      'operacion',
+    );
+  } catch (error) {
+    if (error instanceof ActividadesVulnerablesError) {
+      return res.status(error.status).json({ error: error.message });
+    }
+    return res.status(500).json({ error: 'Error al validar configuración PLD' });
+  }
+
+  if (
+    req.user?.rol === 'consultor'
+    && (actividadProperty.present || operacionProperty.present)
+  ) {
+    return res.status(403).json({
+      error: 'El consultor solo puede consultar la configuración PLD',
+    });
+  }
+
+  let client: PoolClient | null = null;
+  let transactionStarted = false;
   try {
     const id = parsePositiveInt(req.params.id);
     if (!id) return badRequest(res, 'id inválido');
 
+    client = await pool.connect();
     await client.query('BEGIN');
+    transactionStarted = true;
 
     const current = await client.query(
       `SELECT id, empresa_id, tipo_cliente, datos_completos
        FROM clientes
        WHERE id=$1
-       LIMIT 1`,
+       LIMIT 1
+       FOR UPDATE`,
       [id]
     );
     if (current.rows.length === 0) {
       await client.query('ROLLBACK');
+      transactionStarted = false;
       return res.status(404).json({ error: 'Cliente no encontrado' });
     }
 
     const empresa_id = current.rows[0].empresa_id;
+    if (
+      req.user?.rol === 'cliente'
+      && (
+        !req.user.empresa_id
+        || Number(empresa_id) !== req.user.empresa_id
+      )
+    ) {
+      throw new ActividadesVulnerablesError(
+        403,
+        'Acceso denegado: empresa no autorizada',
+      );
+    }
     const tipo = current.rows[0].tipo_cliente;
     const currentDatos = current.rows[0].datos_completos ?? {};
 
@@ -1705,6 +2073,7 @@ router.put('/clientes/:id', authenticate, authorizeRoles('admin', 'consultor', '
       );
       if (!canonicalPreparation.ok) {
         await client.query('ROLLBACK');
+        transactionStarted = false;
         return badRequest(res, canonicalPreparation.error || 'Contrato canónico inválido');
       }
 
@@ -1712,11 +2081,13 @@ router.put('/clientes/:id', authenticate, authorizeRoles('admin', 'consultor', '
       nextDatos = deepMerge(currentDatos, preparedPatchDatos);
       if (!validateDatosCompletosOr400(res, tipo, nextDatos, { validateChildLists: false })) {
         await client.query('ROLLBACK');
+        transactionStarted = false;
         return;
       }
 
       if (hasChildPatchForTipo(tipo, preparedPatchDatos) && !validateChildListsOr400(res, tipo, nextDatos)) {
         await client.query('ROLLBACK');
+        transactionStarted = false;
         return;
       }
 
@@ -1728,6 +2099,7 @@ router.put('/clientes/:id', authenticate, authorizeRoles('admin', 'consultor', '
         );
         if (dupRfc.rows.length > 0) {
           await client.query('ROLLBACK');
+          transactionStarted = false;
           return conflict(res, 'RFC ya existe en el registro');
         }
       }
@@ -1753,14 +2125,36 @@ router.put('/clientes/:id', authenticate, authorizeRoles('admin', 'consultor', '
       await assertRelacionadosPersistedForTipo(client, id, tipo, nextDatos, childSync);
     }
 
+    const configuracion_pld = await applyClientPldSelection(
+      client,
+      id,
+      Number(empresa_id),
+      {
+        mode: 'put',
+        actividad: actividadProperty,
+        operacion: operacionProperty,
+      },
+    );
+
     await client.query('COMMIT');
-    return res.json({ ok: true, cliente: result.rows[0] });
+    transactionStarted = false;
+    return res.json({
+      ok: true,
+      cliente: result.rows[0],
+      configuracion_pld,
+    });
   } catch (error) {
-    await client.query('ROLLBACK').catch(() => {});
+    if (client && transactionStarted) {
+      await client.query('ROLLBACK').catch(() => {});
+      transactionStarted = false;
+    }
+    if (error instanceof ActividadesVulnerablesError) {
+      return res.status(error.status).json({ error: error.message });
+    }
     console.error('Error al editar cliente:', error);
     return res.status(500).json({ error: 'Error al editar cliente' });
   } finally {
-    client.release();
+    client?.release();
   }
 });
 
