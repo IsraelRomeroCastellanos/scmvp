@@ -3,26 +3,31 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { getCurrentUser, isAdmin } from '@/lib/auth';
+import {
+  actualizarEmpresa,
+  getApiErrorMessage,
+  isApiRequestCanceled,
+  obtenerActividadesVulnerables,
+  obtenerEmpresaAdmin,
+} from '@/lib/api';
+import type { ActividadVulnerableGeneral } from '@/types/actividades-vulnerables';
 
 type TipoEntidad = 'persona_moral' | 'persona_fisica';
 type Estado = 'activo' | 'suspendido' | 'inactivo';
 
-async function getEmpresaErrorMessage(res: Response, action: 'cargar' | 'guardar'): Promise<string> {
-  const data = await res.json().catch(() => null);
-  const detail = typeof data?.error === 'string' ? data.error : '';
-
-  if (res.status === 400) return detail ? `Datos inválidos: ${detail}` : 'Datos inválidos';
-  if (res.status === 403) return 'No tienes permiso para acceder a esta empresa';
-  if (res.status === 404) return 'Empresa no encontrada';
-  if (res.status === 409) return detail || 'Ya existe una empresa con ese nombre o RFC';
-  if (res.status >= 500) {
-    return action === 'cargar'
-      ? 'Error interno al cargar la empresa'
-      : 'Error interno al guardar la empresa';
-  }
-
-  return detail || (action === 'cargar' ? 'No se pudo cargar la empresa' : 'No se pudo guardar la empresa');
+function getCatalogErrorMessage(error: unknown): string {
+  return getApiErrorMessage(
+    error,
+    'No se pudo cargar el catálogo de actividades vulnerables',
+  );
 }
+
+type EmpresaDetalle = Partial<FormState> & {
+  domicilio?: string | null;
+  numero?: string | null;
+  actividades_vulnerables?: ActividadVulnerableGeneral[];
+};
 
 type FormState = {
   nombre_legal: string;
@@ -75,6 +80,15 @@ export default function EditarEmpresaPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [canManage, setCanManage] = useState(false);
+  const [actividades, setActividades] = useState<ActividadVulnerableGeneral[]>([]);
+  const [actividadesAsignadas, setActividadesAsignadas] = useState<ActividadVulnerableGeneral[]>([]);
+  const [actividadesSeleccionadas, setActividadesSeleccionadas] = useState<string[]>([]);
+  const [actividadesIniciales, setActividadesIniciales] = useState<string[]>([]);
+  const [actividadesTouched, setActividadesTouched] = useState(false);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState('');
+  const [actividadesError, setActividadesError] = useState('');
 
   const [form, setForm] = useState<FormState>({
     nombre_legal: '',
@@ -96,30 +110,69 @@ export default function EditarEmpresaPage() {
   const onChange =
     (key: keyof FormState) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-      setForm((prev) => ({ ...prev, [key]: e.target.value as any }));
+      setForm((prev) => ({ ...prev, [key]: e.target.value as FormState[typeof key] }));
     };
 
   useEffect(() => {
+    setCanManage(isAdmin(getCurrentUser()?.rol));
+
+    const controller = new AbortController();
+    let active = true;
+
+    const loadCatalog = async () => {
+      setCatalogLoading(true);
+      setCatalogError('');
+      try {
+        const items = await obtenerActividadesVulnerables(controller.signal);
+        if (active) setActividades(items);
+      } catch (loadError) {
+        if (!active || isApiRequestCanceled(loadError)) return;
+        setCatalogError(getCatalogErrorMessage(loadError));
+      } finally {
+        if (active) setCatalogLoading(false);
+      }
+    };
+
+    void loadCatalog();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+
     const fetchEmpresa = async () => {
       try {
         setError('');
         setLoading(true);
 
-        const token = localStorage.getItem('token');
-        const base = process.env.NEXT_PUBLIC_API_BASE_URL;
-        if (!base) throw new Error('Falta NEXT_PUBLIC_API_BASE_URL');
-
-        const res = await fetch(`${base}/api/admin/empresas/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: 'no-store',
-        });
-
-        if (!res.ok) throw new Error(await getEmpresaErrorMessage(res, 'cargar'));
-
-        const data = await res.json();
-        const empresa = data?.empresa;
+        const empresa = await obtenerEmpresaAdmin<EmpresaDetalle>(
+          id,
+          controller.signal,
+        );
+        if (!active) return;
 
         const domicilioParts = splitDomicilio(empresa?.domicilio);
+        const rawAssigned: unknown[] = Array.isArray(empresa?.actividades_vulnerables)
+          ? empresa.actividades_vulnerables
+          : [];
+        const assigned = rawAssigned.filter(
+              (item: unknown): item is ActividadVulnerableGeneral =>
+                typeof item === 'object'
+                && item !== null
+                && typeof (item as ActividadVulnerableGeneral).clave === 'string',
+            );
+        const assignedKeys = Array.from(
+          new Set<string>(assigned.map((item: ActividadVulnerableGeneral) => item.clave)),
+        );
+
+        setActividadesAsignadas(assigned);
+        setActividadesSeleccionadas(assignedKeys);
+        setActividadesIniciales(assignedKeys);
+        setActividadesTouched(false);
 
         setForm({
           nombre_legal: empresa?.nombre_legal ?? '',
@@ -138,29 +191,64 @@ export default function EditarEmpresaPage() {
           estado: (empresa?.estado ?? 'activo') as Estado,
         });
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Error al cargar la empresa');
+        if (!active || isApiRequestCanceled(e)) return;
+        setError(getApiErrorMessage(e, 'Error al cargar la empresa'));
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
 
-    fetchEmpresa();
+    void fetchEmpresa();
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [id]);
+
+  const toggleActividad = (clave: string) => {
+    setActividadesSeleccionadas((current) =>
+      current.includes(clave)
+        ? current.filter((item) => item !== clave)
+        : [...current, clave],
+    );
+    setActividadesTouched(true);
+    setActividadesError('');
+  };
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (saving || success) return;
+
+    if (!canManage) {
+      setError('No tienes permiso para guardar cambios en esta empresa');
+      return;
+    }
+    if (actividadesTouched && actividadesSeleccionadas.length === 0) {
+      setActividadesError('Selecciona al menos una actividad vulnerable.');
+      return;
+    }
+
+    const removedActivities = actividadesIniciales.filter(
+      (clave) => !actividadesSeleccionadas.includes(clave),
+    );
+    if (
+      actividadesTouched
+      && !catalogLoading
+      && !catalogError
+      && removedActivities.length > 0
+      && !window.confirm(
+        'Esta actividad dejará de estar disponible para nuevas selecciones. Los historiales existentes no se eliminarán.',
+      )
+    ) {
+      return;
+    }
 
     setSaving(true);
     setError('');
     setSuccess('');
 
     try {
-      const token = localStorage.getItem('token');
-      const base = process.env.NEXT_PUBLIC_API_BASE_URL;
-      if (!base) throw new Error('Falta NEXT_PUBLIC_API_BASE_URL');
-
-      const body = {
+      const body: Record<string, unknown> = {
         nombre_legal: form.nombre_legal.trim(),
         rfc: form.rfc.trim().toUpperCase() || null,
         tipo_entidad: form.tipo_entidad,
@@ -176,22 +264,23 @@ export default function EditarEmpresaPage() {
         estado_provincia: form.estado_provincia.trim(),
         estado: form.estado,
       };
+      if (
+        actividadesTouched
+        && !catalogLoading
+        && !catalogError
+        && actividades.length > 0
+      ) {
+        body.actividades_vulnerables = actividadesSeleccionadas;
+      }
 
-      const res = await fetch(`${base}/api/admin/empresas/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) throw new Error(await getEmpresaErrorMessage(res, 'guardar'));
+      await actualizarEmpresa(id, body);
 
       setSuccess('Empresa actualizada correctamente');
       window.setTimeout(() => router.push('/admin/empresas'), 700);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al guardar cambios');
+      const message = getApiErrorMessage(e, 'Error al guardar cambios');
+      if (message.toLowerCase().includes('activ')) setActividadesError(message);
+      setError(message);
     } finally {
       setSaving(false);
     }
@@ -323,6 +412,104 @@ export default function EditarEmpresaPage() {
             </div>
           </div>
 
+          <fieldset className="rounded border border-gray-200 p-4">
+            <legend className="px-1 text-sm font-semibold text-gray-700">
+              Actividades vulnerables
+            </legend>
+
+            {actividadesIniciales.length === 0 && (
+              <p className="mb-3 text-sm text-amber-700" role="status">
+                Esta empresa tiene pendiente configurar sus actividades vulnerables.
+              </p>
+            )}
+
+            {catalogLoading && (
+              <p className="text-sm text-gray-600" role="status">
+                Cargando actividades vulnerables…
+              </p>
+            )}
+            {catalogError && (
+              <div className="text-sm text-amber-700" role="alert">
+                <p>{catalogError}</p>
+                <p className="mt-1">
+                  Puedes editar los demás campos; las actividades existentes no se modificarán.
+                </p>
+              </div>
+            )}
+            {!catalogLoading && !catalogError && actividades.length === 0 && (
+              <p className="text-sm text-amber-700" role="alert">
+                El catálogo de actividades vulnerables está vacío. Las relaciones actuales se conservarán.
+              </p>
+            )}
+
+            {!canManage && (
+              <div className="space-y-2">
+                {actividadesAsignadas.length > 0 ? (
+                  actividadesAsignadas.map((actividad) => (
+                    <div key={actividad.clave} className="rounded border border-gray-200 p-3">
+                      <p className="text-sm font-medium text-gray-800">{actividad.nombre}</p>
+                      {actividad.fraccion && (
+                        <p className="text-xs text-gray-500">Fracción {actividad.fraccion}</p>
+                      )}
+                      {actividad.descripcion && (
+                        <p className="mt-1 text-sm text-gray-600">{actividad.descripcion}</p>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-600">Sin actividades asignadas.</p>
+                )}
+                <p className="text-sm text-amber-700">
+                  Tu rol permite consultar esta configuración, pero no modificarla.
+                </p>
+              </div>
+            )}
+
+            {canManage && !catalogLoading && !catalogError && actividades.length > 0 && (
+              <div className="max-h-72 space-y-2 overflow-y-auto pr-2">
+                {actividades.map((actividad) => {
+                  const inputId = `actividad-${actividad.clave}`;
+                  return (
+                    <label
+                      key={actividad.clave}
+                      htmlFor={inputId}
+                      className="flex cursor-pointer items-start gap-3 rounded border border-gray-200 p-3 hover:bg-gray-50"
+                    >
+                      <input
+                        id={inputId}
+                        type="checkbox"
+                        checked={actividadesSeleccionadas.includes(actividad.clave)}
+                        onChange={() => toggleActividad(actividad.clave)}
+                        className="mt-1"
+                      />
+                      <span>
+                        <span className="block text-sm font-medium text-gray-800">
+                          {actividad.nombre}
+                        </span>
+                        {actividad.fraccion && (
+                          <span className="block text-xs text-gray-500">
+                            Fracción {actividad.fraccion}
+                          </span>
+                        )}
+                        {actividad.descripcion && (
+                          <span className="mt-1 block text-sm text-gray-600">
+                            {actividad.descripcion}
+                          </span>
+                        )}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+
+            {actividadesError && (
+              <p className="mt-3 text-sm text-red-700" role="alert">
+                {actividadesError}
+              </p>
+            )}
+          </fieldset>
+
           <div className="pt-2">
             <label className="block text-sm text-gray-600 mb-1">Estado</label>
             <select
@@ -340,7 +527,12 @@ export default function EditarEmpresaPage() {
           <div className="flex items-center gap-3 pt-2">
             <button
               type="submit"
-              disabled={saving || !!success}
+              disabled={
+                saving
+                || !!success
+                || !canManage
+                || (actividadesTouched && actividadesSeleccionadas.length === 0)
+              }
               className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-60"
             >
               {saving ? 'Guardando…' : 'Guardar cambios'}

@@ -14,9 +14,34 @@ import {
   buildBeneficiariosControladoresContract,
   validateBeneficiariosControladores,
 } from '../../registrar-cliente/validate';
+import {
+  actualizarCliente,
+  getApiErrorMessage,
+  isApiRequestCanceled,
+  obtenerDetalleCliente,
+  obtenerEmpresaAdmin,
+  obtenerMiEmpresa,
+} from '@/lib/api';
+import {
+  getCurrentUser,
+  normalizeRole,
+  type NormalizedRole,
+} from '@/lib/auth';
+import PldSelectionFields from '@/components/PldSelectionFields';
+import type {
+  ActividadVulnerableGeneral,
+  ConfiguracionPldCliente,
+  MiEmpresaPld,
+  PldSelectionWritePayload,
+} from '@/types/actividades-vulnerables';
 
 type TipoCliente = 'persona_fisica' | 'persona_moral' | 'fideicomiso';
 type Errors = Record<string, string>;
+type ClienteDetallePldResponse = {
+  // El expediente legacy es abierto; solo se tipa de forma estricta el contrato PLD aditivo.
+  cliente?: Record<string, any>;
+  configuracion_pld?: ConfiguracionPldCliente | null;
+};
 
 type DuenoBeneficiarioItem = {
   nombres: string;
@@ -952,9 +977,6 @@ export default function Page() {
   const params = useParams<{ id: string }>();
   const id = params?.id;
 
-  // ✅ default prod actual si env no está
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://scmvp-nxtj.onrender.com';
-
   const token = useMemo(() => {
     if (typeof window === 'undefined') return '';
     return localStorage.getItem('token') || '';
@@ -964,6 +986,18 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
+  const [role, setRole] = useState<NormalizedRole | null>(null);
+  const [empresaActividades, setEmpresaActividades] = useState<ActividadVulnerableGeneral[]>([]);
+  const [actividadVulnerableClave, setActividadVulnerableClave] = useState('');
+  const [operacionVulnerableClave, setOperacionVulnerableClave] = useState('');
+  const [configuracionPld, setConfiguracionPld] = useState<ConfiguracionPldCliente | null>(null);
+  const [pldTouched, setPldTouched] = useState(false);
+  const [pldLoadError, setPldLoadError] = useState('');
+  const [pldSelectionError, setPldSelectionError] = useState('');
+
+  useEffect(() => {
+    setRole(normalizeRole(getCurrentUser()?.rol));
+  }, []);
 
   const [paises, setPaises] = useState<CatalogItem[]>([]);
   const [actividades, setActividades] = useState<CatalogItem[]>([]);
@@ -1309,31 +1343,27 @@ export default function Page() {
 
   // A2 hydrate editar cliente: carga datos existentes al abrir edición
   useEffect(() => {
-    if (!id || !token) return;
+    if (!id || !token || !role) return;
 
     let alive = true;
+    const controller = new AbortController();
 
     async function loadCliente() {
       setLoading(true);
       setFatal('');
 
       try {
-        const res = await fetch(`${apiBase}/api/cliente/clientes/${id}`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        });
-
-        const data = await res.json().catch(() => ({}));
+        const data = await obtenerDetalleCliente<ClienteDetallePldResponse>(
+          id,
+          controller.signal,
+        );
 
         if (!alive) return;
 
-        if (!res.ok) {
-          setFatal(data?.error || `Error al cargar cliente (${res.status})`);
-          return;
-        }
-
         const cliente = data?.cliente || {};
+        const nextConfiguracionPld =
+          (data?.configuracion_pld ?? null) as ConfiguracionPldCliente | null;
+        setConfiguracionPld(nextConfiguracionPld);
         const datos = cliente?.datos_completos || {};
         const personaPrincipal = datos?.persona || {};
         const empresaPrincipal = datos?.empresa || {};
@@ -1484,8 +1514,44 @@ export default function Page() {
             ? hydrated.relatedDuenosAplica
             : true
         );
-      } catch (e: any) {
-        if (alive) setFatal(e?.message || 'Error al cargar cliente');
+
+        try {
+          const empresaId = Number(cliente.empresa_id);
+          const empresa = role === 'cliente'
+            ? await obtenerMiEmpresa<MiEmpresaPld>(controller.signal)
+            : await obtenerEmpresaAdmin<MiEmpresaPld>(
+                empresaId,
+                controller.signal,
+              );
+          if (!alive) return;
+          const nextEmpresaActividades = Array.isArray(
+            empresa.actividades_vulnerables,
+          )
+            ? empresa.actividades_vulnerables
+            : [];
+          setEmpresaActividades(nextEmpresaActividades);
+          setActividadVulnerableClave(
+            nextConfiguracionPld?.actividad?.clave
+            || (nextEmpresaActividades.length === 1
+              ? nextEmpresaActividades[0].clave
+              : ''),
+          );
+          setOperacionVulnerableClave(
+            nextConfiguracionPld?.operacion?.clave ?? '',
+          );
+          setPldTouched(false);
+          setPldLoadError('');
+        } catch (companyError) {
+          if (alive && !isApiRequestCanceled(companyError)) {
+            setPldLoadError(
+              'No se pudo cargar la configuración PLD de la empresa. Los demás datos pueden editarse sin modificarla.',
+            );
+          }
+        }
+      } catch (requestError) {
+        if (alive && !isApiRequestCanceled(requestError)) {
+          setFatal(getApiErrorMessage(requestError, 'Error al cargar cliente'));
+        }
       } finally {
         if (alive) setLoading(false);
       }
@@ -1495,8 +1561,9 @@ export default function Page() {
 
     return () => {
       alive = false;
+      controller.abort();
     };
-  }, [apiBase, id, token]);
+  }, [id, role, token]);
 
 
   useEffect(() => {
@@ -1685,6 +1752,20 @@ export default function Page() {
       return;
     }
 
+    if (
+      pldTouched
+      && (
+        !actividadVulnerableClave
+        || !operacionVulnerableClave
+      )
+    ) {
+      const message = 'Selecciona actividad y operación para actualizar la configuración PLD.';
+      setPldSelectionError(message);
+      setFatal(message);
+      return;
+    }
+    setPldSelectionError('');
+
     setSaving(true);
     try {
       const actividadEconomicaPrincipal = catalogPayloadValue(actividades, pfActividad, pfActividadOriginal);
@@ -1713,6 +1794,14 @@ export default function Page() {
           }
         }
       };
+
+      if (pldTouched && role !== 'consultor' && !pldLoadError) {
+        const pldPayload: PldSelectionWritePayload = {
+          actividad_vulnerable_clave: actividadVulnerableClave,
+          operacion_vulnerable_clave: operacionVulnerableClave,
+        };
+        Object.assign(body, pldPayload);
+      }
 
         if (tipoCliente === 'persona_fisica') {
           body.nombre_entidad = [pfNombres, pfApellidoPaterno, pfApellidoMaterno]
@@ -1827,24 +1916,15 @@ export default function Page() {
         };
       }
 
-      const res = await fetch(`${apiBase}/api/cliente/clientes/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(body)
-      });
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setFatal(data?.error || `Error al guardar (${res.status})`);
-        return;
-      }
+      await actualizarCliente(id, body);
 
       router.push(`/cliente/clientes/${id}`);
-    } catch (e: any) {
-      setFatal(e?.message || 'Error inesperado');
+    } catch (requestError) {
+      const message = getApiErrorMessage(requestError, 'Error inesperado');
+      if (/actividad|operaci[oó]n|configuraci[oó]n pld/i.test(message)) {
+        setPldSelectionError(message);
+      }
+      setFatal(message);
     } finally {
       setSaving(false);
     }
@@ -1860,6 +1940,32 @@ export default function Page() {
 
       {loading ? <div className="text-sm text-gray-600">Cargando...</div> : null}
 
+      {!loading && pldLoadError ? (
+        <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          {pldLoadError}
+        </div>
+      ) : !loading ? (
+        <PldSelectionFields
+          actividades={empresaActividades}
+          actividadClave={actividadVulnerableClave}
+          operacionClave={operacionVulnerableClave}
+          disabled={role === 'consultor'}
+          touched={pldTouched && configuracionPld?.estado === 'completa'}
+          error={pldSelectionError}
+          onTouched={() => {
+            setPldTouched(true);
+            setPldSelectionError('');
+          }}
+          onActividadChange={(clave) => {
+            setActividadVulnerableClave(clave);
+            setPldSelectionError('');
+          }}
+          onOperacionChange={(clave) => {
+            setOperacionVulnerableClave(clave);
+            setPldSelectionError('');
+          }}
+        />
+      ) : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2 rounded-md border border-gray-200 p-3">

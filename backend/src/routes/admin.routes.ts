@@ -1,9 +1,18 @@
 // backend/src/routes/admin.routes.ts
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import type { PoolClient } from 'pg';
 import pool from '../db';
 import { authenticate } from '../middleware/auth.middleware';
 import { authorizeRoles } from '../middleware/role.middleware';
+import {
+  ActividadesVulnerablesError,
+  getActiveActivitiesByCompanyIds,
+  getActiveCompanyActivities,
+  normalizeKeyArrayProperty,
+  reconcileCompanyActivities,
+  resolveActiveActivitiesByKeys,
+} from '../services/actividades-vulnerables.service';
 
 const router = Router();
 
@@ -365,7 +374,22 @@ router.get(
         ORDER BY nombre_legal
       `);
 
-      res.json({ empresas: result.rows });
+      const empresaIds = result.rows.map((row) => Number(row.id));
+      const activitiesByCompany = await getActiveActivitiesByCompanyIds(
+        pool,
+        empresaIds,
+      );
+      const empresas = result.rows.map((empresa) => {
+        const actividades_vulnerables =
+          activitiesByCompany.get(Number(empresa.id)) ?? [];
+        return {
+          ...empresa,
+          actividades_vulnerables,
+          configuracion_pld_pendiente: actividades_vulnerables.length === 0,
+        };
+      });
+
+      res.json({ empresas });
     } catch (error) {
       console.error('Error al listar empresas:', error);
       res.status(500).json({ error: 'Error al listar empresas' });
@@ -447,21 +471,34 @@ function validarEmpresaBody(
   return true;
 }
 
-function responderConflictoEmpresa(res: any, error: any) {
-  if (error?.code !== '23505') return false;
+type PostgresError = Error & {
+  code?: string;
+  constraint?: string;
+};
 
-  const constraint = String(error?.constraint ?? '').toLowerCase();
-  if (constraint.includes('nombre_legal')) {
+function isPostgresError(error: unknown): error is PostgresError {
+  return error instanceof Error && 'code' in error;
+}
+
+function responderConflictoEmpresa(res: any, error: unknown) {
+  if (!isPostgresError(error) || error.code !== '23505') return false;
+
+  if (error.constraint === 'idx_empresas_nombre') {
     res.status(409).json({ error: 'nombre_legal ya registrado' });
     return true;
   }
 
-  if (constraint.includes('rfc')) {
+  if (error.constraint === 'idx_empresas_rfc') {
     res.status(409).json({ error: 'rfc ya registrado' });
     return true;
   }
 
-  res.status(409).json({ error: 'Empresa duplicada' });
+  return false;
+}
+
+function responderErrorActividadesVulnerables(res: any, error: unknown) {
+  if (!(error instanceof ActividadesVulnerablesError)) return false;
+  res.status(error.status).json({ error: error.message });
   return true;
 }
 
@@ -489,7 +526,19 @@ router.get(
         return res.status(404).json({ error: 'Empresa no encontrada' });
       }
 
-      return res.json({ empresa: result.rows[0] });
+      const activities = await getActiveCompanyActivities(pool, id);
+      return res.json({
+        empresa: {
+          ...result.rows[0],
+          actividades_vulnerables: activities.map((activity) => ({
+            clave: activity.clave,
+            nombre: activity.nombre,
+            fraccion: activity.fraccion,
+            descripcion: activity.descripcion,
+          })),
+          configuracion_pld_pendiente: activities.length === 0,
+        },
+      });
     } catch (error) {
       console.error('Error al consultar empresa:', error);
       return res.status(500).json({ error: 'Error al consultar empresa' });
@@ -508,8 +557,28 @@ router.post(
     const empresa = normalizarEmpresaBody(req.body, 'activo');
     if (!validarEmpresaBody(res, empresa)) return;
 
+    let activitiesProperty;
     try {
-      const duplicateResult = await pool.query(
+      activitiesProperty = normalizeKeyArrayProperty(req.body);
+      if (!activitiesProperty.present || activitiesProperty.keys.length === 0) {
+        return res.status(400).json({
+          error: 'actividades_vulnerables es obligatorio y no puede estar vacío',
+        });
+      }
+    } catch (error) {
+      if (responderErrorActividadesVulnerables(res, error)) return;
+      console.error('Error al validar actividades vulnerables:', error);
+      return res.status(500).json({ error: 'Error al validar actividades vulnerables' });
+    }
+
+    let client: PoolClient | null = null;
+    let transactionStarted = false;
+    try {
+      client = await pool.connect();
+      await client.query('BEGIN');
+      transactionStarted = true;
+
+      const duplicateResult = await client.query(
         `SELECT nombre_legal, rfc
          FROM public.empresas
          WHERE LOWER(nombre_legal) = LOWER($1)
@@ -520,6 +589,8 @@ router.post(
 
       if (duplicateResult.rows.length > 0) {
         const duplicate = duplicateResult.rows[0];
+        await client.query('ROLLBACK');
+        transactionStarted = false;
         if (String(duplicate.nombre_legal).toLowerCase() === empresa.nombre_legal!.toLowerCase()) {
           return res.status(409).json({ error: 'nombre_legal ya registrado' });
         }
@@ -527,7 +598,12 @@ router.post(
         return res.status(409).json({ error: 'rfc ya registrado' });
       }
 
-      const result = await pool.query(
+      const activities = await resolveActiveActivitiesByKeys(
+        client,
+        activitiesProperty.keys,
+      );
+
+      const result = await client.query(
         `INSERT INTO public.empresas (
           nombre_legal, rfc, tipo_entidad, pais, domicilio, estado, entidad,
           municipio, colonia, codigo_postal, calle, numero, ciudad_delegacion,
@@ -553,12 +629,38 @@ router.post(
         ]
       );
 
-      return res.status(201).json({ empresa: result.rows[0] });
+      await reconcileCompanyActivities(client, Number(result.rows[0].id), activities);
+      const assignedActivities = await getActiveCompanyActivities(
+        client,
+        Number(result.rows[0].id),
+      );
+
+      await client.query('COMMIT');
+      transactionStarted = false;
+      return res.status(201).json({
+        empresa: {
+          ...result.rows[0],
+          actividades_vulnerables: assignedActivities.map((activity) => ({
+            clave: activity.clave,
+            nombre: activity.nombre,
+            fraccion: activity.fraccion,
+            descripcion: activity.descripcion,
+          })),
+          configuracion_pld_pendiente: false,
+        },
+      });
     } catch (error) {
+      if (client && transactionStarted) {
+        await client.query('ROLLBACK').catch(() => {});
+        transactionStarted = false;
+      }
+      if (responderErrorActividadesVulnerables(res, error)) return;
       if (responderConflictoEmpresa(res, error)) return;
 
       console.error('Error al crear empresa:', error);
       return res.status(500).json({ error: 'Error al crear empresa' });
+    } finally {
+      client?.release();
     }
   }
 );
@@ -577,20 +679,46 @@ router.put(
       return res.status(400).json({ error: 'id invalido' });
     }
 
+    let activitiesProperty;
     try {
-      const existingResult = await pool.query(
-        'SELECT id, estado FROM public.empresas WHERE id = $1 LIMIT 1',
+      activitiesProperty = normalizeKeyArrayProperty(req.body);
+      if (activitiesProperty.present && activitiesProperty.keys.length === 0) {
+        return res.status(400).json({
+          error: 'actividades_vulnerables no puede estar vacío',
+        });
+      }
+    } catch (error) {
+      if (responderErrorActividadesVulnerables(res, error)) return;
+      console.error('Error al validar actividades vulnerables:', error);
+      return res.status(500).json({ error: 'Error al validar actividades vulnerables' });
+    }
+
+    let client: PoolClient | null = null;
+    let transactionStarted = false;
+    try {
+      client = await pool.connect();
+      await client.query('BEGIN');
+      transactionStarted = true;
+
+      const existingResult = await client.query(
+        'SELECT id, estado FROM public.empresas WHERE id = $1 LIMIT 1 FOR UPDATE',
         [id]
       );
 
       if (existingResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        transactionStarted = false;
         return res.status(404).json({ error: 'Empresa no encontrada' });
       }
 
       const empresa = normalizarEmpresaBody(req.body, existingResult.rows[0].estado);
-      if (!validarEmpresaBody(res, empresa)) return;
+      if (!validarEmpresaBody(res, empresa)) {
+        await client.query('ROLLBACK');
+        transactionStarted = false;
+        return;
+      }
 
-      const duplicateResult = await pool.query(
+      const duplicateResult = await client.query(
         `SELECT nombre_legal, rfc
          FROM public.empresas
          WHERE id <> $1
@@ -604,6 +732,8 @@ router.put(
 
       if (duplicateResult.rows.length > 0) {
         const duplicate = duplicateResult.rows[0];
+        await client.query('ROLLBACK');
+        transactionStarted = false;
         if (String(duplicate.nombre_legal).toLowerCase() === empresa.nombre_legal!.toLowerCase()) {
           return res.status(409).json({ error: 'nombre_legal ya registrado' });
         }
@@ -611,7 +741,11 @@ router.put(
         return res.status(409).json({ error: 'rfc ya registrado' });
       }
 
-      const result = await pool.query(
+      const activities = activitiesProperty.present
+        ? await resolveActiveActivitiesByKeys(client, activitiesProperty.keys)
+        : null;
+
+      const result = await client.query(
         `UPDATE public.empresas
          SET nombre_legal = $1,
              rfc = $2,
@@ -649,12 +783,37 @@ router.put(
         ]
       );
 
-      return res.json({ empresa: result.rows[0] });
+      if (activities) {
+        await reconcileCompanyActivities(client, id, activities);
+      }
+      const assignedActivities = await getActiveCompanyActivities(client, id);
+
+      await client.query('COMMIT');
+      transactionStarted = false;
+      return res.json({
+        empresa: {
+          ...result.rows[0],
+          actividades_vulnerables: assignedActivities.map((activity) => ({
+            clave: activity.clave,
+            nombre: activity.nombre,
+            fraccion: activity.fraccion,
+            descripcion: activity.descripcion,
+          })),
+          configuracion_pld_pendiente: assignedActivities.length === 0,
+        },
+      });
     } catch (error) {
+      if (client && transactionStarted) {
+        await client.query('ROLLBACK').catch(() => {});
+        transactionStarted = false;
+      }
+      if (responderErrorActividadesVulnerables(res, error)) return;
       if (responderConflictoEmpresa(res, error)) return;
 
       console.error('Error al editar empresa:', error);
       return res.status(500).json({ error: 'Error al editar empresa' });
+    } finally {
+      client?.release();
     }
   }
 );

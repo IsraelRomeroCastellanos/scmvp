@@ -1,6 +1,12 @@
 import { Router } from 'express';
 import pool from '../db';
 import { authenticate } from '../middleware/auth.middleware';
+import {
+  ActividadesVulnerablesError,
+  getActiveActivitiesCatalog,
+  getActiveOperationsByActivityKey,
+  normalizePublicKey,
+} from '../services/actividades-vulnerables.service';
 
 const router = Router();
 
@@ -52,6 +58,44 @@ router.get('/giros-mercantiles', authenticate, async (_req, res) => {
     console.error('Error al listar catálogo de giros mercantiles:', error);
     return res.status(500).json({
       error: 'Error al listar catálogo de giros mercantiles'
+    });
+  }
+});
+
+router.get('/actividades-vulnerables', authenticate, async (_req, res) => {
+  try {
+    const actividades_vulnerables = await getActiveActivitiesCatalog(pool);
+    return res.json({ actividades_vulnerables });
+  } catch (error) {
+    console.error('Error al listar actividades vulnerables:', error);
+    return res.status(500).json({
+      error: 'Error al listar actividades vulnerables',
+    });
+  }
+});
+
+router.get('/operaciones-vulnerables', authenticate, async (req, res) => {
+  const rawActivityKey = req.query.actividad_clave;
+  if (rawActivityKey === undefined) {
+    return res.status(400).json({
+      error: 'actividad_clave es obligatoria',
+    });
+  }
+
+  try {
+    const actividad_clave = normalizePublicKey(rawActivityKey, 'actividad');
+    const operaciones = await getActiveOperationsByActivityKey(
+      pool,
+      actividad_clave,
+    );
+    return res.json({ actividad_clave, operaciones });
+  } catch (error) {
+    if (error instanceof ActividadesVulnerablesError) {
+      return res.status(error.status).json({ error: error.message });
+    }
+    console.error('Error al listar operaciones vulnerables:', error);
+    return res.status(500).json({
+      error: 'Error al listar operaciones vulnerables',
     });
   }
 });
