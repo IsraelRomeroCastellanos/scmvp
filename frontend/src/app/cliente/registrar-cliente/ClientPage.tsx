@@ -11,7 +11,19 @@ import {
   type NormalizedRole,
 } from "@/lib/auth";
 import { loadCatalogo, type CatalogItem } from "@/lib/catalogos";
-import api from "@/lib/api";
+import api, {
+  getApiErrorMessage,
+  isApiRequestCanceled,
+  obtenerEmpresasAdmin,
+  obtenerMiEmpresa,
+  registrarCliente,
+} from "@/lib/api";
+import PldSelectionFields from "@/components/PldSelectionFields";
+import type {
+  ActividadVulnerableGeneral,
+  MiEmpresaPld,
+  PldSelectionWritePayload,
+} from "@/types/actividades-vulnerables";
 
 import {
   buildBeneficiariosControladoresContract,
@@ -26,6 +38,8 @@ export default function ClientPage() {
   type EmpresaOption = {
     id: number;
     nombre_legal: string;
+    actividades_vulnerables: ActividadVulnerableGeneral[];
+    configuracion_pld_pendiente: boolean;
   };
 
   type RecursoTerceroItem = {
@@ -348,6 +362,10 @@ function valueToCatalogKey(v: string) {
   const [empresaLoading, setEmpresaLoading] = useState(true);
   const [empresaError, setEmpresaError] = useState("");
   const [sessionRole, setSessionRole] = useState<NormalizedRole | null>(null);
+  const [empresaActividades, setEmpresaActividades] = useState<ActividadVulnerableGeneral[]>([]);
+  const [actividadVulnerableClave, setActividadVulnerableClave] = useState("");
+  const [operacionVulnerableClave, setOperacionVulnerableClave] = useState("");
+  const [pldSelectionError, setPldSelectionError] = useState("");
   const [nombreEntidad, setNombreEntidad] = useState("");
   const [pmRazonSocial, setPmRazonSocial] = useState("");
   const [nacionalidad, setNacionalidad] = useState(""); // clave catálogo
@@ -868,6 +886,9 @@ function valueToCatalogKey(v: string) {
       return;
     }
 
+    const controller = new AbortController();
+    let active = true;
+
     (async () => {
       let empresaResolved = false;
 
@@ -879,9 +900,6 @@ function valueToCatalogKey(v: string) {
         setEmpresas([]);
         setEmpresaLoading(true);
 
-        const apiBase =
-          process.env.NEXT_PUBLIC_API_BASE_URL ||
-          "https://scmvp-1jhq.onrender.com";
         const storedUser = getCurrentUser();
         const role = normalizeRole(storedUser?.rol ?? storedUser?.role);
 
@@ -897,24 +915,10 @@ function valueToCatalogKey(v: string) {
             throw new Error("Usuario sin empresa asignada");
           }
 
-          const empresaResponse = await fetch(
-            `${apiBase}/api/cliente/mi-empresa`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-              cache: "no-store",
-            },
+          const empresa = await obtenerMiEmpresa<MiEmpresaPld>(
+            controller.signal,
           );
-          const empresaData = await empresaResponse.json().catch(() => null);
-
-          if (!empresaResponse.ok) {
-            throw new Error(
-              empresaData?.error || "No se pudo cargar la empresa de la sesión",
-            );
-          }
-
-          const empresa = empresaData?.empresa;
+          if (!active) return;
           const id = Number(empresa?.id);
           const nombreLegal = String(empresa?.nombre_legal ?? "").trim();
 
@@ -924,32 +928,28 @@ function valueToCatalogKey(v: string) {
 
           setEmpresaId(String(id));
           setEmpresaNombre(nombreLegal);
-        } else {
-          const empresasResponse = await fetch(
-            `${apiBase}/api/admin/empresas`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-              cache: "no-store",
-            },
+          const actividadesEmpresa = Array.isArray(empresa?.actividades_vulnerables)
+            ? empresa.actividades_vulnerables
+            : [];
+          setEmpresaActividades(actividadesEmpresa);
+          setActividadVulnerableClave(
+            actividadesEmpresa.length === 1 ? actividadesEmpresa[0].clave : "",
           );
-          const empresasData = await empresasResponse.json().catch(() => null);
-
-          if (!empresasResponse.ok) {
-            throw new Error(
-              empresasData?.error || "No se pudo cargar el catálogo de empresas",
-            );
-          }
-
-          if (!Array.isArray(empresasData?.empresas)) {
-            throw new Error("La respuesta del catálogo de empresas no es válida");
-          }
-
-          const empresasApi: EmpresaOption[] = empresasData.empresas
-            .map((empresa: any) => ({
+          setOperacionVulnerableClave("");
+        } else {
+          const empresasData = await obtenerEmpresasAdmin<EmpresaOption>(
+            controller.signal,
+          );
+          if (!active) return;
+          const empresasApi: EmpresaOption[] = empresasData
+            .map((empresa) => ({
               id: Number(empresa?.id),
               nombre_legal: String(empresa?.nombre_legal ?? "").trim(),
+              actividades_vulnerables: Array.isArray(empresa?.actividades_vulnerables)
+                ? empresa.actividades_vulnerables
+                : [],
+              configuracion_pld_pendiente:
+                empresa?.configuracion_pld_pendiente === true,
             }))
             .filter(
               (empresa: EmpresaOption) =>
@@ -962,49 +962,35 @@ function valueToCatalogKey(v: string) {
         }
         empresaResolved = true;
 
-        const paisesResponse = await fetch(`${apiBase}/api/catalogos/paises`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          cache: "no-store",
-        });
-
-        if (!paisesResponse.ok) {
-          throw new Error(
-            `No se pudo cargar el catálogo de países (${paisesResponse.status})`,
-          );
-        }
-
-        const paisesData = await paisesResponse.json().catch(() => null);
+        const paisesData = (
+          await api.get<{ paises: Array<{ id?: string | number; clave?: unknown; descripcion?: unknown }> }>(
+            "/api/catalogos/paises",
+            { signal: controller.signal },
+          )
+        ).data;
         if (!Array.isArray(paisesData?.paises)) {
           throw new Error("La respuesta del catálogo de países no es válida");
         }
 
         const paisesApi: CatalogItem[] = paisesData.paises
-          .map((item: any) => ({
+          .map((item) => ({
             id: item?.id,
             clave: String(item?.clave ?? "").trim(),
             descripcion: String(item?.descripcion ?? "").trim(),
           }))
           .filter((item: CatalogItem) => item.clave && item.descripcion);
 
-        const actividadesResponse = await fetch(
-          `${apiBase}/api/catalogos/actividades-economicas`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            cache: "no-store",
-          },
-        );
-
-        if (!actividadesResponse.ok) {
-          throw new Error(
-            `No se pudo cargar el catálogo de actividades económicas (${actividadesResponse.status})`,
-          );
-        }
-
-        const actividadesData = await actividadesResponse.json().catch(() => null);
+        const actividadesData = (
+          await api.get<{
+            actividades_economicas: Array<{
+              id?: string | number;
+              clave?: unknown;
+              descripcion?: unknown;
+            }>;
+          }>("/api/catalogos/actividades-economicas", {
+            signal: controller.signal,
+          })
+        ).data;
         if (!Array.isArray(actividadesData?.actividades_economicas)) {
           throw new Error(
             "La respuesta del catálogo de actividades económicas no es válida",
@@ -1012,7 +998,7 @@ function valueToCatalogKey(v: string) {
         }
 
         const actividadesApi: CatalogItem[] = actividadesData.actividades_economicas
-          .map((item: any) => ({
+          .map((item) => ({
             id: item?.id,
             clave: String(item?.clave ?? "").trim(),
             descripcion: String(item?.descripcion ?? "").trim(),
@@ -1024,11 +1010,16 @@ function valueToCatalogKey(v: string) {
           Promise.resolve(actividadesApi),
           loadCatalogo("internos/giro_mercantil"),
         ]);
+        if (!active) return;
         setPaises(p);
         setActividades(a);
         setGiros(g);
-      } catch (e: any) {
-        const message = e?.message ?? "No se pudieron cargar los datos del formulario";
+      } catch (requestError) {
+        if (!active || isApiRequestCanceled(requestError)) return;
+        const message = getApiErrorMessage(
+          requestError,
+          "No se pudieron cargar los datos del formulario",
+        );
         if (!empresaResolved) {
           setEmpresaId("");
           setEmpresaNombre("");
@@ -1036,9 +1027,13 @@ function valueToCatalogKey(v: string) {
         }
         setFatal(message);
       } finally {
-        setEmpresaLoading(false);
+        if (active) setEmpresaLoading(false);
       }
     })();
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [router]);
 
   function setErr(path: string, msg?: string) {
@@ -3501,6 +3496,21 @@ persona: {
       return;
     }
 
+    if (
+      sessionRole !== "consultor"
+      && empresaActividades.length > 1
+      && Boolean(actividadVulnerableClave) !== Boolean(operacionVulnerableClave)
+    ) {
+      const message =
+        actividadVulnerableClave
+          ? "Selecciona una operación específica o deja pendiente toda la configuración PLD."
+          : "Selecciona primero una actividad vulnerable para la operación.";
+      setPldSelectionError(message);
+      setFatal(message);
+      return;
+    }
+    setPldSelectionError("");
+
     const focusFirstInvalidField = () => {
       window.setTimeout(() => {
         const firstInvalid = document.querySelector<HTMLElement>(
@@ -3593,6 +3603,20 @@ persona: {
     setFatal(null);
     const payload = buildPayload();
 
+      if (sessionRole === "cliente") {
+        delete (payload as Record<string, unknown>).empresa_id;
+      }
+
+      if (sessionRole !== "consultor" && operacionVulnerableClave) {
+        const pldPayload: PldSelectionWritePayload = {
+          operacion_vulnerable_clave: operacionVulnerableClave,
+        };
+        if (empresaActividades.length > 1 && actividadVulnerableClave) {
+          pldPayload.actividad_vulnerable_clave = actividadVulnerableClave;
+        }
+        Object.assign(payload, pldPayload);
+      }
+
       if (tipo === "persona_fisica") {
         payload.nombre_entidad = [pfNombres, pfApPat, pfApMat]
           .map((v) => safeInput(v).trim())
@@ -3627,26 +3651,10 @@ persona: {
 
     try {
       setLoading(true);
-      const base =
-        process.env.NEXT_PUBLIC_API_BASE_URL ||
-        "https://scmvp-1jhq.onrender.com";
-
-      const res = await fetch(`${base}/api/cliente/registrar-cliente`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        const msg = data?.error || `Error HTTP ${res.status}`;
-        setFatal(typeof msg === "string" ? msg : JSON.stringify(msg, null, 2));
-        return;
-      }
+      const data = await registrarCliente<{
+        ok: boolean;
+        cliente?: { id?: number };
+      }>(payload as Record<string, unknown>);
 
       // API regresa { ok:true, cliente:{id...} }
       const id = data?.cliente?.id;
@@ -3656,8 +3664,12 @@ persona: {
         setFatal(
           "Registrado, pero no se recibió id. Revisa respuesta del backend.",
         );
-    } catch (err: any) {
-      setFatal(err?.message ?? "Error inesperado");
+    } catch (requestError) {
+      const message = getApiErrorMessage(requestError, "Error inesperado");
+      if (/actividad|operaci[oó]n|configuraci[oó]n pld/i.test(message)) {
+        setPldSelectionError(message);
+      }
+      setFatal(message);
     } finally {
       setLoading(false);
     }
@@ -3738,7 +3750,21 @@ persona: {
                 className={`w-full rounded border px-3 py-2 text-sm ${errors["empresa_id"] || empresaError ? "border-red-500" : "border-gray-300"}`}
                 value={empresaId}
                 onChange={(e) => {
-                  setEmpresaId(e.target.value);
+                  const nextEmpresaId = e.target.value;
+                  const nextEmpresa = empresas.find(
+                    (empresa) => String(empresa.id) === nextEmpresaId,
+                  );
+                  const nextActividades =
+                    nextEmpresa?.actividades_vulnerables ?? [];
+                  setEmpresaId(nextEmpresaId);
+                  setEmpresaActividades(nextActividades);
+                  setActividadVulnerableClave(
+                    nextActividades.length === 1
+                      ? nextActividades[0].clave
+                      : "",
+                  );
+                  setOperacionVulnerableClave("");
+                  setPldSelectionError("");
                   setErr("empresa_id");
                 }}
                 onBlur={() => validator.validateField("empresa_id")}
@@ -3760,6 +3786,25 @@ persona: {
             ) : null}
           </div>
 
+          {!empresaLoading && empresaId ? (
+            <div className="md:col-span-3">
+              <PldSelectionFields
+                actividades={empresaActividades}
+                actividadClave={actividadVulnerableClave}
+                operacionClave={operacionVulnerableClave}
+                disabled={sessionRole === "consultor"}
+                error={pldSelectionError}
+                onActividadChange={(clave) => {
+                  setActividadVulnerableClave(clave);
+                  setPldSelectionError("");
+                }}
+                onOperacionChange={(clave) => {
+                  setOperacionVulnerableClave(clave);
+                  setPldSelectionError("");
+                }}
+              />
+            </div>
+          ) : null}
 
           <div
             tabIndex={-1}

@@ -12,6 +12,12 @@ import {
   TableContainer,
 } from '@/components/ui';
 import { getCurrentUser, isAdmin } from '@/lib/auth';
+import {
+  getApiErrorMessage,
+  isApiRequestCanceled,
+  obtenerEmpresasAdmin,
+} from '@/lib/api';
+import type { ActividadVulnerableGeneral } from '@/types/actividades-vulnerables';
 
 interface Empresa {
   id: number;
@@ -22,6 +28,35 @@ interface Empresa {
   entidad: string | null;
   municipio: string | null;
   codigo_postal: string | null;
+  actividades_vulnerables?: ActividadVulnerableGeneral[];
+  configuracion_pld_pendiente?: boolean;
+}
+
+function actividadesEmpresa(empresa: Empresa) {
+  return Array.isArray(empresa.actividades_vulnerables)
+    ? empresa.actividades_vulnerables
+    : [];
+}
+
+function ActividadesSummary({ empresa }: { empresa: Empresa }) {
+  const actividades = actividadesEmpresa(empresa);
+  if (actividades.length === 0) {
+    return (
+      <div>
+        <Badge variant="warning">Configuración PLD pendiente</Badge>
+        <p className="mt-1 text-xs text-text-secondary">Empresa histórica sin actividades asignadas.</p>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <Badge variant="success">Configuración PLD completa</Badge>
+      <p className="mt-1 text-xs text-text-secondary">
+        {actividades.slice(0, 2).map((item) => item.nombre).join(', ')}
+        {actividades.length > 2 ? ` +${actividades.length - 2} más` : ''}
+      </p>
+    </div>
+  );
 }
 
 function mostrar(value: string | null | undefined) {
@@ -84,40 +119,31 @@ export default function EmpresasPage() {
   const [search, setSearch] = useState('');
   const [selectedEmpresa, setSelectedEmpresa] = useState<Empresa | null>(null);
 
-  const fetchEmpresas = async () => {
-    try {
-      setError('');
-      setLoading(true);
-
-      const token = localStorage.getItem('token');
-      const base = process.env.NEXT_PUBLIC_API_BASE_URL;
-
-      if (!base) {
-        throw new Error('Falta NEXT_PUBLIC_API_BASE_URL');
-      }
-
-      const res = await fetch(`${base}/api/admin/empresas`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        cache: 'no-store',
-      });
-
-      if (!res.ok) throw new Error('No se pudo cargar empresas');
-
-      const data = await res.json();
-      setEmpresas(Array.isArray(data?.empresas) ? data.empresas : []);
-    } catch (_error) {
-      setEmpresas([]);
-      setError('Error al cargar empresas');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
     setCanManageEmpresas(isAdmin(getCurrentUser()?.rol));
-    fetchEmpresas();
+
+    const fetchEmpresas = async () => {
+      try {
+        setError('');
+        setLoading(true);
+        const items = await obtenerEmpresasAdmin<Empresa>(controller.signal);
+        if (active) setEmpresas(items);
+      } catch (requestError) {
+        if (!active || isApiRequestCanceled(requestError)) return;
+        setEmpresas([]);
+        setError(getApiErrorMessage(requestError, 'Error al cargar empresas'));
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    void fetchEmpresas();
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, []);
 
   useEffect(() => {
@@ -207,6 +233,7 @@ export default function EmpresasPage() {
                       <th>Ubicación</th>
                       <th>Tipo</th>
                       <th>Estado</th>
+                      <th>Configuración PLD</th>
                       <th>Acciones</th>
                     </tr>
                   </thead>
@@ -222,6 +249,9 @@ export default function EmpresasPage() {
                         <td>{tipoEntidadLabel(empresa.tipo_entidad)}</td>
                         <td>
                           <Badge variant={estadoVariant(empresa.estado)}>{mostrar(empresa.estado)}</Badge>
+                        </td>
+                        <td className="min-w-56">
+                          <ActividadesSummary empresa={empresa} />
                         </td>
                         <td>
                           <div className="flex flex-wrap gap-2">
@@ -271,6 +301,10 @@ export default function EmpresasPage() {
                         <dd className="mt-1">
                           <UbicacionDetails empresa={empresa} />
                         </dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs font-medium uppercase tracking-wide text-text-secondary">Configuración PLD</dt>
+                        <dd className="mt-1"><ActividadesSummary empresa={empresa} /></dd>
                       </div>
                     </dl>
 
@@ -364,6 +398,30 @@ export default function EmpresasPage() {
               <div className="rounded-card bg-surface-muted p-3">
                 <dt className="text-xs font-medium uppercase tracking-wide text-text-secondary">Código postal</dt>
                 <dd className="mt-1 break-words text-text-primary">{mostrar(selectedEmpresa.codigo_postal)}</dd>
+              </div>
+              <div className="rounded-card bg-surface-muted p-3 sm:col-span-2">
+                <dt className="text-xs font-medium uppercase tracking-wide text-text-secondary">Actividades vulnerables</dt>
+                <dd className="mt-2">
+                  {actividadesEmpresa(selectedEmpresa).length === 0 ? (
+                    <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                      Configuración PLD pendiente
+                    </div>
+                  ) : (
+                    <ul className="space-y-2">
+                      {actividadesEmpresa(selectedEmpresa).map((actividad) => (
+                        <li key={actividad.clave} className="rounded border border-border-light bg-white p-3">
+                          <div className="font-medium text-text-primary">{actividad.nombre}</div>
+                          {actividad.fraccion ? (
+                            <div className="mt-1 text-xs text-text-secondary">Fracción: {actividad.fraccion}</div>
+                          ) : null}
+                          {actividad.descripcion ? (
+                            <p className="mt-1 text-sm text-text-secondary">{actividad.descripcion}</p>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </dd>
               </div>
             </dl>
           </div>
