@@ -5,9 +5,9 @@
 | Campo | Valor |
 |---|---|
 | Código | ESP-AV-001 |
-| Versión | 0.2-PROPUESTA FUNCIONAL CERRADA |
+| Versión | 0.3-PREFLIGHT-TECNICO-CERRADO |
 | Fecha | 2026-07-28 |
-| Estado | Funcionalmente cerrada; pendiente de validación legal y preflight técnico |
+| Estado | Diseño funcional y preflight técnico cerrados; pendiente de validación jurídica y migración |
 | Propietario funcional | Decisiones funcionales aprobadas; responsable nominal pendiente |
 | Aprobación jurídica/Oficial de Cumplimiento | Pendiente |
 | Aprobación técnica | Pendiente |
@@ -19,6 +19,7 @@
 |---|---|---|---|
 | 0.1-BORRADOR | 2026-07-28 | Equipo técnico | Primera especificación integral basada en inspección del repositorio y contexto confirmado. |
 | 0.2-PROPUESTA FUNCIONAL CERRADA | 2026-07-28 | Equipo funcional y técnico | Cierre de decisiones de empresa, expediente, operación, permisos e historial; consolidación de 14 actividades generales y mapeo funcional de 31 operaciones. |
+| 0.3-PREFLIGHT-TECNICO-CERRADO | 2026-07-28 | Equipo funcional y técnico | Incorporación de evidencia real saneada de base y Perfil Transaccional; cierre del modelo físico conceptual, compatibilidad histórica y vínculo nullable de perfiles. |
 
 ### Convención de evidencia
 
@@ -129,14 +130,44 @@ La administración de empresas conserva contratos simples `{ empresa }` y `{ emp
 | Habilitación | Demo | Requiere `NEXT_PUBLIC_MOCK_RIESGO === "1"` (`frontend/src/demo-evaluaciones/isEnabled.ts:1-3`). |
 | Cuestionario actual | Demo | Cuatro criterios y bandas estáticas (`frontend/src/demo-evaluaciones/config/perfilTransaccional.ts:3-69`). |
 | Persistencia de demo | No productiva | `localStorage`, clave por cliente, sin HTTP (`frontend/src/demo-evaluaciones/storage/local.ts:12-72`). |
-| Lectura en detalle productivo | Código existente, persistencia no verificada | Backend consulta `cliente_perfil_transaccional` y `matrices_riesgo` (`cliente.routes.ts:1555-1575`) y frontend los renderiza (`clientes/[id]/page.tsx:399-432`). |
+| Lectura en detalle productivo | Confirmada | Backend consulta `cliente_perfil_transaccional` y `matrices_riesgo` (`cliente.routes.ts:1555-1575`) y frontend los renderiza (`clientes/[id]/page.tsx:399-432`). |
 | Endpoint productivo de guardado | No localizado | No existe POST/PUT localizado para Perfil Transaccional. |
-| DDL de `cliente_perfil_transaccional` | No localizado | No aparece en SQL versionado inspeccionado. |
-| `matrices_riesgo`, `transacciones`, `alertas` | Histórico, no esquema vigente confirmado | `crear_tablas.sql:54-97`; `MAP-001_mapa_tecnico.md:528-532`. |
+| Tabla `cliente_perfil_transaccional` | Confirmada por preflight | Existe en `public`, con 1 registro y estructura detallada abajo. |
+| Tabla `matrices_riesgo` | Confirmada por preflight | Existe en `public`; este ticket no modifica su contrato. |
 
-Hay una contradicción que debe resolverse antes de programar: la documentación califica el Perfil Transaccional como demo sin backend/DB integrada (`MAP-001_mapa_tecnico.md:448-470`; `GAP_MAP_01.md:457-478`), mientras el detalle de cliente intenta leer tablas productivas. La existencia, columnas y datos reales de esas tablas no puede asumirse.
+La documentación que califica todo el Perfil Transaccional como demo está parcialmente desactualizada: la captura localizada sigue siendo demo y no existe endpoint productivo de escritura, pero la tabla y la lectura productiva sí existen.
 
-La consulta recientemente descrita por el equipo respondió como `scmvp_0plk` y no encontró `schema_migrations`, `cat_actividades_vulnerables` ni `empresa_actividades_vulnerables`. Eso confirma únicamente esa conexión. Debe verificarse, sin revelar secretos, que `DATABASE_URL` del servicio Render apunta a la misma base.
+#### 4.3.1 Preflight real de base
+
+- Base enlazada mediante la configuración real del backend: `scmvp_0plk`.
+- Usuario de base observado: `scmvp_user`.
+- Esquema: `public`.
+- Motor: PostgreSQL 17.10.
+- Conteos de baseline: 19 empresas, 98 clientes y 1 Perfil Transaccional.
+- Tablas confirmadas: `public.empresas`, `public.clientes`, `public.cliente_perfil_transaccional` y `public.matrices_riesgo`.
+- Tablas inexistentes: `public.schema_migrations`, `public.cat_actividades_vulnerables` y `public.empresa_actividades_vulnerables`.
+- No se registran host, puerto, credenciales ni cadena de conexión.
+
+#### 4.3.2 Esquema confirmado de `cliente_perfil_transaccional`
+
+| Campo | Tipo y nulabilidad | Default/clave |
+|---|---|---|
+| `id` | `INTEGER NOT NULL` | PK, generado por secuencia (`SERIAL`) |
+| `cliente_id` | `INTEGER NOT NULL` | FK a `clientes(id)` con `ON DELETE CASCADE` |
+| `empresa_id` | `INTEGER NOT NULL` | FK a `empresas(id)` con `ON DELETE CASCADE` |
+| `tipo_servicio` | `VARCHAR NULL` | Sin default confirmado |
+| `actividad_esperada` | `VARCHAR NULL` | Sin default confirmado |
+| `monto_mensual_estimado` | `NUMERIC NULL` | Sin default confirmado |
+| `frecuencia_operacion` | `VARCHAR NULL` | Sin default confirmado |
+| `origen_recursos` | `VARCHAR NULL` | Sin default confirmado |
+| `destino_recursos` | `VARCHAR NULL` | Sin default confirmado |
+| `instrumentos_pago` | `JSONB NULL` | Sin default confirmado |
+| `version` | `INTEGER` | Default `1` |
+| `estado` | `VARCHAR` | Default `activo` |
+| `creado_en` | `TIMESTAMPTZ` | Default `NOW()` |
+| `actualizado_en` | `TIMESTAMPTZ` | Default `NOW()` |
+
+No existe FK a actividad vulnerable u operación, no existe restricción única por cliente y no se confirmaron índices adicionales. Las FK actuales de cliente y empresa se conservan sin cambios en esta migración.
 
 ### 4.4 Catálogos, aplicación y autenticación
 
@@ -152,20 +183,18 @@ La consulta recientemente descrita por el equipo respondió como `scmvp_0plk` y 
 - Backend solo define `build` y `start`; no existe script de migraciones ni ORM (`backend/package.json:4-30`).
 - `crear_tablas.sql` usa `SERIAL`, FK enteras, timestamps con zona, JSONB e índices `idx_`, pero es evidencia histórica y contiene al menos un error tipográfico (`crear_tablas.sql:67`).
 - `scripts/migracion_final_mvp.sql` es un script aditivo histórico; no hay tabla de control ni ejecutor vigente confirmados.
-- La infraestructura documenta migraciones previas por backup/restore y cambio manual de `DATABASE_URL`; también contiene URLs históricas contradictorias (`docs/infraestructura.md:1-201`).
-- La documentación del 2026-07-07 identifica `scmvp_0plk` y `https://scmvp-1jhq.onrender.com`, pero la configuración real de Render debe verificarse antes de migrar (`docs/infraestructura.md:129-201`).
+- La infraestructura documenta migraciones previas por backup/restore y cambio manual de configuración; contiene referencias históricas que no sustituyen el preflight (`docs/infraestructura.md:1-201`).
+- El preflight confirmó que la configuración real del backend inspeccionado enlaza `scmvp_0plk`; la evidencia operativa no reproduce endpoints, host, puerto ni secretos.
 - No se localizaron Docker, CI/IaC ni ejecución automática de migraciones (`MAP-001_mapa_tecnico.md:472-496`).
 
 ### 4.6 Vacíos y riesgos actuales
 
-1. No existe catálogo vigente de actividades generales aprobado jurídica y técnicamente.
-2. No existe mapa aprobado actividad general → operaciones.
+1. El catálogo de 14 actividades generales está cerrado funcionalmente, pero pendiente de validación jurídica.
+2. El mapa funcional de 31 operaciones está cerrado, pero pendiente de aprobación jurídica, fracciones y fundamento.
 3. No hay mecanismo formal vigente de migraciones.
-4. No está confirmada la identidad de la base enlazada al backend.
-5. El esquema real de Perfil Transaccional no está confirmado.
-6. El detalle de cliente puede fallar completo si las tablas que consulta no existen.
-7. El cuestionario demo está orientado a servicios profesionales y no constituye matriz multisector.
-8. Los documentos técnicos anteriores tienen hallazgos desactualizados: por ejemplo, `MAP-001_mapa_tecnico.md:520-525` no localizaba rutas de empresa que sí existen en el código actual.
+4. El cuestionario demo está orientado a servicios profesionales y no constituye matriz multisector.
+5. No existe vínculo normalizado entre el perfil actual y una selección PLD.
+6. Los documentos técnicos anteriores tienen hallazgos desactualizados: por ejemplo, `MAP-001_mapa_tecnico.md:520-525` no localizaba rutas de empresa que sí existen en el código actual.
 
 ## 5. Glosario
 
@@ -292,35 +321,57 @@ El mapa contiene exactamente 31 operaciones, cada una con una asignación genera
 
 ## 8. Modelo de datos propuesto
 
-El modelo conceptual queda funcionalmente cerrado. El preflight determinará únicamente el DDL físico exacto —tipos compatibles, nombres finales de constraints e índices y adaptación a objetos existentes—, sin reabrir las relaciones funcionales.
+El modelo conceptual y sus tipos base quedan técnicamente cerrados con `SERIAL`/`INTEGER` y `TIMESTAMPTZ`, alineados con el esquema observado. La redacción del DDL determinará nombres exactos de constraints e índices sin reabrir las relaciones funcionales.
 
 ### 8.1 Tablas mínimas
 
 | Tabla lógica cerrada | Campos funcionales mínimos | Restricciones y propósito |
 |---|---|---|
-| Control de migraciones (`schema_migrations`) | PK interna; `migration_key`; fecha de aplicación | Clave única; evita doble aplicación y registra evidencia. |
-| Catálogo de actividades generales (`cat_actividades_vulnerables_generales`) | PK interna; clave pública `AVG_...`; nombre; fracción nullable hasta aprobación legal; descripción; activo; timestamps | Clave única e inmutable; 14 registros funcionales. No se borra si fue referenciada. |
-| Catálogo de operaciones (`cat_operaciones_vulnerables`) | PK interna; clave pública `AV_...`; nombre; descripción; activo; timestamps | Clave única e inmutable; 31 registros funcionales. No se borra si fue referenciada. |
-| Actividad–operación (`actividad_vulnerable_operaciones`) | PK interna o compuesta según tipos reales; actividad_general_id; operacion_id; activo; timestamps | Única por par; materializa el mapa aprobado y permite desactivación lógica. |
-| Empresa–actividad (`empresa_actividades_vulnerables`) | PK interna; `empresa_id`; actividad_general_id; activo; timestamps | Única por par; una empresa tiene una o varias actividades; una histórica puede tener cero. |
-| Selección PLD del cliente (`cliente_selecciones_pld`) | PK interna; `cliente_id`; referencia empresa–actividad; referencia actividad–operación; origen de selección; inicio/fin de vigencia; activo; timestamps | Una sola selección vigente por cliente; historial append-only; actividad autorizada y operación relacionada. |
-| Referencia desde Perfil Transaccional | Referencia a selección PLD; versión/contexto del perfil | Cada perfil conserva la selección con la que fue creado. La forma física se decide después de inspeccionar `cliente_perfil_transaccional`. |
+| Control de migraciones (`schema_migrations`) | `id SERIAL`; `migration_key`; `applied_at TIMESTAMPTZ` | PK interna, clave de migración única y evidencia de aplicación. |
+| Catálogo de actividades generales (`cat_actividades_vulnerables_generales`) | `id SERIAL`; clave pública `AVG_...`; nombre; fracción nullable hasta aprobación legal; descripción; activo; timestamps | Clave única e inmutable; 14 registros funcionales. No se borra si fue referenciada. |
+| Catálogo de operaciones (`cat_operaciones_vulnerables`) | `id SERIAL`; clave pública `AV_...`; nombre; descripción; activo; timestamps | Clave única e inmutable; 31 registros funcionales. No se borra si fue referenciada. |
+| Actividad–operación (`actividad_vulnerable_operaciones`) | `id SERIAL`; `actividad_vulnerable_general_id INTEGER`; `operacion_vulnerable_id INTEGER`; activo; timestamps | Única por par; materializa el mapa aprobado y permite desactivación lógica. |
+| Empresa–actividad (`empresa_actividades_vulnerables`) | `id SERIAL`; `empresa_id INTEGER`; `actividad_vulnerable_general_id INTEGER`; activo; timestamps | Única por par; una empresa tiene una o varias actividades; una histórica puede tener cero. |
+| Selección PLD del cliente (`cliente_selecciones_pld`) | Estructura exacta en 8.2 | Una sola selección activa por cliente; historial por vigencias; actividad autorizada y operación relacionada. |
+| Referencia desde Perfil Transaccional | Nueva columna nullable `seleccion_pld_cliente_id INTEGER` | FK a `cliente_selecciones_pld(id)` con `ON DELETE RESTRICT` e índice. Sin backfill histórico. |
 
-### 8.2 Relaciones e integridad
+### 8.2 Estructura cerrada de `cliente_selecciones_pld`
 
-- PK y FK internas usan los tipos reales confirmados en preflight; el contrato público nunca depende de ellas.
+| Campo | Definición conceptual cerrada |
+|---|---|
+| `id` | `SERIAL PRIMARY KEY` |
+| `cliente_id` | `INTEGER NOT NULL`, FK a `clientes(id)` |
+| `empresa_id` | `INTEGER NOT NULL`, FK a `empresas(id)` |
+| `empresa_actividad_vulnerable_id` | `INTEGER NOT NULL`, FK a `empresa_actividades_vulnerables(id)` |
+| `actividad_operacion_id` | `INTEGER NOT NULL`, FK a `actividad_vulnerable_operaciones(id)` |
+| `origen_seleccion` | `VARCHAR NOT NULL` |
+| `vigente_desde` | `TIMESTAMPTZ NOT NULL DEFAULT NOW()` |
+| `vigente_hasta` | `TIMESTAMPTZ NULL` |
+| `activo` | `BOOLEAN NOT NULL DEFAULT TRUE` |
+| `creado_en` | `TIMESTAMPTZ NOT NULL DEFAULT NOW()` |
+| `actualizado_en` | `TIMESTAMPTZ NOT NULL DEFAULT NOW()` |
+
+### 8.3 Relaciones e integridad
+
+- PK y FK internas usan `SERIAL`/`INTEGER`, alineados con las tablas inspeccionadas; el contrato público nunca depende de ellas.
 - Claves públicas: ASCII, mayúsculas y guion bajo, únicas e inmutables.
 - `empresa_id`: FK a la empresa real; nunca se toma de un ID arbitrario para rol cliente.
 - El expediente conserva su `empresa_id` actual.
 - La selección referencia la relación empresa–actividad, no solo la actividad, para reforzar autorización.
 - La operación pertenece a la actividad mediante la relación actividad–operación. La integridad se asegura con FK/clave compuesta compatible y se revalida en servicio.
 - Relaciones y catálogos se desactivan; no se borran si tienen historial.
-- Catálogos referenciados usan borrado restringido y desactivación lógica. El comportamiento físico para empresa/cliente conserva el contrato real confirmado en preflight.
+- Un índice único parcial impide más de una fila con `activo = true` por `cliente_id`.
+- El backend valida que cliente y selección correspondan a la misma empresa, que la actividad esté asignada a ella y que la operación pertenezca a la actividad.
+- Catálogos referenciados usan borrado restringido y desactivación lógica.
 - Índices mínimos: claves públicas, FKs, relaciones activas por empresa/cliente y unicidad de selección vigente.
-- Todo cambio de actividad u operación cierra la vigencia activa y crea otra; no actualiza la fila histórica.
-- La referencia desde Perfil Transaccional es obligatoria para perfiles nuevos. Los perfiles históricos permanecen sin reescritura.
+- Todo cambio de actividad u operación actualiza únicamente `vigente_hasta`, `activo` y timestamps de la selección saliente, y crea una nueva; nunca sobrescribe su actividad u operación histórica.
+- `cliente_perfil_transaccional.seleccion_pld_cliente_id` es nullable, tiene índice y FK `ON DELETE RESTRICT`.
+- La nueva referencia es obligatoria por validación de backend para perfiles nuevos. Su nulabilidad preserva perfiles históricos.
+- Las FK actuales de `cliente_perfil_transaccional.cliente_id` y `empresa_id` se mantienen sin cambios.
+- No se impone todavía append-only mediante constraints destructivos sobre `cliente_perfil_transaccional`.
+- No se borran físicamente selecciones referenciadas por perfiles.
 
-### 8.3 Normalizado frente a JSONB
+### 8.4 Normalizado frente a JSONB
 
 Debe normalizarse:
 
@@ -348,14 +399,32 @@ JSONB no debe usarse para decidir autorización, pertenencia al tenant o validez
 4. Clientes existentes permanecen visibles y editables sin selección PLD.
 5. `datos_completos` se preserva íntegro, incluidas estructuras legacy y colecciones materializadas.
 6. No se trasladan automáticamente valores de JSONB a las tablas nuevas.
-7. Perfiles existentes, si se confirman, no se reescriben. Se marcan técnicamente como “contexto no determinado” hasta regularización explícita.
+7. El perfil histórico confirmado no se modifica, reinterpreta ni completa automáticamente. Su `seleccion_pld_cliente_id` permanece `NULL`.
 8. Las claves/nombres históricos se muestran aun si su catálogo queda inactivo.
 9. PUT sin propiedades nuevas conserva las relaciones. `undefined`, `null`, cadena vacía y arreglo vacío no deben colapsarse al mismo significado.
 10. Persona Moral, Fideicomiso y Recursos de Terceros conservan sus contratos. La configuración PLD se agrega al expediente común sin modificar sus subestructuras.
 
+### 9.1 Perfil histórico confirmado
+
+Existe exactamente un registro histórico, documentado de forma saneada:
+
+| Campo | Valor confirmado |
+|---|---|
+| `id` | 1 |
+| `cliente_id` | 2 |
+| `empresa_id` | 4 |
+| `tipo_servicio` | Servicios profesionales |
+| `actividad_esperada` | Consultoría empresarial |
+| `monto_mensual_estimado` | 500000.00 |
+| `frecuencia_operacion` | mensual |
+| `version` | 1 |
+| `estado` | activo |
+
+Esos textos no autorizan inferir `AVG_SERVICIOS_PROFESIONALES` ni operación alguna. El perfil se conserva legible con “contexto PLD no determinado”, sin backfill ni modificación histórica. La demo de `localStorage` permanece separada y no se migra.
+
 ## 10. Contratos API
 
-Los contratos funcionales de actividades, empresa, empresa de sesión, expediente y operaciones quedan cerrados como ampliaciones aditivas. Los IDs internos no forman parte del contrato público. El contrato físico de Perfil Transaccional continúa condicionado al preflight de su esquema real.
+Los contratos funcionales de actividades, empresa, empresa de sesión, expediente y operaciones quedan cerrados como ampliaciones aditivas. Los IDs internos no forman parte del contrato público. El vínculo técnico de Perfil Transaccional queda cerrado; la ruta y payload de escritura se ajustarán al endpoint productivo que se implemente.
 
 ### 10.1 Catálogo de actividades generales
 
@@ -513,9 +582,38 @@ La operación se captura durante alta/edición o en el paso inmediatamente anter
 
 ### 10.6 Lectura y guardado de Perfil Transaccional
 
-El `GET /api/cliente/clientes/:id` existente seguirá devolviendo `perfil_transaccional` como último perfil cuando el esquema real lo permita, agregando su contexto. Antes de cerrar la ruta y el payload físicos de escritura se inspeccionarán columnas, constraints, índices y datos reales.
+El `GET /api/cliente/clientes/:id` existente seguirá devolviendo `perfil_transaccional` como último perfil y agregará el contexto PLD de forma aditiva.
 
-Ruta nueva recomendada, solo si no existe en la base/despliegue: `POST /api/cliente/clientes/:id/perfil-transaccional`.
+Para el perfil histórico con `seleccion_pld_cliente_id IS NULL`:
+
+```json
+{
+  "perfil_transaccional": {
+    "id": 1,
+    "contexto_pld": null,
+    "contexto_pld_pendiente": true
+  }
+}
+```
+
+La respuesta real conserva además sus campos históricos existentes; el ejemplo omite deliberadamente datos que no son necesarios para evidenciar el contrato.
+
+Para perfiles nuevos:
+
+```json
+{
+  "perfil_transaccional": {
+    "seleccion_pld_cliente_id": 123,
+    "contexto_pld": {
+      "actividad": { "clave": "AVG_INMOBILIARIA", "nombre": "Actividad inmobiliaria" },
+      "operacion": { "clave": "AV_CONSTRUCCION_DE_INMUEBLES", "nombre": "Construcción de inmuebles" }
+    },
+    "contexto_pld_pendiente": false
+  }
+}
+```
+
+No se localizó endpoint productivo de escritura. Se propone `POST /api/cliente/clientes/:id/perfil-transaccional`, sujeto a revisión del patrón de rutas al implementar.
 
 Request conceptual:
 
@@ -534,14 +632,16 @@ Response 201: perfil con identificador, cliente, claves públicas, versión, est
 Reglas:
 
 - Roles y alcance iguales al acceso autorizado del cliente; todo acceso revalida tenant.
-- El servidor toma la selección vigente del expediente y rechaza claves discordantes.
+- El servidor carga la selección vigente, comprueba `cliente_id` y `empresa_id`, y rechaza una selección enviada que no corresponda al expediente y tenant.
+- Todo perfil nuevo se guarda con `seleccion_pld_cliente_id` no nulo por regla de backend.
 - Empresa/actividad/operación pendientes: 409, porque el recurso existe pero no está listo para evaluación.
 - Cuestionario/respuestas inválidos: 400.
 - Cliente inexistente: 404.
 - 401, 403 y 500 aplican.
 - Guardado append-only/versionado; nunca sobrescribe un perfil histórico.
+- No se agrega todavía una constraint destructiva para convertir toda la tabla en append-only.
 - El demo `localStorage` no se migra automáticamente.
-- La forma definitiva de esta ruta, payload y referencia física queda condicionada al preflight de `cliente_perfil_transaccional`.
+- Perfiles con FK nula conservan `contexto_pld: null` y `contexto_pld_pendiente: true`; no se infiere contexto por texto.
 
 ## 11. Reglas de frontend
 
@@ -572,7 +672,7 @@ Reglas:
 - El cuestionario actual puede reutilizarse solo si el Oficial de Cumplimiento aprueba su aplicabilidad y versión.
 - No habilitar configurador dinámico.
 - Datos incompletos: mostrar qué configuración falta y enlace autorizado para completarla.
-- Resultado existente: conservarlo y mostrar su actividad, operación y versión histórica.
+- Resultado existente: conservarlo y mostrar su actividad, operación y versión cuando tenga vínculo; con FK nula mostrar contexto PLD pendiente sin inferencia.
 - No mezclar datos demo de `localStorage` con persistencia real.
 
 ## 12. Seguridad y permisos
@@ -601,14 +701,16 @@ La autorización actual limita automáticamente por tenant solo al rol `cliente`
 
 ## 13. Migración y rollback
 
-### 13.1 Preflight
+### 13.1 Preflight técnico cumplido
 
-1. Identificar el servicio Render vigente.
-2. Confirmar, sin imprimir URL ni credenciales, la identidad de `current_database()`, host lógico y esquema de `DATABASE_URL`.
-3. Inventariar tablas/columnas/constraints reales, especialmente `empresas`, `clientes`, `cliente_perfil_transaccional` y `matrices_riesgo`.
-4. Comparar tipos de PK/FK y timestamps.
-5. Confirmar que no existan tablas homónimas ni una migración aplicada.
-6. Tomar respaldo verificable y restaurarlo en una base desechable.
+1. Se identificó la base enlazada por la configuración real del backend: `scmvp_0plk`, esquema `public`, PostgreSQL 17.10.
+2. Se confirmaron `empresas`, `clientes`, `cliente_perfil_transaccional` y `matrices_riesgo`.
+3. Se inventariaron columnas, tipos, PK, FK e índices confirmados de `cliente_perfil_transaccional`.
+4. Se alineó el modelo nuevo con PK `SERIAL`, FK `INTEGER` y timestamps `TIMESTAMPTZ`.
+5. Se confirmó la inexistencia de `schema_migrations` y de las tablas previas de actividades vulnerables.
+6. Se definió el tratamiento sin backfill del único perfil histórico.
+
+La evidencia no incluye host, puerto, credenciales ni cadena de conexión. Inmediatamente antes de ejecutar una migración deberá repetirse una verificación de identidad y tomarse un respaldo restaurable en base desechable.
 
 ### 13.2 Aplicación
 
@@ -643,7 +745,7 @@ La autorización actual limita automáticamente por tenant solo al rol `cliente`
 
 > Base correcta → backend compatible → frontend.
 
-No arrancar backend dependiente de tablas antes de migrar. Backend y frontend deben tolerar empresas históricas con `[]`. Verificar health, autenticación, catálogos, empresa de sesión, alta/edición y detalle. La base usada por Render debe confirmarse nuevamente inmediatamente antes de aplicar.
+No arrancar backend dependiente de tablas antes de migrar. Backend y frontend deben tolerar empresas históricas con `[]`. Verificar health, autenticación, catálogos, empresa de sesión, alta/edición y detalle. La identidad de la base debe revalidarse inmediatamente antes de aplicar, sin reabrir el preflight ya cerrado.
 
 ## 14. Plan único de implementación
 
@@ -692,10 +794,10 @@ Cada etapa tiene criterio de salida. No se programa la siguiente si persiste un 
 | AV-T23 | Operación ajena | Guardar selección/perfil | Rechazo sin persistencia | HTTP + DB | Crítica |
 | AV-T24 | Selección vigente | Cambiar actividad | Cierra vigencia, exige operación compatible | Historial DB | Crítica |
 | AV-T25 | Selección vigente | Cambiar operación | Nuevo historial; perfil previo intacto | Historial DB/UI | Alta |
-| AV-T26 | Actividad inactivada | Leer perfil histórico | Sigue visible como histórico, no seleccionable | UI/API | Alta |
-| AV-T27 | Perfil configurado | Guardar cuestionario válido | Perfil versionado y ligado a selección | API + DB | Crítica |
+| AV-T26 | Perfil histórico id 1 | Consultar detalle | Sin modificación; `contexto_pld: null` y pendiente `true` | UI/API/DB | Crítica |
+| AV-T27 | Perfil configurado | Guardar cuestionario válido | Perfil ligado a `seleccion_pld_cliente_id` vigente y revalidado | API + DB | Crítica |
 | AV-T28 | Perfil incompleto | Guardar | 400/409 claro, sin registro parcial | HTTP + DB | Alta |
-| AV-T29 | Perfil existente | Crear nueva evaluación | Anterior inmutable; nueva versión | DB/UI | Crítica |
+| AV-T29 | Perfil existente | Crear nueva evaluación | Perfil anterior sin backfill; nueva fila vinculada a selección vigente | DB/UI | Crítica |
 | AV-T30 | Demo local previa | Abrir módulo productivo | No importa ni mezcla `localStorage` | DevTools + DB | Media |
 | AV-T31 | Cliente tenant A | Solicitar cliente/perfil tenant B | 403/404 consistente; cero fuga | HTTP/log saneado | Crítica |
 | AV-T32 | Admin/consultor | Probar alcance aprobado | Solo acciones permitidas | Matriz de roles | Crítica |
@@ -717,34 +819,31 @@ Las decisiones funcionales de empresa, expediente, operación, permisos, histori
 
 | Bloqueo pendiente | Alcance requerido | Resultado de salida | Responsable |
 |---|---|---|---|
-| Validación legal del catálogo | Validar las 14 actividades, nombres, alcance y fracciones | Catálogo firmado por Oficial de Cumplimiento | Jurídico/Oficial de Cumplimiento |
-| Mapa jurídico definitivo | Validar la adscripción jurídica de las 31 operaciones a las 14 actividades | Matriz firmada; ajustes documentados antes del seed | Jurídico/Oficial de Cumplimiento |
-| Base exacta usada por Render | Confirmar que `DATABASE_URL` del backend apunta a la base objetivo sin exponerla | Evidencia saneada de servicio, base y esquema | DevOps |
-| Esquema real de `cliente_perfil_transaccional` | Inspeccionar columnas, tipos, constraints, índices, conteos y dependencias | Inventario técnico aprobado | DBA/Backend |
-| Tratamiento técnico de perfiles históricos | Determinar cómo representarlos sin reescribirlos ni inventar contexto | Regla de lectura/regularización y pruebas | Backend/Cumplimiento |
-| Estrategia exacta de migración y rollback | Ajustar objetos, orden y guardas a tipos/dependencias reales | Diseño de migración revisado en base desechable | DBA/Backend/DevOps |
+| Validación jurídica de actividades generales | Validar las 14 actividades y sus nombres/alcance | Catálogo firmado por Oficial de Cumplimiento | Jurídico/Oficial de Cumplimiento |
+| Validación jurídica de operaciones | Validar las 31 operaciones y sus denominaciones | Catálogo de operaciones firmado | Jurídico/Oficial de Cumplimiento |
+| Fracciones y fundamento normativo | Confirmar fuente, fracción y alcance aplicable | Fundamento documentado sin afirmaciones provisionales | Jurídico/Oficial de Cumplimiento |
+| Aprobación final del mapa actividad–operación | Ratificar o corregir jurídicamente el mapa funcional | Matriz definitiva firmada antes del seed | Jurídico/Oficial de Cumplimiento |
+| SQL de migración y rollback | Revisar transacción, constraints, índices, seed, doble ejecución, guardas y rollback en base desechable | Aprobación técnica previa a toda ejecución | DBA/Backend/DevOps |
 
 ### Riesgos principales
 
-- migrar una base distinta de la usada por el backend;
 - confiar en SQL histórico como esquema vigente;
 - arrancar backend antes de crear tablas;
 - seed jurídicamente incorrecto;
 - pérdida de historial por reconciliación destructiva;
 - autorización por ID enviado por el navegador;
-- ruptura del detalle de cliente por tablas no verificadas;
 - convertir una demo local en resultado regulatorio;
 - despliegue parcial entre DB, backend y frontend;
 - extender inadvertidamente validaciones internas de PF a PM/Fideicomiso.
 
 ## 17. Criterios de aprobación
 
-El diseño funcional queda aprobado en esta versión. Para autorizar implementación deben cumplirse únicamente estos criterios de entrada:
+El diseño funcional y el preflight técnico están cumplidos en esta versión. Para autorizar la implementación y posterior ejecución de migración deben satisfacerse:
 
-1. **Diseño funcional aprobado:** aceptación formal de la versión `0.2-PROPUESTA FUNCIONAL CERRADA`, incluidos 14 actividades generales, 31 operaciones y contratos funcionales.
-2. **Validación legal:** firma del catálogo, fracciones y mapa actividad–operación por el Oficial de Cumplimiento.
-3. **Preflight de base:** confirmación saneada de la base usada por Render y del esquema/tipos/constraints reales.
-4. **Preflight de Perfil Transaccional:** inventario aprobado de `cliente_perfil_transaccional` y regla técnica para perfiles históricos sin reescritura.
-5. **Aprobación técnica de migración:** diseño up/down, control de doble ejecución, respaldo, base desechable, rollback y orden DB → backend → frontend revisados.
+1. **Diseño funcional aprobado — cumplido:** versión `0.3-PREFLIGHT-TECNICO-CERRADO`, con 14 actividades generales, 31 operaciones y contratos funcionales.
+2. **Preflight de base — cumplido:** identidad saneada, esquema, objetos, tipos y baseline confirmados.
+3. **Preflight de Perfil Transaccional — cumplido:** tabla, columnas, constraints, ausencia de índice adicional y perfil histórico inventariados; tratamiento nullable sin backfill definido.
+4. **Validación jurídica — pendiente:** catálogo, fracciones, fundamento y mapa actividad–operación firmados por el Oficial de Cumplimiento.
+5. **Aprobación técnica de migración — pendiente:** SQL up/down, control de doble ejecución, respaldo, prueba en base desechable, rollback y orden DB → backend → frontend revisados.
 
-Hasta cumplirlos, este documento permanece en estado **0.2-PROPUESTA FUNCIONAL CERRADA**: autoriza preparar el preflight y la validación legal, pero no ejecutar SQL, migraciones ni despliegues.
+Hasta completar los puntos pendientes, este documento permanece en estado **0.3-PREFLIGHT-TECNICO-CERRADO** y no autoriza ejecutar SQL, migraciones ni despliegues.
