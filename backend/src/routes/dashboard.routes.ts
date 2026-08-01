@@ -36,17 +36,22 @@ router.get(
         });
       }
 
-      const [empresasResult, clientesResult] = await Promise.all([
-        pool.query('SELECT COUNT(*) FROM empresas'),
-        pool.query('SELECT COUNT(*) FROM clientes')
-      ]);
-
       if (user.rol === 'consultor') {
+        const [empresasResult, clientesResult] = await Promise.all([
+          pool.query('SELECT COUNT(*) FROM empresas WHERE id = $1', [user.empresa_id]),
+          pool.query('SELECT COUNT(*) FROM clientes WHERE empresa_id = $1', [user.empresa_id])
+        ]);
+
         return res.json({
           empresas: Number(empresasResult.rows[0].count),
           clientes: Number(clientesResult.rows[0].count)
         });
       }
+
+      const [empresasResult, clientesResult] = await Promise.all([
+        pool.query('SELECT COUNT(*) FROM empresas'),
+        pool.query('SELECT COUNT(*) FROM clientes')
+      ]);
 
       const usuariosResult = await pool.query(
         'SELECT COUNT(*) FROM usuarios WHERE activo = true'

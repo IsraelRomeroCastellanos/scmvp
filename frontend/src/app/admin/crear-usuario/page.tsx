@@ -116,7 +116,7 @@ export default function CrearUsuario() {
         return {
           ...prev,
           rol: value as RolUsuario,
-          empresa_id: value === 'cliente' ? prev.empresa_id : '',
+          empresa_id: value === 'admin' ? '' : prev.empresa_id,
         };
       }
 
@@ -138,8 +138,8 @@ export default function CrearUsuario() {
     if (!['admin', 'consultor', 'cliente'].includes(formData.rol)) {
       return 'rol invalido';
     }
-    if (formData.rol === 'cliente' && !formData.empresa_id) {
-      return 'empresa_id es obligatorio para rol cliente';
+    if (formData.rol !== 'admin' && !formData.empresa_id) {
+      return `empresa_id es obligatorio para rol ${formData.rol}`;
     }
 
     return null;
@@ -187,7 +187,7 @@ export default function CrearUsuario() {
         activo: formData.activo,
       };
 
-      if (formData.rol === 'cliente') {
+      if (formData.rol !== 'admin') {
         payload.empresa_id = Number(formData.empresa_id);
       }
 
@@ -318,7 +318,7 @@ export default function CrearUsuario() {
                 </select>
               </div>
 
-              {formData.rol === 'cliente' && (
+              {formData.rol !== 'admin' && (
                 <div>
                   <label htmlFor="empresa_id" className="block text-sm font-medium text-gray-700">
                     Empresa *

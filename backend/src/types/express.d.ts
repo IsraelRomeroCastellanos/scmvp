@@ -1,14 +1,21 @@
-import { JwtPayload } from 'jsonwebtoken';
-
 declare global {
   namespace Express {
+    type AuthenticatedUser =
+      | {
+          id: number;
+          email: string;
+          rol: 'admin';
+          empresa_id: null;
+        }
+      | {
+          id: number;
+          email: string;
+          rol: 'consultor' | 'cliente';
+          empresa_id: number;
+        };
+
     interface Request {
-      user?: {
-        id: number;
-        email: string;
-        rol: 'admin' | 'consultor' | 'cliente';
-        empresa_id: number | null;
-      };
+      user?: AuthenticatedUser;
     }
   }
 }
