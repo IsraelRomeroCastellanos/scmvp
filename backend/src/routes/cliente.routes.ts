@@ -155,6 +155,28 @@ function authorizeClienteEmpresaBody(
   return next();
 }
 
+function authorizeConsultorEmpresaBody(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  const user = req.user;
+
+  if (!user || user.rol !== 'consultor') return next();
+
+  const requestedEmpresaId = parsePositiveInt(req.body?.empresa_id);
+  if (
+    req.body?.empresa_id !== undefined
+    && requestedEmpresaId !== user.empresa_id
+  ) {
+    return res.status(403).json({
+      error: 'Acceso denegado: empresa no autorizada'
+    });
+  }
+
+  return next();
+}
+
 async function authorizeClienteEmpresaRecurso(
   req: Request,
   res: Response,
@@ -1590,8 +1612,23 @@ router.get('/mi-empresa', authenticate, async (req: Request, res: Response) => {
  */
 router.get('/clientes', authenticate, async (req: Request, res: Response) => {
   try {
-    const empresa_id = parsePositiveInt(req.query.empresa_id);
-    if (!empresa_id) return badRequest(res, 'empresa_id inválido');
+    const requestedEmpresaId = parsePositiveInt(req.query.empresa_id);
+    const hasEmpresaIdQuery = req.query.empresa_id !== undefined;
+    let empresa_id: number | null = requestedEmpresaId;
+
+    if (hasEmpresaIdQuery && !requestedEmpresaId) {
+      return badRequest(res, 'empresa_id inválido');
+    }
+
+    if (req.user?.rol === 'consultor') {
+      if (requestedEmpresaId !== null && requestedEmpresaId !== req.user.empresa_id) {
+        return res.status(403).json({
+          error: 'Acceso denegado: empresa no autorizada'
+        });
+      }
+
+      empresa_id = req.user.empresa_id;
+    }
 
     if (req.user?.rol === 'cliente') {
       if (!req.user.empresa_id) {
@@ -1599,6 +1636,8 @@ router.get('/clientes', authenticate, async (req: Request, res: Response) => {
           error: 'Acceso denegado: empresa no asignada'
         });
       }
+
+      if (!empresa_id) return badRequest(res, 'empresa_id inválido');
 
       if (empresa_id !== req.user.empresa_id) {
         return res.status(403).json({
@@ -1610,9 +1649,9 @@ router.get('/clientes', authenticate, async (req: Request, res: Response) => {
     const result = await pool.query(
       `SELECT id, empresa_id, nombre_entidad, tipo_cliente, nacionalidad, estado, creado_en, actualizado_en
        FROM clientes
-       WHERE empresa_id=$1
+       ${empresa_id === null ? '' : 'WHERE empresa_id=$1'}
        ORDER BY id DESC`,
-      [empresa_id]
+      empresa_id === null ? [] : [empresa_id]
     );
 
     return res.json({ clientes: result.rows });
@@ -1632,12 +1671,16 @@ router.get('/clientes/:id', authenticate, async (req: Request, res: Response) =>
     const id = parsePositiveInt(req.params.id);
     if (!id) return badRequest(res, 'id inválido');
 
+    const consultorEmpresaId = req.user?.rol === 'consultor'
+      ? req.user.empresa_id
+      : null;
     const result = await pool.query(
       `SELECT id, empresa_id, nombre_entidad, tipo_cliente, nacionalidad, estado, creado_en, actualizado_en, datos_completos
        FROM clientes
        WHERE id=$1
+       ${consultorEmpresaId === null ? '' : 'AND empresa_id=$2'}
        LIMIT 1`,
-      [id]
+      consultorEmpresaId === null ? [id] : [id, consultorEmpresaId]
     );
 
     if (result.rows.length === 0) return res.status(404).json({ error: 'Cliente no encontrado' });
@@ -1721,7 +1764,7 @@ router.get('/clientes/:id', authenticate, async (req: Request, res: Response) =>
  * REGISTRAR CLIENTE (Contrato Único)
  * ===============================
  */
-router.post('/registrar-cliente', authenticate, authorizeRoles('admin', 'consultor', 'cliente'), authorizeClienteEmpresaBody, async (req: Request, res: Response) => {
+router.post('/registrar-cliente', authenticate, authorizeRoles('admin', 'consultor', 'cliente'), authorizeClienteEmpresaBody, authorizeConsultorEmpresaBody, async (req: Request, res: Response) => {
   let actividadProperty;
   let operacionProperty;
   try {
@@ -1754,7 +1797,7 @@ router.post('/registrar-cliente', authenticate, authorizeRoles('admin', 'consult
   let client: PoolClient | null = null;
   let transactionStarted = false;
   try {
-    const empresa_id = req.user?.rol === 'cliente'
+    const empresa_id = req.user?.rol === 'cliente' || req.user?.rol === 'consultor'
       ? parsePositiveInt(req.user.empresa_id)
       : parsePositiveInt(req.body.empresa_id);
     const tipo = req.body.tipo_cliente;
@@ -1988,7 +2031,7 @@ router.post(
  * - replace-all temporal para listas hijas
  * ===============================
  */
-router.put('/clientes/:id', authenticate, authorizeRoles('admin', 'consultor', 'cliente'), authorizeClienteEmpresaRecurso, async (req: Request, res: Response) => {
+router.put('/clientes/:id', authenticate, authorizeRoles('admin', 'consultor', 'cliente'), authorizeConsultorEmpresaBody, authorizeClienteEmpresaRecurso, async (req: Request, res: Response) => {
   let actividadProperty;
   let operacionProperty;
   try {
@@ -2028,13 +2071,17 @@ router.put('/clientes/:id', authenticate, authorizeRoles('admin', 'consultor', '
     await client.query('BEGIN');
     transactionStarted = true;
 
+    const consultorEmpresaId = req.user?.rol === 'consultor'
+      ? req.user.empresa_id
+      : null;
     const current = await client.query(
       `SELECT id, empresa_id, tipo_cliente, datos_completos
        FROM clientes
        WHERE id=$1
+       ${consultorEmpresaId === null ? '' : 'AND empresa_id=$2'}
        LIMIT 1
        FOR UPDATE`,
-      [id]
+      consultorEmpresaId === null ? [id] : [id, consultorEmpresaId]
     );
     if (current.rows.length === 0) {
       await client.query('ROLLBACK');
@@ -2116,8 +2163,11 @@ router.put('/clientes/:id', authenticate, authorizeRoles('admin', 'consultor', '
            rfc_principal = COALESCE($5, rfc_principal),
            actualizado_en = NOW()
        WHERE id=$6
+       ${consultorEmpresaId === null ? '' : 'AND empresa_id=$7'}
        RETURNING id, empresa_id, nombre_entidad, tipo_cliente, nacionalidad, estado, creado_en, actualizado_en`,
-      [nombre_entidad, nacionalidad, storedNextDatos, estado, nextRfcPrincipal, id]
+      consultorEmpresaId === null
+        ? [nombre_entidad, nacionalidad, storedNextDatos, estado, nextRfcPrincipal, id]
+        : [nombre_entidad, nacionalidad, storedNextDatos, estado, nextRfcPrincipal, id, consultorEmpresaId]
     );
 
     if (preparedPatchDatos !== null && hasChildPatchForTipo(tipo, preparedPatchDatos)) {

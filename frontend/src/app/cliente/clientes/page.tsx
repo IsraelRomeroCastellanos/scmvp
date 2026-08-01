@@ -130,8 +130,8 @@ export default function ClientesPage() {
   const role = useMemo(() => normalizeRole(user?.rol ?? user?.role), [user]);
   const userEmpresaId = useMemo(() => parsePositiveId(user?.empresa_id), [user]);
 
-  // 1) Cargar empresas (para el selector de admin/consultor).
-  // Para rol cliente no se llama /api/admin/empresas; se usa empresa_id del token.
+  // 1) Cargar empresas para el selector global del admin.
+  // Consultor y cliente usan empresa_id de su sesión.
   useEffect(() => {
     let alive = true;
 
@@ -143,9 +143,9 @@ export default function ClientesPage() {
         if (!token) throw new Error('No hay token. Inicia sesión.');
         if (!role) throw new Error('No hay rol válido en la sesión.');
 
-        if (role === 'cliente') {
+        if (role === 'cliente' || role === 'consultor') {
           if (!userEmpresaId) {
-            throw new Error('No hay empresa_id válido en la sesión del cliente.');
+            throw new Error('No hay empresa_id válido en la sesión.');
           }
 
           if (!alive) return;
@@ -175,7 +175,8 @@ export default function ClientesPage() {
   }, [token, role, userEmpresaId]);
 
   // 2) Cargar clientes.
-  // Cliente: solo su empresa_id. Admin: conserva selector/Todas. Consultor: sin cambio de contrato en F1A.
+  // Cliente: conserva su consulta por empresa. Consultor: backend deriva el tenant del JWT.
+  // Admin: conserva selector/Todas.
   useEffect(() => {
     let alive = true;
 
@@ -193,6 +194,17 @@ export default function ClientesPage() {
 
           const data = await apiGet<{ clientes: Cliente[] }>(
             `/api/cliente/clientes?empresa_id=${encodeURIComponent(String(userEmpresaId))}`,
+            token
+          );
+
+          if (!alive) return;
+          setClientes(Array.isArray(data?.clientes) ? data.clientes : []);
+          return;
+        }
+
+        if (role === 'consultor') {
+          const data = await apiGet<{ clientes: Cliente[] }>(
+            '/api/cliente/clientes',
             token
           );
 
@@ -275,7 +287,7 @@ export default function ClientesPage() {
             : 'Consulta y administra los clientes disponibles en el portal.'
         }
         actions={
-          role === 'admin' || role === 'cliente' ? (
+          role ? (
             <Button onClick={() => router.push('/cliente/registrar-cliente')}>
               + Registrar cliente
             </Button>
@@ -285,7 +297,7 @@ export default function ClientesPage() {
 
       <Card className="overflow-hidden">
         <div className="border-b border-border-light px-4 py-4 sm:px-6">
-          {role !== 'cliente' ? (
+          {role === 'admin' ? (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div className="w-full max-w-md">
                 <label htmlFor="empresa" className="mb-2 block text-sm font-medium text-text-primary">
