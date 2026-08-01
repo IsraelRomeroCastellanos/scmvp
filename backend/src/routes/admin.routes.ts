@@ -101,18 +101,20 @@ router.post(
 
       let empresa_id: number | null = null;
 
-      if (empresaIdRaw !== undefined && empresaIdRaw !== null && empresaIdRaw !== '') {
-        const parsedEmpresaId = Number(empresaIdRaw);
-
-        if (!Number.isInteger(parsedEmpresaId) || parsedEmpresaId <= 0) {
+      if (rol === 'admin') {
+        if (empresaIdRaw !== undefined && empresaIdRaw !== null) {
+          return res.status(400).json({ error: 'empresa_id debe ser null para rol admin' });
+        }
+      } else {
+        if (
+          typeof empresaIdRaw !== 'number' ||
+          !Number.isInteger(empresaIdRaw) ||
+          empresaIdRaw <= 0
+        ) {
           return res.status(400).json({ error: 'empresa_id invalido' });
         }
 
-        empresa_id = parsedEmpresaId;
-      }
-
-      if (rol === 'cliente' && !empresa_id) {
-        return res.status(400).json({ error: 'empresa_id es obligatorio para rol cliente' });
+        empresa_id = empresaIdRaw;
       }
 
       let activo = true;
@@ -216,20 +218,20 @@ router.patch(
 
       let empresa_id: number | null = null;
 
-      if (rol === 'cliente') {
-        if (empresaIdRaw === undefined || empresaIdRaw === null || empresaIdRaw === '') {
-          return res.status(400).json({ error: 'empresa_id es obligatorio para rol cliente' });
+      if (rol === 'admin') {
+        if (empresaIdRaw !== undefined && empresaIdRaw !== null) {
+          return res.status(400).json({ error: 'empresa_id debe ser null para rol admin' });
         }
-
-        const parsedEmpresaId = Number(empresaIdRaw);
-
-        if (!Number.isInteger(parsedEmpresaId) || parsedEmpresaId <= 0) {
+      } else {
+        if (
+          typeof empresaIdRaw !== 'number' ||
+          !Number.isInteger(empresaIdRaw) ||
+          empresaIdRaw <= 0
+        ) {
           return res.status(400).json({ error: 'empresa_id invalido' });
         }
 
-        empresa_id = parsedEmpresaId;
-      } else if (empresaIdRaw !== undefined && empresaIdRaw !== null && empresaIdRaw !== '') {
-        return res.status(400).json({ error: 'empresa_id debe ser null para rol admin o consultor' });
+        empresa_id = empresaIdRaw;
       }
 
       const existingUser = await pool.query(
@@ -358,8 +360,9 @@ router.get(
   '/empresas',
   authenticate,
   authorizeRoles('admin', 'consultor'),
-  async (_req, res) => {
+  async (req, res) => {
     try {
+      const empresaId = req.user?.rol === 'consultor' ? req.user.empresa_id : null;
       const result = await pool.query(`
         SELECT
           id,
@@ -371,8 +374,9 @@ router.get(
           municipio,
           codigo_postal
         FROM empresas
+        ${empresaId === null ? '' : 'WHERE id = $1'}
         ORDER BY nombre_legal
-      `);
+      `, empresaId === null ? [] : [empresaId]);
 
       const empresaIds = result.rows.map((row) => Number(row.id));
       const activitiesByCompany = await getActiveActivitiesByCompanyIds(
@@ -514,6 +518,10 @@ router.get(
 
     if (!Number.isInteger(id) || id <= 0) {
       return res.status(400).json({ error: 'id invalido' });
+    }
+
+    if (req.user?.rol === 'consultor' && req.user.empresa_id !== id) {
+      return res.status(404).json({ error: 'Empresa no encontrada' });
     }
 
     try {

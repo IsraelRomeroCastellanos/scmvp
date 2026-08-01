@@ -5,12 +5,19 @@ import { secretFingerprint } from '../utils/secretFingerprint';
 
 export type UserRole = 'admin' | 'consultor' | 'cliente';
 
-export type AuthUser = {
-  id: number;
-  email: string;
-  rol: UserRole;
-  empresa_id: number | null;
-};
+export type AuthUser =
+  | {
+      id: number;
+      email: string;
+      rol: 'admin';
+      empresa_id: null;
+    }
+  | {
+      id: number;
+      email: string;
+      rol: 'consultor' | 'cliente';
+      empresa_id: number;
+    };
 
 export type AuthRequest = Request & {
   user?: AuthUser;
@@ -44,15 +51,31 @@ export function authenticate(req: AuthRequest, res: Response, next: NextFunction
       return res.status(401).json({ error: 'Token inválido (rol inválido)' });
     }
 
-    req.user = {
-      id: Number(decoded?.id),
-      email: String(decoded?.email ?? ''),
-      rol: rolRaw,
-      empresa_id:
-        decoded?.empresa_id === null || decoded?.empresa_id === undefined
-          ? null
-          : Number(decoded.empresa_id)
-    };
+    if (rolRaw === 'admin') {
+      if (decoded?.empresa_id !== null) {
+        return res.status(401).json({ error: 'Token inválido' });
+      }
+
+      req.user = {
+        id: Number(decoded?.id),
+        email: String(decoded?.email ?? ''),
+        rol: rolRaw,
+        empresa_id: null
+      };
+    } else {
+      const empresaId = decoded?.empresa_id;
+
+      if (typeof empresaId !== 'number' || !Number.isInteger(empresaId) || empresaId <= 0) {
+        return res.status(401).json({ error: 'Token inválido' });
+      }
+
+      req.user = {
+        id: Number(decoded?.id),
+        email: String(decoded?.email ?? ''),
+        rol: rolRaw,
+        empresa_id: empresaId
+      };
+    }
 
     return next();
   } catch (err: any) {

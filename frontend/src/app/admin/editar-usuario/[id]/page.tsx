@@ -110,7 +110,7 @@ export default function EditarUsuario() {
   const handleRolChange = (nuevoRol: RolUsuario) => {
     setRol(nuevoRol);
 
-    if (nuevoRol !== 'cliente') {
+    if (nuevoRol === 'admin') {
       setEmpresaId('');
     }
   };
@@ -124,8 +124,8 @@ export default function EditarUsuario() {
       return 'rol invalido';
     }
 
-    if (rol === 'cliente' && !empresaId) {
-      return 'empresa_id es obligatorio para rol cliente';
+    if (rol !== 'admin' && !empresaId) {
+      return `empresa_id es obligatorio para rol ${rol}`;
     }
 
     return '';
@@ -161,7 +161,7 @@ export default function EditarUsuario() {
       const payload = {
         nombre_completo: nombreCompleto.trim(),
         rol,
-        empresa_id: rol === 'cliente' ? Number(empresaId) : null,
+        empresa_id: rol === 'admin' ? null : Number(empresaId),
       };
 
       const res = await fetch(`${base}/api/admin/usuarios/${userId}`, {
@@ -259,7 +259,7 @@ export default function EditarUsuario() {
             </select>
           </div>
 
-          {rol === 'cliente' && (
+          {rol !== 'admin' && (
             <div>
               <label htmlFor="empresa_id" className="block text-sm font-medium text-gray-700">
                 Empresa

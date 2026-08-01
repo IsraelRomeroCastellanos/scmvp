@@ -52,6 +52,33 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Credenciales inválidas' });
     }
 
+    if (!['admin', 'consultor', 'cliente'].includes(user.rol)) {
+      return res.status(403).json({ error: 'Acceso no disponible' });
+    }
+
+    if (user.rol === 'admin') {
+      if (user.empresa_id !== null) {
+        return res.status(403).json({ error: 'Acceso no disponible' });
+      }
+    } else {
+      if (
+        typeof user.empresa_id !== 'number' ||
+        !Number.isInteger(user.empresa_id) ||
+        user.empresa_id <= 0
+      ) {
+        return res.status(403).json({ error: 'Acceso no disponible' });
+      }
+
+      const empresaResult = await pool.query(
+        'SELECT id FROM empresas WHERE id = $1 LIMIT 1',
+        [user.empresa_id]
+      );
+
+      if (empresaResult.rows.length === 0) {
+        return res.status(403).json({ error: 'Acceso no disponible' });
+      }
+    }
+
     // ✅ Un único secreto, sin fallback
     const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret) {
