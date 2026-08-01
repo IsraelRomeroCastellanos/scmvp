@@ -1707,6 +1707,13 @@ router.get('/clientes/:id', authenticate, async (req: Request, res: Response) =>
     );
     const configuracion_pld = await getClientPldConfiguration(pool, row.id);
 
+    if (req.user?.rol === 'cliente') {
+      return res.json({
+        cliente: row,
+        configuracion_pld
+      });
+    }
+
     const perfilResult = await pool.query(
       `SELECT *
        FROM cliente_perfil_transaccional
@@ -1985,6 +1992,15 @@ router.post(
           selection.id,
         ],
       );
+
+      if (req.user?.rol === 'cliente') {
+        await client.query('COMMIT');
+        transactionStarted = false;
+        return res.status(201).json({
+          ok: true,
+          mensaje: 'Perfil Transaccional guardado correctamente'
+        });
+      }
 
       const context = await getProfilePldContext(
         client,
