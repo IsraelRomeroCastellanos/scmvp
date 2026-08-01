@@ -53,8 +53,8 @@ type PerfilTransaccional = Partial<PerfilTransaccionalConContexto> & {
 type ClienteDetalleResponse = {
   cliente: Cliente | null;
   configuracion_pld: ConfiguracionPldCliente | null;
-  perfil_transaccional: PerfilTransaccional | null;
-  matriz_riesgo: MatrizRiesgo | null;
+  perfil_transaccional?: PerfilTransaccional | null;
+  matriz_riesgo?: MatrizRiesgo | null;
 };
 
 type MatrizRiesgo = {
@@ -189,6 +189,7 @@ export default function ClienteDetallePage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [perfilSaving, setPerfilSaving] = useState(false);
   const [perfilError, setPerfilError] = useState('');
+  const [perfilSuccess, setPerfilSuccess] = useState('');
   const [perfilForm, setPerfilForm] = useState({
     tipo_servicio: '',
     actividad_esperada: '',
@@ -231,8 +232,14 @@ export default function ClienteDetallePage() {
 
         setCliente(data?.cliente ?? null);
         setConfiguracionPld(data?.configuracion_pld ?? null);
-        setPerfilTransaccional(data?.perfil_transaccional ?? null);
-        setMatrizRiesgo(data?.matriz_riesgo ?? null);
+        const sessionRole = normalizeRole(getCurrentUser()?.rol);
+        if (sessionRole === 'admin' || sessionRole === 'consultor') {
+          setPerfilTransaccional(data?.perfil_transaccional ?? null);
+          setMatrizRiesgo(data?.matriz_riesgo ?? null);
+        } else {
+          setPerfilTransaccional(null);
+          setMatrizRiesgo(null);
+        }
       } catch (requestError) {
         if (!active || isApiRequestCanceled(requestError)) return;
         setErr(getApiErrorMessage(requestError, 'Error al cargar cliente'));
@@ -273,6 +280,7 @@ export default function ClienteDetallePage() {
     try {
       setPerfilSaving(true);
       setPerfilError('');
+      setPerfilSuccess('');
       await crearPerfilTransaccional(id, payload);
       setPerfilForm({
         tipo_servicio: '',
@@ -282,7 +290,10 @@ export default function ClienteDetallePage() {
         origen_recursos: '',
         destino_recursos: '',
       });
-      setRefreshKey((value) => value + 1);
+      setPerfilSuccess('Perfil Transaccional guardado correctamente.');
+      if (role === 'admin') {
+        setRefreshKey((value) => value + 1);
+      }
     } catch (error) {
       if (!isApiRequestCanceled(error)) {
         setPerfilError(
@@ -498,37 +509,39 @@ export default function ClienteDetallePage() {
 
       <div id="perfil-transaccional" className="scroll-mt-6">
       <Card title="Perfil Transaccional">
-        {perfilTransaccional ? (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <Row label="Tipo de servicio" value={perfilTransaccional.tipo_servicio} />
-              <Row label="Actividad esperada" value={perfilTransaccional.actividad_esperada} />
-              <Row label="Monto mensual estimado" value={perfilTransaccional.monto_mensual_estimado} />
-              <Row label="Frecuencia de operación" value={perfilTransaccional.frecuencia_operacion} />
-              <Row label="Origen de recursos" value={perfilTransaccional.origen_recursos} />
-              <Row label="Destino de recursos" value={perfilTransaccional.destino_recursos} />
-              <Row label="Instrumentos de pago" value={perfilTransaccional.instrumentos_pago} />
-            </div>
-            {perfilTransaccional.contexto_pld_pendiente || !perfilTransaccional.contexto_pld ? (
-              <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                Contexto PLD histórico no determinado.
+        {role === 'admin' || role === 'consultor' ? (
+          perfilTransaccional ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Row label="Tipo de servicio" value={perfilTransaccional.tipo_servicio} />
+                <Row label="Actividad esperada" value={perfilTransaccional.actividad_esperada} />
+                <Row label="Monto mensual estimado" value={perfilTransaccional.monto_mensual_estimado} />
+                <Row label="Frecuencia de operación" value={perfilTransaccional.frecuencia_operacion} />
+                <Row label="Origen de recursos" value={perfilTransaccional.origen_recursos} />
+                <Row label="Destino de recursos" value={perfilTransaccional.destino_recursos} />
+                <Row label="Instrumentos de pago" value={perfilTransaccional.instrumentos_pago} />
               </div>
-            ) : (
-              <div className="rounded border border-gray-200 bg-gray-50 p-3">
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <Row label="Actividad del perfil" value={perfilTransaccional.contexto_pld.actividad.nombre} />
-                  <Row label="Operación del perfil" value={perfilTransaccional.contexto_pld.operacion.nombre} />
-                  <Row label="Origen" value={perfilTransaccional.contexto_pld.origen_seleccion} />
-                  <Row label="Vigente desde" value={perfilTransaccional.contexto_pld.vigente_desde} />
+              {perfilTransaccional.contexto_pld_pendiente || !perfilTransaccional.contexto_pld ? (
+                <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  Contexto PLD histórico no determinado.
                 </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="rounded border border-dashed bg-gray-50 p-4 text-sm text-gray-600">
-            No hay perfil transaccional registrado para este cliente.
-          </div>
-        )}
+              ) : (
+                <div className="rounded border border-gray-200 bg-gray-50 p-3">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <Row label="Actividad del perfil" value={perfilTransaccional.contexto_pld.actividad.nombre} />
+                    <Row label="Operación del perfil" value={perfilTransaccional.contexto_pld.operacion.nombre} />
+                    <Row label="Origen" value={perfilTransaccional.contexto_pld.origen_seleccion} />
+                    <Row label="Vigente desde" value={perfilTransaccional.contexto_pld.vigente_desde} />
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="rounded border border-dashed bg-gray-50 p-4 text-sm text-gray-600">
+              No hay perfil transaccional registrado para este cliente.
+            </div>
+          )
+        ) : null}
 
         {role && role !== 'consultor' ? (
           configuracionPld?.estado === 'completa' ? (
@@ -574,6 +587,9 @@ export default function ClienteDetallePage() {
               {perfilError ? (
                 <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{perfilError}</div>
               ) : null}
+              {perfilSuccess ? (
+                <div className="rounded border border-green-200 bg-green-50 p-3 text-sm text-green-700">{perfilSuccess}</div>
+              ) : null}
               <button
                 type="submit"
                 disabled={perfilSaving}
@@ -591,6 +607,7 @@ export default function ClienteDetallePage() {
       </Card>
       </div>
 
+      {role === 'admin' || role === 'consultor' ? (
       <Card title="Evaluación de Riesgo">
         {matrizRiesgo ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -607,6 +624,7 @@ export default function ClienteDetallePage() {
           </div>
         )}
       </Card>
+      ) : null}
 
       <div className="rounded border bg-white p-4">
         <div className="flex items-center justify-between gap-3">
