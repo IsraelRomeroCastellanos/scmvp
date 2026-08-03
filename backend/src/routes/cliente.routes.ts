@@ -14,6 +14,7 @@ import {
   hasOwnProperty,
   normalizeKeyProperty,
 } from '../services/actividades-vulnerables.service';
+import { hasPublishedActiveCompanyMatrix } from '../services/matrices-empresa.service';
 
 const router = Router();
 
@@ -1584,7 +1585,10 @@ router.get('/mi-empresa', authenticate, async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Empresa no encontrada' });
     }
 
-    const activities = await getActiveCompanyActivities(pool, empresaId);
+    const [activities, tieneMatrizPublicadaActiva] = await Promise.all([
+      getActiveCompanyActivities(pool, empresaId),
+      hasPublishedActiveCompanyMatrix(pool, empresaId),
+    ]);
     return res.json({
       empresa: {
         ...result.rows[0],
@@ -1595,6 +1599,7 @@ router.get('/mi-empresa', authenticate, async (req: Request, res: Response) => {
           descripcion: activity.descripcion,
         })),
         configuracion_pld_pendiente: activities.length === 0,
+        tiene_matriz_publicada_activa: tieneMatrizPublicadaActiva,
       },
     });
   } catch (error) {

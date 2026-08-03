@@ -13,6 +13,10 @@ import {
   reconcileCompanyActivities,
   resolveActiveActivitiesByKeys,
 } from '../services/actividades-vulnerables.service';
+import {
+  getPublishedActiveMatrixStatusByCompanyIds,
+  hasPublishedActiveCompanyMatrix,
+} from '../services/matrices-empresa.service';
 
 const router = Router();
 
@@ -379,10 +383,10 @@ router.get(
       `, empresaId === null ? [] : [empresaId]);
 
       const empresaIds = result.rows.map((row) => Number(row.id));
-      const activitiesByCompany = await getActiveActivitiesByCompanyIds(
-        pool,
-        empresaIds,
-      );
+      const [activitiesByCompany, matrixStatusByCompany] = await Promise.all([
+        getActiveActivitiesByCompanyIds(pool, empresaIds),
+        getPublishedActiveMatrixStatusByCompanyIds(pool, empresaIds),
+      ]);
       const empresas = result.rows.map((empresa) => {
         const actividades_vulnerables =
           activitiesByCompany.get(Number(empresa.id)) ?? [];
@@ -390,6 +394,8 @@ router.get(
           ...empresa,
           actividades_vulnerables,
           configuracion_pld_pendiente: actividades_vulnerables.length === 0,
+          tiene_matriz_publicada_activa:
+            matrixStatusByCompany.get(Number(empresa.id)) ?? false,
         };
       });
 
@@ -534,7 +540,10 @@ router.get(
         return res.status(404).json({ error: 'Empresa no encontrada' });
       }
 
-      const activities = await getActiveCompanyActivities(pool, id);
+      const [activities, tieneMatrizPublicadaActiva] = await Promise.all([
+        getActiveCompanyActivities(pool, id),
+        hasPublishedActiveCompanyMatrix(pool, id),
+      ]);
       return res.json({
         empresa: {
           ...result.rows[0],
@@ -545,6 +554,7 @@ router.get(
             descripcion: activity.descripcion,
           })),
           configuracion_pld_pendiente: activities.length === 0,
+          tiene_matriz_publicada_activa: tieneMatrizPublicadaActiva,
         },
       });
     } catch (error) {
