@@ -1,18 +1,54 @@
 # Migraciones manuales de PostgreSQL
 
-## Estado
+## Matrices PT/GR versionadas por empresa
 
-La migración `20260728_001_modelo_integral_actividades_vulnerables` está preparada, pero permanece pendiente de:
+La migración `20260801_002_matrices_pt_gr_empresa` crea exclusivamente la
+línea base del modelo de matrices por empresa. Depende de que esté registrada
+`20260728_001_modelo_integral_actividades_vulnerables` en
+`schema_migrations`.
 
-1. validación jurídica de las 14 actividades generales;
-2. validación jurídica de las 31 operaciones y sus fracciones;
-3. aprobación final del mapa actividad–operación;
-4. revisión técnica del SQL UP, DOWN y VERIFY.
+La migración 002 sigue sin autorización para producción. Antes de cualquier
+consideración productiva debe probarse completa sobre una restauración
+desechable y someterse a revisión técnica del UP, VERIFY y DOWN.
 
-No debe ejecutarse hasta obtener esas aprobaciones.
+### Procedimiento de la migración 002
+
+El orden de prueba de la migración 002 es:
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f backend/migrations/20260801_002_matrices_pt_gr_empresa.up.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f backend/migrations/20260801_002_matrices_pt_gr_empresa.verify.sql
+```
+
+El VERIFY valida por catálogos la estructura de tablas y columnas, las seis
+secuencias SERIAL y su propiedad, la estructura efectiva de constraints y los
+índices. El rollback solo es admisible cuando las seis tablas creadas están
+vacías. El DOWN exige primero esa misma estructura íntegra y después comprueba
+la ausencia de filas antes de eliminar objetos:
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f backend/migrations/20260801_002_matrices_pt_gr_empresa.down.sql
+```
+
+Esta migración no incluye carga o almacenamiento del Excel, API de borrador o
+publicación, motor de cálculo, evaluaciones históricas ni frontend. Tampoco
+modifica `matrices_riesgo` ni `cliente_perfil_transaccional`.
+
+## Estado de la migración base
+
+La evidencia operativa del 1 de agosto de 2026 confirma que la migración
+`20260728_001_modelo_integral_actividades_vulnerables` está registrada en la
+base desplegada. Es la dependencia obligatoria de la migración de matrices y
+no debe volver a ejecutarse sobre esa base.
 
 ## Archivos
 
+- `20260801_002_matrices_pt_gr_empresa.up.sql`: crea las seis tablas versionadas, sus constraints e índices y registra la migración 002.
+- `20260801_002_matrices_pt_gr_empresa.verify.sql`: verifica por catálogos tablas, columnas, secuencias SERIAL, constraints e índices, y muestra la identidad de base y esquema.
+- `20260801_002_matrices_pt_gr_empresa.down.sql`: exige esa estructura íntegra y revierte la migración 002 solo con las seis tablas vacías.
 - `20260728_001_modelo_integral_actividades_vulnerables.up.sql`: toma un advisory lock transaccional, valida `schema_migrations`, crea el modelo, inserta el seed y registra la migración.
 - `20260728_001_modelo_integral_actividades_vulnerables.verify.sql`: realiza únicamente consultas de verificación.
 - `20260728_001_modelo_integral_actividades_vulnerables.down.sql`: revierte objetos solo cuando no existen datos de uso.
@@ -26,11 +62,17 @@ No debe ejecutarse hasta obtener esas aprobaciones.
 - No ejecutar comandos que impriman la variable o sus credenciales.
 - No editar backups para simular una migración.
 - Usar `ON_ERROR_STOP=1` para detener `psql` ante el primer error.
-- Confirmar la identidad de base y esquema mediante el VERIFY antes de aprobar producción.
+- El VERIFY muestra la identidad de base y esquema; esa salida debe compararse explícitamente contra la base y el esquema del objetivo aprobado antes de continuar.
 - El UP usa un advisory lock transaccional derivado de la migration key para serializar ejecuciones concurrentes; PostgreSQL lo libera automáticamente al terminar la transacción.
 - Si `schema_migrations` ya existe, el UP valida su estructura mínima y aborta sin modificarla cuando es incompatible.
 
-## Comandos genéricos
+## Procedimiento histórico de la migración 001
+
+Los apartados siguientes documentan exclusivamente la migración histórica 001;
+no constituyen autorización ni procedimiento de producción para la migración
+002.
+
+### Comandos genéricos de la migración 001
 
 Los siguientes comandos son plantillas. La variable debe inyectarse de forma segura en la sesión y nunca escribirse literalmente en archivos versionados.
 
@@ -49,7 +91,7 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f backend/migrations/20260728_001_modelo_integral_actividades_vulnerables.down.sql
 ```
 
-## Procedimiento obligatorio en base desechable
+### Procedimiento histórico obligatorio en base desechable para la migración 001
 
 1. Tomar el respaldo de la base objetivo.
 2. Restaurarlo sin alteraciones en una base desechable.
@@ -76,7 +118,7 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
 11. Conservar evidencia saneada de cada resultado para revisión técnica.
 12. Obtener aprobación antes de considerar producción.
 
-## Rollback
+## Rollback histórico de la migración 001
 
 El DOWN se ejecuta dentro de una transacción y aborta si:
 
