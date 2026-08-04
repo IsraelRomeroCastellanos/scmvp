@@ -24,6 +24,7 @@ export type MiEmpresaPld = {
   nombre_legal: string;
   actividades_vulnerables: ActividadVulnerableGeneral[];
   configuracion_pld_pendiente: boolean;
+  tiene_matriz_publicada_activa: boolean | null;
 };
 
 export type EmpresaConActividadesVulnerables = MiEmpresaPld;
