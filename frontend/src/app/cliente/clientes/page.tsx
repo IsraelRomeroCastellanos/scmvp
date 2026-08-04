@@ -18,6 +18,7 @@ import {
 type Empresa = {
   id: number;
   nombre_legal: string;
+  tiene_matriz_publicada_activa: boolean | null;
 };
 
 type Cliente = {
@@ -124,6 +125,10 @@ export default function ClientesPage() {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [empresaSel, setEmpresaSel] = useState<string>('all');
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [loadingIndicadorMatriz, setLoadingIndicadorMatriz] = useState(true);
+  const [errorIndicadorMatriz, setErrorIndicadorMatriz] = useState<string | null>(null);
+  const [indicadorMatriz, setIndicadorMatriz] = useState<boolean | null>(null);
+  const [mensajeBloqueoMatriz, setMensajeBloqueoMatriz] = useState<string | null>(null);
 
   const token = useMemo(() => getToken(), []);
   const user = useMemo(() => getStoredUser(), []);
@@ -151,15 +156,56 @@ export default function ClientesPage() {
           if (!alive) return;
           setEmpresas([]);
           setEmpresaSel(String(userEmpresaId));
+          setLoadingIndicadorMatriz(true);
+          setErrorIndicadorMatriz(null);
+          setIndicadorMatriz(null);
+          setMensajeBloqueoMatriz(null);
+
+          try {
+            const data = await apiGet<{ empresa?: { tiene_matriz_publicada_activa?: unknown } }>(
+              '/api/cliente/mi-empresa',
+              token
+            );
+            if (!alive) return;
+            const value = data?.empresa?.tiene_matriz_publicada_activa === true
+              ? true
+              : data?.empresa?.tiene_matriz_publicada_activa === false
+                ? false
+                : null;
+            setIndicadorMatriz(value);
+            setMensajeBloqueoMatriz(
+              value === false
+                ? 'No es posible registrar clientes para esta empresa porque aún no cuenta con una matriz PT/GR publicada y activa.'
+                : null
+            );
+          } catch (matrixError: any) {
+            if (!alive) return;
+            setErrorIndicadorMatriz(matrixError?.message || 'No fue posible consultar la matriz de la empresa');
+            setIndicadorMatriz(null);
+            setMensajeBloqueoMatriz(null);
+          } finally {
+            if (alive) setLoadingIndicadorMatriz(false);
+          }
           return;
         }
 
         const data = await apiGet<{ empresas: Empresa[] }>('/api/admin/empresas', token);
 
         if (!alive) return;
-        const list = Array.isArray(data?.empresas) ? data.empresas : [];
+        const list = Array.isArray(data?.empresas)
+          ? data.empresas.map((empresa) => ({
+              ...empresa,
+              tiene_matriz_publicada_activa:
+                empresa?.tiene_matriz_publicada_activa === true
+                  ? true
+                  : empresa?.tiene_matriz_publicada_activa === false
+                    ? false
+                    : null,
+            }))
+          : [];
         setEmpresas(list);
         setEmpresaSel('all');
+        setLoadingIndicadorMatriz(false);
       } catch (e: any) {
         if (!alive) return;
         setError(e?.message || 'Error al cargar empresas');
@@ -173,6 +219,19 @@ export default function ClientesPage() {
       alive = false;
     };
   }, [token, role, userEmpresaId]);
+
+  const indicadorMatrizAdmin = role === 'admin' && empresaSel !== 'all'
+    ? empresas.find((empresa) => String(empresa.id) === empresaSel)?.tiene_matriz_publicada_activa ?? null
+    : null;
+
+  useEffect(() => {
+    if (role !== 'admin') return;
+    setMensajeBloqueoMatriz(
+      empresaSel !== 'all' && indicadorMatrizAdmin === false
+        ? 'No es posible registrar clientes para esta empresa porque aún no cuenta con una matriz PT/GR publicada y activa.'
+        : null
+    );
+  }, [role, empresaSel, indicadorMatrizAdmin]);
 
   // 2) Cargar clientes.
   // Cliente: conserva su consulta por empresa. Consultor: backend deriva el tenant del JWT.
@@ -277,6 +336,10 @@ export default function ClientesPage() {
     return <Alert variant="danger">{error}</Alert>;
   }
 
+  const registrarDisabled = role === 'admin'
+    ? empresaSel !== 'all' && indicadorMatrizAdmin !== true
+    : loadingIndicadorMatriz || Boolean(errorIndicadorMatriz) || indicadorMatriz !== true;
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -288,12 +351,19 @@ export default function ClientesPage() {
         }
         actions={
           role ? (
-            <Button onClick={() => router.push('/cliente/registrar-cliente')}>
+            <Button
+              disabled={registrarDisabled}
+              onClick={() => router.push('/cliente/registrar-cliente')}
+            >
               + Registrar cliente
             </Button>
           ) : undefined
         }
       />
+
+      {mensajeBloqueoMatriz ? (
+        <Alert variant="danger">{mensajeBloqueoMatriz}</Alert>
+      ) : null}
 
       <Card className="overflow-hidden">
         <div className="border-b border-border-light px-4 py-4 sm:px-6">
@@ -307,7 +377,10 @@ export default function ClientesPage() {
                   id="empresa"
                   className="w-full"
                   value={empresaSel}
-                  onChange={(e) => setEmpresaSel(e.target.value)}
+                  onChange={(e) => {
+                    setMensajeBloqueoMatriz(null);
+                    setEmpresaSel(e.target.value);
+                  }}
                 >
                   <option value="all">Todas</option>
                   {empresas.map((e) => (

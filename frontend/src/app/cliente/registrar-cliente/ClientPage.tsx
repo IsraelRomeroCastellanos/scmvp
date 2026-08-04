@@ -42,6 +42,7 @@ export default function ClientPage() {
     nombre_legal: string;
     actividades_vulnerables: ActividadVulnerableGeneral[];
     configuracion_pld_pendiente: boolean;
+    tiene_matriz_publicada_activa: boolean | null;
   };
 
   type RecursoTerceroItem = {
@@ -368,6 +369,7 @@ function valueToCatalogKey(v: string) {
   const [empresaError, setEmpresaError] = useState("");
   const [sessionRole, setSessionRole] = useState<NormalizedRole | null>(null);
   const [empresaActividades, setEmpresaActividades] = useState<ActividadVulnerableGeneral[]>([]);
+  const [tieneMatrizPublicadaActiva, setTieneMatrizPublicadaActiva] = useState<boolean | null>(null);
   const [actividadVulnerableClave, setActividadVulnerableClave] = useState("");
   const [operacionVulnerableClave, setOperacionVulnerableClave] = useState("");
   const [operacionesVulnerables, setOperacionesVulnerables] = useState<OperacionVulnerable[]>([]);
@@ -904,6 +906,7 @@ function valueToCatalogKey(v: string) {
         setEmpresaError("");
         setEmpresaId("");
         setEmpresaNombre("");
+        setTieneMatrizPublicadaActiva(null);
         setEmpresas([]);
         setEmpresaLoading(true);
 
@@ -938,7 +941,16 @@ function valueToCatalogKey(v: string) {
           const actividadesEmpresa = Array.isArray(empresa?.actividades_vulnerables)
             ? empresa.actividades_vulnerables
             : [];
+          const indicadorMatriz = empresa?.tiene_matriz_publicada_activa === true
+            ? true
+            : empresa?.tiene_matriz_publicada_activa === false
+              ? false
+              : null;
           setEmpresaActividades(actividadesEmpresa);
+          setTieneMatrizPublicadaActiva(indicadorMatriz);
+          if (indicadorMatriz === false) {
+            setFatal("No es posible registrar clientes para esta empresa porque aún no cuenta con una matriz PT/GR publicada y activa.");
+          }
           setActividadVulnerableClave(
             actividadesEmpresa.length === 1 ? actividadesEmpresa[0].clave : "",
           );
@@ -957,6 +969,12 @@ function valueToCatalogKey(v: string) {
                 : [],
               configuracion_pld_pendiente:
                 empresa?.configuracion_pld_pendiente === true,
+              tiene_matriz_publicada_activa:
+                empresa?.tiene_matriz_publicada_activa === true
+                  ? true
+                  : empresa?.tiene_matriz_publicada_activa === false
+                    ? false
+                    : null,
             }))
             .filter(
               (empresa: EmpresaOption) =>
@@ -3573,6 +3591,14 @@ persona: {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (loading || pfConfirmationOpen || pfSuccessClientId) return;
+    if (tieneMatrizPublicadaActiva === false) {
+      setFatal("No es posible registrar clientes para esta empresa porque aún no cuenta con una matriz PT/GR publicada y activa.");
+      return;
+    }
+    if (tieneMatrizPublicadaActiva === null) {
+      setFatal("No fue posible confirmar si la empresa cuenta con una matriz PT/GR publicada y activa.");
+      return;
+    }
     console.log("[DEBUG tipo submit]", {
       tipo,
       tipoRef: tipoRef.current?.value,
@@ -3818,8 +3844,19 @@ persona: {
                   );
                   const nextActividades =
                     nextEmpresa?.actividades_vulnerables ?? [];
+                  const nextIndicador = nextEmpresa?.tiene_matriz_publicada_activa ?? null;
                   setEmpresaId(nextEmpresaId);
                   setEmpresaActividades(nextActividades);
+                  setTieneMatrizPublicadaActiva(nextIndicador);
+                  setFatal((current) => {
+                    const isMatrixMessage =
+                      current === "No es posible registrar clientes para esta empresa porque aún no cuenta con una matriz PT/GR publicada y activa." ||
+                      current === "No fue posible confirmar si la empresa cuenta con una matriz PT/GR publicada y activa.";
+                    if (nextIndicador === false) {
+                      return "No es posible registrar clientes para esta empresa porque aún no cuenta con una matriz PT/GR publicada y activa.";
+                    }
+                    return isMatrixMessage ? null : current;
+                  });
                   setActividadVulnerableClave(
                     nextActividades.length === 1
                       ? nextActividades[0].clave
@@ -6046,7 +6083,8 @@ persona: {
               pfSuccessClientId !== null ||
               empresaLoading ||
               Boolean(empresaError) ||
-              !sessionRole
+              !sessionRole ||
+              tieneMatrizPublicadaActiva !== true
             }
             className="rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
           >
