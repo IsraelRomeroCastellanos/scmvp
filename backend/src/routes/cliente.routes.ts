@@ -1834,6 +1834,31 @@ router.post('/registrar-cliente', authenticate, authorizeRoles('admin', 'consult
     await client.query('BEGIN');
     transactionStarted = true;
 
+    const empresaResult = await client.query(
+      `SELECT id
+       FROM public.empresas
+       WHERE id = $1
+       LIMIT 1`,
+      [empresa_id],
+    );
+    if (empresaResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      transactionStarted = false;
+      return res.status(400).json({ error: 'empresa_id no existe' });
+    }
+
+    const hasPublishedActiveMatrix = await hasPublishedActiveCompanyMatrix(
+      client,
+      empresa_id,
+    );
+    if (!hasPublishedActiveMatrix) {
+      await client.query('ROLLBACK');
+      transactionStarted = false;
+      return res.status(409).json({
+        error: 'No es posible registrar clientes para esta empresa porque aún no cuenta con una matriz PT/GR publicada y activa.',
+      });
+    }
+
     if (rfc_principal) {
       const dupRfc = await client.query(
         `SELECT id FROM clientes WHERE empresa_id=$1 AND rfc_principal=$2 LIMIT 1`,
