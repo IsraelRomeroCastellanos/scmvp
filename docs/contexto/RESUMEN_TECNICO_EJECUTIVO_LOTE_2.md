@@ -4,20 +4,26 @@
 
 ### Situación actual
 
-- Rama confirmada: `feat/fase-2-gestion-matriz-empresa`.
-- Base: `dcceca0`; PR más reciente `#92`, fusionado.
+- Rama confirmada: `main`.
+- Base: `5dc8596`; PR más reciente `#97`, fusionado.
+- Commit de merge actual: `5dc8596 Merge pull request #97 from
+  IsraelRomeroCastellanos/feat/lote-2d-bloqueo-frontend-sin-matriz`.
 - La migración 001 está registrada en la base desplegada.
 - La migración 002 está versionada, pero **no se ha ejecutado en producción**.
 - El backend ya gestiona empresas, configuración PLD y clientes con aislamiento
   por empresa.
-- No existe gestión funcional de matrices, servicio de matrices, endpoints de
-  carga/publicación ni indicador de matriz activa en los DTO actuales.
+- Los Lotes 2A, 2B, 2C y 2D están implementados y fusionados mediante los PR
+  `#94`, `#95`, `#96` y `#97`, respectivamente.
+- Existe consulta reutilizable, indicador en los DTO y bloqueo en backend y
+  frontend. No existe todavía gestión administrativa completa de matrices.
 
 ### Objetivo
 
-Preparar la gestión mínima de matriz PT/GR por empresa y hacer exigible la
-condición de matriz utilizable antes del alta de clientes, sin implementar aún
-importación Excel, publicación completa, motor PT/GR o históricos.
+El objetivo de los Lotes 2A–2D quedó cerrado: hacer exigible la condición de
+matriz utilizable antes del alta de clientes. El siguiente objetivo es definir
+el Lote 2E para la gestión administrativa mínima, sin declarar como existentes
+el motor PT/GR, la evaluación histórica ni un despliegue productivo dependiente
+de la migración 002.
 
 ### Regla aprobada
 
@@ -29,7 +35,7 @@ estado_editorial = PUBLICADA
 activa = TRUE
 ```
 
-El bloqueo debe existir en backend y frontend. El backend es la autoridad y la
+El bloqueo existe en backend y frontend. El backend es la autoridad y la
 empresa autorizada no puede sustituirse mediante body, query o controles del
 navegador.
 
@@ -48,38 +54,53 @@ navegador.
   `POST /api/cliente/registrar-cliente`.
 - Servicios existentes: `actividades-vulnerables.service.ts` y
   `auth.service.ts`.
+- Servicio reutilizable `backend/src/services/matrices-empresa.service.ts`,
+  con `hasPublishedActiveCompanyMatrix` y consulta por empresa con
+  `estado_editorial = 'PUBLICADA'` y `activa = TRUE`.
+- Indicador `tiene_matriz_publicada_activa` expuesto en
+  `GET /api/admin/empresas`, `GET /api/admin/empresas/:id` y
+  `GET /api/cliente/mi-empresa`; el listado usa consulta agrupada para evitar
+  N+1.
+- `POST /api/cliente/registrar-cliente` valida la existencia de la empresa y,
+  dentro de la transacción y antes de insertar, exige matriz publicada y activa.
+- El frontend normaliza el indicador como `true`/`false`/`null`, bloquea el
+  acceso desde el listado y el formulario, conserva `empresaSel = all` para
+  admin y evita que los errores del indicador sustituyan el listado.
 - `req.user` contiene `id`, `email`, `rol` y `empresa_id`, con contrato distinto
   para admin frente a consultor/cliente.
 - `exceljs` y `express-fileupload` figuran como dependencias, pero esto no
   demuestra un flujo de carga de matrices implementado.
 
-### Brechas
+### Lotes cerrados
 
-- No existe consulta reutilizable de matriz publicada y activa.
-- Los DTO de empresa no indican disponibilidad de matriz PT/GR.
-- El alta de cliente no valida la existencia de matriz utilizable.
-- El frontend no bloquea ni explica esta condición.
-- No existen rutas ni servicio de gestión de versiones.
-- No existen pruebas automatizadas detectadas.
-- El flujo de auditoría hacia `creada_por`, `validada_por`, `publicada_por` y
-  `cargado_por` aún no está implementado.
+- **2A — PR #94:** servicio y consulta reutilizable.
+- **2B — PR #95:** indicador en los tres endpoints y consulta agrupada sin N+1.
+- **2C — PR #96:** validación transaccional previa a la inserción y respuesta
+  `409` con el mensaje: “No es posible registrar clientes para esta empresa
+  porque aún no cuenta con una matriz PT/GR publicada y activa.”
+- **2D — PR #97:** bloqueo defensivo de frontend en listado y formulario.
 
-### Alcance
+El backend conserva la autoridad final. El riesgo TOCTOU se acepta
+temporalmente hasta que existan flujos coordinados de publicación y activación.
 
-**Confirmado:** conservar la creación de empresa sin matriz y bloquear la
-creación de clientes sin matriz `PUBLICADA` y activa, tanto en backend como en
-frontend.
+### Validaciones realizadas
 
-**Propuesto para implementación mínima:**
+- builds de frontend correctos;
+- TypeScript sin errores;
+- `git diff --check` limpio;
+- revisiones independientes aprobadas;
+- cambios limitados al alcance.
 
-1. consulta backend parametrizada y reutilizable por `empresa_id`;
-2. indicador mínimo de disponibilidad en DTO de empresa;
-3. bloqueo de `POST /api/cliente/registrar-cliente` antes de insertar;
-4. bloqueo defensivo y mensaje en el frontend;
-5. build, pruebas controladas por rol y regresión.
+### Pendientes
 
-**Pendiente de decisión:** nombre del indicador, contrato de error, metadatos
-expuestos, primera API administrativa y estrategia de pruebas automatizadas.
+- migración 002 versionada, pero no ejecutada ni autorizada en producción;
+- gestión administrativa para crear borrador, cargar estructura, validar,
+  publicar, activar/desactivar y sustituir versión;
+- motor PT/GR y evaluación histórica;
+- pruebas automatizadas completas;
+- pruebas controladas reales con empresa sin matriz y con matriz activa;
+- pruebas por rol, manipulación de `empresa_id` y regresión integral de PF,
+  PM, Fideicomiso y Recursos de Terceros.
 
 ### Fuera de alcance
 
@@ -95,33 +116,35 @@ expuestos, primera API administrativa y estrategia de pruebas automatizadas.
 
 | Riesgo | Control requerido |
 |---|---|
-| Confiar en el frontend | Validación obligatoria en backend. |
+| Confiar en el frontend | Validación implementada y obligatoria en backend. |
 | Usar empresa manipulada | Derivar tenant de `req.user` para consultor/cliente y validar selección admin. |
 | Bloqueo después de insertar | Comprobar matriz dentro del flujo transaccional y antes de mutaciones. |
 | Confundir SQL versionado con producción | Mantener explícito que la migración 002 no está aplicada. |
 | Romper capturas existentes | Regresión de PF, PM, Fideicomiso, terceros y contratos actuales. |
 | Exponer auditoría manipulable | Tomar identificadores futuros de `req.user.id`, no del body. |
 | Ampliar el lote | Implementar cambios pequeños y excluir motor/importación/publicación. |
+| Cambio concurrente de estado de matriz (TOCTOU) | Riesgo aceptado temporalmente hasta coordinar los flujos de publicación/activación. |
 
-### Dependencias
+### Dependencias del Lote 2E
 
-- Aprobación del contrato mínimo de DTO y error.
+- Inspección de contratos existentes y aprobación previa de API, estados,
+  permisos, auditoría y estrategia transaccional.
 - Migración 001 aplicada, ya confirmada.
 - Migración 002 probada en restauración desechable y autorizada antes de que
   un backend dependiente de sus tablas pueda desplegarse.
 - Preservación del aislamiento multiempresa y de los contratos actuales.
 
-### Criterio de cierre del lote
+### Próximo bloque de trabajo
 
-1. Empresa sin matriz puede crearse, pero su alta de cliente es rechazada sin
-   insertar datos.
-2. Empresa con matriz propia `PUBLICADA` y activa conserva el alta autorizada.
-3. Backend y frontend aplican la regla; manipular `empresa_id` no la evade.
-4. Admin, consultor y cliente mantienen sus alcances vigentes.
-5. Builds backend/frontend, lint disponible, pruebas controladas y regresión
-   resultan satisfactorios.
-6. Diff limitado al alcance, `git diff --check` limpio y revisión independiente
-   completada.
+El próximo paso inmediato es únicamente definir, inspeccionar y aprobar el
+contrato técnico del Lote 2E antes de programar. La secuencia futura objetivo es:
+
+```text
+crear borrador -> cargar estructura -> validar -> publicar -> activar
+```
+
+Antes de programar deben aprobarse los contratos indicados en dependencias. No
+se ejecutará la migración 002 sin autorización separada.
 
 ### Estado de producción
 
