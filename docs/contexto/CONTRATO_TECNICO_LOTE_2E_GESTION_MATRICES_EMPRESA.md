@@ -400,17 +400,17 @@ auditoría.
 
 ### 8.3 Transacciones y bloqueos
 
-- Se reserva un namespace fijo y documentado de advisory locks para matrices de
-  empresa. La 003 y el backend deben usar la misma función de derivación y la
-  misma clave por `empresa_id`; el valor numérico definitivo se elegirá después
-  de inspeccionar colisiones con locks existentes.
+- El namespace operativo fijo para matrices por empresa es
+  `MATRICES_EMPRESA_LOCK_NAMESPACE = 2205`.
 - Crear/numerar, activar, desactivar y crear desde histórica toman advisory lock
-  transaccional **exclusivo** por empresa antes de leer estado relevante y lo
-  conservan hasta commit/rollback.
+  transaccional **exclusivo** por empresa antes de leer estado relevante, con
+  `pg_catalog.pg_advisory_xact_lock(2205, empresa_id)`, y lo conservan hasta
+  commit/rollback.
 - El alta de clientes toma el advisory lock transaccional **compartido** por la
-  empresa antes de comprobar si hay matriz activa y lo conserva hasta completar
-  toda su transacción. Así, una desactivación no puede intercalarse entre la
-  comprobación y el commit del alta.
+  empresa antes de comprobar si hay matriz activa, con
+  `pg_catalog.pg_advisory_xact_lock_shared(2205, empresa_id)`, y lo conserva
+  hasta completar toda su transacción. Así, una desactivación no puede
+  intercalarse entre la comprobación y el commit del alta.
 - Numerar versión, verificar pendiente y crear borrador ocurren en una misma
   transacción bajo el lock exclusivo.
 - Sustituir archivo y definición normalizada es atómico.
@@ -425,6 +425,12 @@ Los locks de fila se adquieren después del advisory lock y en orden estable de
 ID. Las restricciones únicas siguen siendo la última defensa. No se permite
 usar un lock de sesión: debe ser `pg_advisory_xact_lock` o su variante compartida
 transaccional.
+
+El lock textual propio de la migración 003 usa
+`pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtext('20260805_003_gestion_matrices_empresa'))`.
+Este lock de migración y el namespace operativo `2205` por `empresa_id` son
+mecanismos distintos, con ámbitos y propósitos diferentes, y no deben mezclarse
+ni derivarse uno del otro.
 
 ## 9. Auditoría append-only
 
@@ -551,10 +557,18 @@ posterior al MVP quedan pendientes; no autorizan borrar fuentes durante 2E.
 
 ## 11. Estrategia UP, VERIFY y DOWN de la 003
 
+El nombre/key definitivo de la migración 003 es
+`20260805_003_gestion_matrices_empresa`. Sus archivos previstos son:
+
+- `backend/migrations/20260805_003_gestion_matrices_empresa.up.sql`;
+- `backend/migrations/20260805_003_gestion_matrices_empresa.verify.sql`;
+- `backend/migrations/20260805_003_gestion_matrices_empresa.down.sql`.
+
 ### UP
 
-1. Adquiere lock de migración y comprueba esquema, 001, 002 verificada y ausencia
-   de estado parcial.
+1. Adquiere el lock propio de migración
+   `pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtext('20260805_003_gestion_matrices_empresa'))`
+   y comprueba esquema, 001, 002 verificada y ausencia de estado parcial.
 2. Aborta si una fila previa de archivo carece de binario confiable.
 3. Agrega columnas, backfill verificable, constraints, índices, tablas, función
    y trigger append-only, y privilegios; valida antes de registrar la 003.
@@ -761,8 +775,11 @@ residuales de la sección 19 que afecten nombres, preflight o privilegios.
     uso real.
 13. La limpieza de idempotencia es separada, observable y sin cron en la
     migración; nunca borra auditoría.
-14. Se documenta un namespace fijo para advisory locks; su valor definitivo se
-    elige tras inspeccionar colisiones existentes.
+14. El namespace operativo fijo para matrices por empresa es
+    `MATRICES_EMPRESA_LOCK_NAMESPACE = 2205`; el lock exclusivo es
+    `pg_catalog.pg_advisory_xact_lock(2205, empresa_id)` y el compartido para el
+    alta de clientes es
+    `pg_catalog.pg_advisory_xact_lock_shared(2205, empresa_id)`.
 15. El orden obligatorio es `001 -> 002 -> VERIFY 002 -> 003 -> VERIFY 003`;
     producción requiere autorización separada.
 16. Se mantienen las decisiones funcionales previas: una sola pendiente, una
@@ -776,32 +793,39 @@ residuales de la sección 19 que afecten nombres, preflight o privilegios.
     CHECK de coherencia para cada par actor/fecha.
     Activar y desactivar persisten estos datos en la misma transacción que la
     vigencia y la auditoría, sin alterar las decisiones funcionales previas.
+19. El nombre/key definitivo de la migración 003 es
+    `20260805_003_gestion_matrices_empresa`, con archivos previstos `.up.sql`,
+    `.verify.sql` y `.down.sql` bajo `backend/migrations/` y con ese mismo
+    nombre base.
+20. El lock textual propio de la migración es
+    `pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtext('20260805_003_gestion_matrices_empresa'))`.
+    Es distinto del namespace operativo `2205` por empresa; ambos mecanismos
+    tienen propósitos diferentes y no deben mezclarse.
 
 ## 19. Pendientes residuales antes de escribir SQL
 
 El 2E-0 queda aprobado. Solo permanecen estos cierres operativos o nominales:
 
-1. Asignar el ticket `COR-XXX` de la migración 003 y fijar su nombre/key final.
-2. Inspeccionar el inventario real de advisory locks y elegir el valor numérico
-   sin colisiones para el namespace ya aprobado; documentar la función exacta
-   de derivación desde `empresa_id`.
-3. Identificar los nombres efectivos de rol propietario y rol de aplicación en
+1. Asignar el ticket `COR-###` de la migración 003. Continúa pendiente porque
+   el repositorio no contiene una numeración real; este documento no inventa un
+   ticket.
+2. Identificar los nombres efectivos de rol propietario y rol de aplicación en
    cada ambiente, y aprobar la matriz exacta de grants/revokes previa a
    producción.
-4. Definir el mecanismo autorizado para recuperar/verificar binarios si al
+3. Definir el mecanismo autorizado para recuperar/verificar binarios si al
    preflight existieran filas de la 002; si no puede probarse integridad, la 003
    debe abortar como ya quedó aprobado.
-5. Cerrar el contrato estructural de tablas auxiliares empresariales (edad,
+4. Cerrar el contrato estructural de tablas auxiliares empresariales (edad,
    antigüedad, montos y marcas), el catálogo estable de códigos de validación y
    la allowlist OOXML concreta que implementará el inspector.
-6. Elegir y validar la herramienta de inspección ZIP/OOXML, incluida la forma de
+5. Elegir y validar la herramienta de inspección ZIP/OOXML, incluida la forma de
    imponer timeout y ratios antes de `exceljs`, mediante corpus adversarial.
-7. Precisar nombres finales de columnas de auditoría/idempotencia y si
+6. Precisar nombres finales de columnas de auditoría/idempotencia y si
    `correlation_id` y `request_id` serán uno o dos campos, sin alterar límites ni
    semántica aprobados.
-8. Aprobar por separado el plan de prueba/despliegue de 002 y 003. Ninguna
+7. Aprobar por separado el plan de prueba/despliegue de 002 y 003. Ninguna
    autorización se presume en este documento.
-9. Determinar, antes del SQL definitivo y según las consultas reales de
+8. Determinar, antes del SQL definitivo y según las consultas reales de
    auditoría, si se requieren índices individuales por `activada_por` y
    `desactivada_por` o un índice compuesto más útil.
 
