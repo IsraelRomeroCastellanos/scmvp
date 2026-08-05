@@ -11,6 +11,7 @@
 | Alcance | Gestión administrativa mínima de versiones de matrices PT/GR por empresa |
 | Naturaleza | Contrato funcional y técnico; no acredita implementación ni despliegue |
 | Producción | La migración `20260801_002_matrices_pt_gr_empresa` sigue NO ejecutada y NO autorizada |
+| Sublote 2E-0 | CERRADO; decisiones físicas APROBADAS para diseñar la migración 003 |
 
 ## 1. Objetivo y alcance
 
@@ -50,23 +51,38 @@ Actualmente:
 - `frontend/src/lib/api.ts` no contiene clientes HTTP de matrices;
 - la migración 002 define las seis tablas de versiones, criterios, opciones,
   rangos, reglas y metadatos de archivo, pero no está desplegada en producción.
+- `backend/src/config/database.ts` no existe. La fuente efectiva comprobada de
+  conexión PostgreSQL es `backend/src/db.ts`, que exporta un `Pool` de `pg` y
+  usa `DATABASE_URL`;
+- `backend/package.json` ya declara `exceljs` 4.4.0, pero esa librería no será
+  la primera barrera frente a archivos hostiles: antes debe inspeccionarse el
+  paquete ZIP/OOXML;
+- el alta de clientes en `backend/src/routes/cliente.routes.ts` abre una
+  transacción y comprueba la matriz activa mediante
+  `hasPublishedActiveCompanyMatrix`, pero aún no toma el advisory lock
+  compartido aprobado en este contrato.
 
 Dependencias obligatorias para implementar:
 
 1. La migración 001 debe existir en el ambiente objetivo.
 2. La migración 002 deberá aprobarse y desplegarse mediante un proceso separado;
    este documento no lo autoriza.
-3. Debe diseñarse, revisarse y aprobarse una migración posterior que complete
+3. Debe diseñarse, revisarse y aprobarse la migración 003 que complete
    almacenamiento binario, auditoría append-only, idempotencia, control de
    concurrencia y la restricción de una sola versión pendiente.
 4. Backend y frontend del flujo 2E solo podrán desplegarse cuando el esquema que
    consumen exista y haya sido verificado.
 
+Orden técnico obligatorio: `001 -> 002 -> VERIFY 002 -> 003 -> VERIFY 003`.
+La autorización para ejecutar en producción es un acto separado. La migración
+002 permanece **NO ejecutada y NO autorizada en producción**; este cambio
+documental no ejecuta ni autoriza la 002, la 003 ni ninguna otra migración.
+
 ### Diferencias resueltas por este contrato
 
 - La 002 contiene `referencia_contenido` y no almacena el binario. Para el MVP
   queda aprobado conservar el Excel completo en PostgreSQL; se requiere una
-  migración adicional.
+  migración 003.
 - Documentos anteriores proponían exigir consultor activo para publicar o
   activar. En Lote 2E no se exige consultor asignado para activar.
 - La inspección general recomendaba rechazar todas las fórmulas. El contrato
@@ -138,7 +154,8 @@ Invariantes:
 - Activar una nueva no degrada el estado editorial de la anterior: continúa
   `PUBLICADA` con `activa=false`.
 - Revertir nunca reactiva una histórica. Crea un BORRADOR nuevo con
-  `version_origen_id`, copia lógica del contenido y trazabilidad completa.
+  `version_origen_id`, copia física independiente del binario y de la definición
+  normalizada, y trazabilidad completa.
 - No se elimina una versión publicada ni su archivo fuente.
 
 ## 5. Contrato del archivo Excel
@@ -154,17 +171,33 @@ de catálogo jurídico universal.
 
 ### 5.2 Formatos y límites
 
-- Tipo permitido: `.xlsx` con tipo real y contenedor válidos; no basta extensión
-  o MIME declarado por el navegador.
-- Tamaño máximo: 5 MB, validado antes de parsear.
+- El usuario sube exclusivamente `.xlsx`; se exige tipo real y contenedor
+  válidos, no basta extensión o MIME declarado por el navegador.
+- Tamaño máximo comprimido: 5 MiB (`5 * 1024 * 1024` bytes), validado antes de
+  parsear.
 - Hojas estructurales requeridas: `PERFIL TRANSACCIONAL` y
   `GRADO DE RIESGO DE CLIENTE`, conforme al contrato de plantilla.
-- Deben aplicarse límites defensivos de hojas, filas, columnas, celdas,
-  descompresión y tiempo de parseo. Sus cifras exactas quedan pendientes.
+- Límites defensivos: máximo 8 hojas, 500 filas por hoja, 64 columnas por hoja,
+  10,000 celdas no vacías en total, 256 entradas ZIP, 25 MiB descomprimidos en
+  total, 10 MiB descomprimidos por entrada y ratio máximo
+  descomprimido:comprimido de 20:1 tanto por entrada como global
+  (`tamaño_descomprimido / tamaño_comprimido <= 20`).
+- El timeout total de inspección y parseo es 5 segundos. Exceder cualquier
+  límite produce rechazo bloqueante; los límites no se degradan a advertencia.
 - La importación es total: un error bloqueante impide validar y nunca deja
   criterios/opciones/rangos parcialmente reemplazados.
 
-### 5.3 Fórmulas permitidas
+### 5.3 Inspección ZIP/OOXML previa
+
+Antes de entregar contenido a `exceljs`, el backend inspecciona centralmente el
+ZIP y las relaciones OOXML. Rechaza hojas extra respecto de las admitidas por
+la plantilla, hojas ocultas o `very hidden`, nombres definidos no reconocidos,
+macros/VBA, OLE, objetos incrustados, vínculos externos, entradas cifradas,
+rutas ZIP inseguras y cualquier parte OOXML fuera de una allowlist explícita.
+También rechaza entradas duplicadas/ambiguas y violaciones de los límites de
+5.2. `exceljs` nunca actúa como detector único de contenido activo.
+
+### 5.4 Fórmulas permitidas
 
 Se aceptan dos variantes:
 
@@ -186,7 +219,7 @@ valida los totales desde opciones y puntajes normalizados. Cualquier otra
 fórmula, macro/VBA, vínculo externo, nombre definido con ejecución/referencia
 externa, objeto incrustado ejecutable u otro contenido activo bloquea la carga.
 
-### 5.4 Resultado de validación
+### 5.5 Resultado de validación
 
 Cada hallazgo incluye como mínimo `codigo`, `severidad`, `hoja`, `celda` o
 `rango`, `fila`, `columna` y `mensaje`. El reporte diferencia errores
@@ -262,17 +295,22 @@ parseado y recalculado por backend.
 - Solo una PUBLICADA inactiva puede activarse.
 - No exige consultor asignado.
 - En una sola transacción y bajo bloqueo por empresa: bloquea versiones de la
-  empresa, pone `activa=false` a la anterior si existe, activa la elegida y
-  agrega auditoría. La anterior sigue PUBLICADA.
+  empresa, pone `activa=false` a la anterior si existe y registra en ella
+  `desactivada_por` y `desactivada_en`, activa la elegida y registra en ella
+  `activada_por` y `activada_en`, y agrega la auditoría correspondiente. Actor,
+  fecha, cambio de vigencia y auditoría se confirman en la misma transacción. La
+  anterior sigue PUBLICADA.
 - Requiere `If-Match`, `Idempotency-Key` y confirmación explícita de la versión
   activa que será sustituida, si la hay.
 
 ### 6.9 Desactivar
 
 - Solo sobre la PUBLICADA activa.
-- Motivo no vacío obligatorio, con longitud máxima por definir.
-- En una transacción cambia únicamente `activa=false` y audita actor, motivo y
-  estado anterior/nuevo. Puede dejar a la empresa sin matriz activa.
+- Motivo no vacío obligatorio, máximo 500 caracteres.
+- En una transacción cambia `activa=false`, registra `desactivada_por` y
+  `desactivada_en`, y audita actor, motivo y estado anterior/nuevo. Actor, fecha,
+  cambio de vigencia y auditoría se confirman en la misma transacción. Puede
+  dejar a la empresa sin matriz activa.
 - El backend debe bloquear desde ese commit el alta de nuevos clientes con el
   contrato `409` ya vigente. No elimina clientes ni altera históricos.
 
@@ -282,8 +320,10 @@ parseado y recalculado por backend.
 - Requiere motivo, `If-Match` sobre la fuente e `Idempotency-Key`.
 - Rechaza si ya existe pendiente.
 - En una transacción crea un BORRADOR con nuevo número,
-  `version_origen_id=fuente.id`, copia lógica de archivo y definición, nueva
-  auditoría y sin alterar la fuente.
+  `version_origen_id=fuente.id`, copia física independiente del binario y copia
+  física de toda la definición normalizada, nueva auditoría y sin alterar la
+  fuente. En el MVP no hay deduplicación física por SHA-256 ni referencias
+  compartidas al contenido de la histórica.
 - La copia puede editarse/cargarse mientras sea BORRADOR. Debe validarse y
   publicarse de nuevo antes de activar.
 
@@ -335,25 +375,44 @@ validación enviados por el cliente no son autoritativos.
 
 ### 8.1 Etiqueta de versión e `If-Match`
 
-Toda lectura de detalle/preview devuelve `ETag` fuerte basado en un token de
-concurrencia persistido, no solo en timestamps. Toda mutación de una versión
-existente exige `If-Match`. Ausencia produce `428 Precondition Required`; token
-obsoleto produce `412 Precondition Failed`. La migración adicional debe aportar
-el token/contador necesario.
+La 003 agrega `matriz_empresa_version.revision BIGINT NOT NULL DEFAULT 1`, con
+`CHECK (revision > 0)`. Toda lectura de detalle/preview devuelve el ETag fuerte
+exacto `"mve-<versionId>-r<revision>"`. Toda mutación de una versión existente
+exige `If-Match`, compara la revisión dentro de la transacción e incrementa
+`revision` exactamente una vez si produce un cambio. Ausencia produce `428
+Precondition Required`; token mal formado u obsoleto produce `412 Precondition
+Failed`.
 
 ### 8.2 `Idempotency-Key`
 
 Es obligatorio para crear borrador, validar, publicar, activar, desactivar y
-crear desde histórica; también se recomienda para la carga. La clave se acota a
-actor + empresa + operación, se guarda con hash canónico de request, estado y
-respuesta esencial, y posee unicidad en base. Repetir clave y mismo hash
-devuelve el resultado original; repetir clave con otro hash devuelve `409`.
-Retención y longitud quedan pendientes de fijar antes de implementar.
+crear desde histórica; también se recomienda para la carga. `Idempotency-Key`
+admite de 16 a 128 caracteres ASCII visibles (`0x21` a `0x7E`). La clave nunca
+se persiste en claro: se guarda únicamente su SHA-256. El ámbito único es actor
++ empresa + operación + hash de clave; se guarda además hash canónico del
+request, estado y respuesta reproducible. Repetir clave y mismo request devuelve
+el resultado original; repetirla con otro request devuelve `409`.
+
+La retención es 7 días desde creación. La respuesta persistida no supera 64
+KiB. La limpieza es un proceso separado, observable, por lotes y sin cron dentro
+de la migración; registra métricas/resultado y nunca consulta, modifica ni borra
+auditoría.
 
 ### 8.3 Transacciones y bloqueos
 
+- Se reserva un namespace fijo y documentado de advisory locks para matrices de
+  empresa. La 003 y el backend deben usar la misma función de derivación y la
+  misma clave por `empresa_id`; el valor numérico definitivo se elegirá después
+  de inspeccionar colisiones con locks existentes.
+- Crear/numerar, activar, desactivar y crear desde histórica toman advisory lock
+  transaccional **exclusivo** por empresa antes de leer estado relevante y lo
+  conservan hasta commit/rollback.
+- El alta de clientes toma el advisory lock transaccional **compartido** por la
+  empresa antes de comprobar si hay matriz activa y lo conserva hasta completar
+  toda su transacción. Así, una desactivación no puede intercalarse entre la
+  comprobación y el commit del alta.
 - Numerar versión, verificar pendiente y crear borrador ocurren en una misma
-  transacción con bloqueo por empresa.
+  transacción bajo el lock exclusivo.
 - Sustituir archivo y definición normalizada es atómico.
 - Publicar verifica estado, revisión y huella con bloqueo de la fila.
 - Activar/desactivar bloquea todas las cabeceras relevantes de la empresa en
@@ -362,9 +421,10 @@ Retención y longitud quedan pendientes de fijar antes de implementar.
 - Restricciones únicas de base son la última defensa; conflictos se traducen a
   errores de dominio y no a `500` genérico.
 
-La futura implementación deberá coordinar estas transacciones con el bloqueo de
-alta de clientes para cerrar el riesgo TOCTOU documentado. La estrategia exacta
-de bloqueo compartido/advisory entre ambas operaciones está pendiente.
+Los locks de fila se adquieren después del advisory lock y en orden estable de
+ID. Las restricciones únicas siguen siendo la última defensa. No se permite
+usar un lock de sesión: debe ser `pg_advisory_xact_lock` o su variante compartida
+transaccional.
 
 ## 9. Auditoría append-only
 
@@ -379,28 +439,109 @@ por los flujos de aplicación. Como mínimo registra:
 - estado y activa antes/después;
 - motivo obligatorio donde corresponda;
 - nombre, MIME, tamaño y SHA-256 del archivo cuando aplique;
-- clave de idempotencia referenciada y correlation/request ID;
+- hash SHA-256 de clave de idempotencia y correlation/request ID;
 - resumen controlado de resultado, sin binario, token, secretos ni contenido
   sensible innecesario.
 
 Los campos `creada_por`, `validada_por`, `publicada_por` y `cargado_por` de la
 002 se conservan como resumen de estado, pero no sustituyen el historial
 append-only. Activar, sustituir activa y desactivar también requieren actor y
-fecha, hoy ausentes en la 002.
+fecha; están ausentes en la 002 y su diseño físico aprobado para la 003 se
+especifica en las secciones 10 y 11.
 
-## 10. Conservación del binario en PostgreSQL
+La tabla de auditoría queda protegida por trigger `BEFORE UPDATE OR DELETE` que
+siempre aborta la operación. El rol de aplicación recibe únicamente `SELECT` e
+`INSERT` sobre ella: no recibe `UPDATE`, `DELETE` ni `TRUNCATE`. La separación
+entre rol propietario de objetos y rol de aplicación es requisito previo a
+producción; el propietario no se usa por la aplicación. El resumen controlado
+de auditoría tiene máximo 16 KiB; `accion` tiene máximo 40 caracteres y
+`correlation_id`/`request_id`, cuando se conserven por separado, máximo 128
+caracteres ASCII visibles.
 
-Para el MVP se conserva una copia íntegra del `.xlsx` en PostgreSQL, asociada
-uno a uno con `matriz_archivo_fuente`, junto con:
+## 10. Diseño físico aprobado de la futura migración 003
+
+La 003 complementa, no reemplaza, las seis tablas de la 002. Los nombres aquí
+son el contrato propuesto para redactar SQL; cualquier cambio nominal durante
+la revisión debe conservar las invariantes y documentarse antes de ejecutar.
+
+### 10.1 Cambios sobre tablas de la 002
+
+| Tabla | Columna/cambio aprobado |
+|---|---|
+| `matriz_archivo_fuente` | `contenido BYTEA NOT NULL`; binario `.xlsx` íntegro |
+| `matriz_archivo_fuente` | `nombre_original VARCHAR(255)` y además máximo 1024 bytes UTF-8 |
+| `matriz_archivo_fuente` | `mime_detectado VARCHAR(127)` |
+| `matriz_archivo_fuente` | `referencia_contenido VARCHAR(512)` solo si se mantiene utilizable; no sustituye `contenido` |
+| `matriz_empresa_version` | `revision BIGINT NOT NULL DEFAULT 1`, positiva |
+| `matriz_empresa_version` | `version_origen_empresa_id INTEGER NULL` |
+| `matriz_empresa_version` | `motivo_nueva_version` limitado a 500 caracteres |
+| `matriz_empresa_version` | `activada_por INTEGER NULL` |
+| `matriz_empresa_version` | `activada_en TIMESTAMPTZ NULL` |
+| `matriz_empresa_version` | `desactivada_por INTEGER NULL` |
+| `matriz_empresa_version` | `desactivada_en TIMESTAMPTZ NULL` |
+
+La migración 003 aborta antes de alterar el esquema si existe cualquier fila
+previa de `matriz_archivo_fuente` para la cual no pueda obtenerse un binario
+confiable e íntegro, verificable contra `tamano_bytes` y `sha256`. No inventa
+contenido, no deja `contenido` nulo y no convierte una referencia no verificable
+en prueba de integridad.
+
+### 10.2 Tablas nuevas propuestas
+
+`matriz_auditoria_evento` contiene como mínimo: `id BIGSERIAL`, `empresa_id`,
+`matriz_version_id`, `version_origen_id`, `actor_usuario_id`, `accion
+VARCHAR(40)`, `operacion VARCHAR(40)`, estados/activa antes y después, `motivo`
+limitado a 500 caracteres, metadatos y SHA-256 del archivo, hash de clave
+idempotente, `correlation_id VARCHAR(128)`, `request_id VARCHAR(128)`, `resumen
+JSONB` limitado a 16 KiB y `creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()`.
+
+`matriz_idempotencia` contiene como mínimo: `id BIGSERIAL`, `empresa_id`,
+`actor_usuario_id`, `operacion VARCHAR(40)`, `clave_sha256 CHAR(64)`,
+`request_sha256 CHAR(64)`, estado de ejecución, código HTTP, `respuesta JSONB`
+limitada a 64 KiB, referencias de resultado, `creado_en`, `completado_en` y
+`expira_en` fijado a creación + 7 días. No contiene la clave original.
+
+### 10.3 Constraints e índices de la 003
+
+- agregar `UNIQUE (id, empresa_id)` a `matriz_empresa_version`;
+- poblar `version_origen_empresa_id=empresa_id` cuando exista origen, exigir
+  `CHECK (version_origen_empresa_id IS NULL OR version_origen_empresa_id =
+  empresa_id)` y FK compuesta `(version_origen_id,
+  version_origen_empresa_id) -> matriz_empresa_version(id, empresa_id)`; ambos
+  campos de origen son nulos o ambos no nulos;
+- conservar unicidad de una activa y agregar índice único parcial por
+  `empresa_id` para una sola pendiente donde `estado_editorial IN
+  ('BORRADOR','VALIDADA')`;
+- agregar FK `activada_por -> usuarios(id) ON DELETE RESTRICT` y FK
+  `desactivada_por -> usuarios(id) ON DELETE RESTRICT`;
+- exigir `CHECK ((activada_por IS NULL) = (activada_en IS NULL))` y `CHECK
+  ((desactivada_por IS NULL) = (desactivada_en IS NULL))`, de modo que cada par
+  actor/fecha sea completamente nulo o completamente no nulo;
+- dejar los índices individuales por `activada_por` y `desactivada_por` como
+  decisión pendiente de revisión técnica basada en consultas reales,
+  selectividad y costo de escritura;
+- checks de SHA-256 hexadecimal minúsculo, tamaños y longitudes/bytes aprobados;
+- unicidad idempotente en `(empresa_id, actor_usuario_id, operacion,
+  clave_sha256)` e índice de limpieza por `expira_en`;
+- índices de auditoría por `(empresa_id, creado_en)`, `(matriz_version_id,
+  creado_en)` y actor/fecha según VERIFY; ninguno habilita borrado;
+- FKs a empresa, usuario y versión con política restrictiva para auditoría e
+  idempotencia, evitando cascadas que destruyan trazabilidad.
+
+### 10.4 Conservación y copia física
+
+Para el MVP se conserva una copia íntegra del `.xlsx` directamente en
+`matriz_archivo_fuente.contenido`, asociada uno a uno con la versión, junto con:
 
 - nombre original saneado;
 - MIME detectado por backend;
-- tamaño en bytes, máximo 5 MB;
+- tamaño en bytes, máximo 5 MiB;
 - SHA-256 hexadecimal calculado por backend;
 - usuario y fecha de carga.
 
-El tipo físico (`bytea` en la misma tabla o tabla uno-a-uno) se definirá en la
-migración adicional. El acceso es exclusivo de admin, autenticado, auditado y
+No se aplica deduplicación física en el MVP. Crear desde histórica inserta un
+nuevo binario y nuevas filas para toda la definición normalizada. El acceso es
+exclusivo de admin, autenticado, auditado y
 sin URL pública. La descarga debe enviar cabeceras seguras, impedir sniffing y
 usar nombre saneado. No se registra el binario en logs ni respuestas JSON.
 
@@ -408,7 +549,42 @@ La retención mínima cubre toda la vida de la versión y sus referencias
 históricas. Eliminación, archivado externo, cifrado adicional y retención final
 posterior al MVP quedan pendientes; no autorizan borrar fuentes durante 2E.
 
-## 11. Errores HTTP mínimos
+## 11. Estrategia UP, VERIFY y DOWN de la 003
+
+### UP
+
+1. Adquiere lock de migración y comprueba esquema, 001, 002 verificada y ausencia
+   de estado parcial.
+2. Aborta si una fila previa de archivo carece de binario confiable.
+3. Agrega columnas, backfill verificable, constraints, índices, tablas, función
+   y trigger append-only, y privilegios; valida antes de registrar la 003.
+4. No instala cron ni ejecuta limpieza de idempotencia.
+
+### VERIFY
+
+Es read-only y falla ante diferencias de columnas, defaults, nulabilidad,
+constraints, FKs compuestas, índices/predicados, trigger, privilegios, registro
+de migración o datos incoherentes. Verifica `octet_length(contenido) =
+tamano_bytes`, SHA-256 cuando la capacidad segura esté disponible, coherencia de
+origen, una sola pendiente/activa, revisión positiva y ausencia de permisos de
+mutación/TRUNCATE de auditoría para el rol de aplicación. Para `activada_por`,
+`activada_en`, `desactivada_por` y `desactivada_en` comprueba expresamente tipos,
+nulabilidad, ambas FKs a `usuarios(id)`, su `ON DELETE RESTRICT`, ambos CHECK,
+la inexistencia de pares actor/fecha incoherentes y, solo si finalmente se
+incluyen en el diseño SQL aprobado, los índices correspondientes.
+
+### DOWN
+
+Es conservador: preflight estricto y aborto si existen datos creados o afectados
+por la 003. Después del primer uso real no revierte. Nunca elimina auditoría ni
+binarios para forzar un rollback y no deja un esquema híbrido. La recuperación
+productiva se realiza mediante una migración correctiva autorizada, no mediante
+un DOWN destructivo. Las cuatro columnas de activación/desactivación, sus FKs,
+CHECK e índices solo se eliminan cuando ese preflight conservador confirma que
+la reversión es segura; en caso contrario, el DOWN aborta sin eliminar ninguno
+de esos objetos.
+
+## 12. Errores HTTP mínimos
 
 | HTTP | Uso mínimo |
 |---:|---|
@@ -418,13 +594,13 @@ posterior al MVP quedan pendientes; no autorizan borrar fuentes durante 2E.
 | 404 | Empresa/versión no encontrada dentro del contexto autorizado |
 | 409 | Pendiente ya existente, transición inválida, activa esperada distinta, clave idempotente reutilizada con otro request o restricción de dominio |
 | 412 | `If-Match` obsoleto |
-| 413 | Archivo mayor de 5 MB |
+| 413 | Archivo mayor de 5 MiB |
 | 415 | Tipo real distinto de `.xlsx` permitido |
 | 422 | Estructura/contenido Excel no cumple; devuelve errores por celda |
 | 428 | Falta `If-Match` obligatorio |
 | 500 | Error interno no clasificado, sin filtrar SQL, rutas o secretos |
 
-## 12. Alcance exacto de frontend
+## 13. Alcance exacto de frontend
 
 El frontend futuro se limita al área admin:
 
@@ -432,7 +608,7 @@ El frontend futuro se limita al área admin:
 2. Crear una vista por empresa con estado de matriz activa, versión pendiente e
    historial paginado.
 3. Mostrar estados separados: BORRADOR, VALIDADA, PUBLICADA inactiva y ACTIVA.
-4. Permitir crear borrador, seleccionar/cargar un `.xlsx` de hasta 5 MB, mostrar
+4. Permitir crear borrador, seleccionar/cargar un `.xlsx` de hasta 5 MiB, mostrar
    progreso y errores devueltos por backend.
 5. Renderizar preview administrativa de criterios, opciones, puntajes, rangos,
    reglas, totales, huella, advertencias y errores por hoja/celda.
@@ -452,7 +628,7 @@ No forma parte del lote rediseñar el CRUD general de empresas ni el formulario
 de clientes, salvo reflejar el indicador vigente y mensaje de bloqueo ya
 existentes cuando se desactive una matriz.
 
-## 13. Fuera de alcance
+## 14. Fuera de alcance
 
 - Ejecutar o autorizar migraciones, incluida la 002.
 - Programar los endpoints o pantallas dentro de este contrato documental.
@@ -471,27 +647,27 @@ existentes cuando se desactive una matriz.
 - Almacenamiento externo del Excel, antivirus como servicio y cifrado con llave
   de aplicación, sin perjuicio de controles de plataforma existentes.
 
-## 14. Secuencia de sublotes 2E-0 a 2E-8
+## 15. Secuencia de sublotes 2E-0 a 2E-8
 
 Cada sublote debe corresponder a un ticket `COR-XXX`, revisar dependencias y
 completar build, prueba del caso y regresión antes de avanzar.
 
 | Sublote | Entregable acotado |
 |---|---|
-| 2E-0 | Cerrar diseño físico de migración adicional, modelo de auditoría/idempotencia/concurrencia, retención y límites; revisión de seguridad. Sin ejecutar migraciones. |
-| 2E-1 | Migración adicional UP/VERIFY/DOWN y pruebas desechables autorizadas; despliegue productivo fuera de alcance hasta autorización separada. |
+| 2E-0 | CERRADO: diseño físico y decisiones de seguridad aprobados en este contrato. Sin ejecutar migraciones. |
+| 2E-1 | Migración 003 UP/VERIFY/DOWN y pruebas desechables autorizadas; despliegue productivo fuera de alcance hasta autorización separada. |
 | 2E-2 | Backend de listar, detalle, preview y descarga admin con aislamiento y ETag. |
 | 2E-3 | Backend de crear borrador y una sola pendiente, con transacción e idempotencia. |
 | 2E-4 | Carga segura, almacenamiento binario, SHA-256, parser y normalización atómica. |
 | 2E-5 | Validación estructural/contenido, allowlist de fórmulas, reportes por celda y transición a VALIDADA. |
 | 2E-6 | Publicar, activar y desactivar con inmutabilidad, sustitución atómica, motivo y auditoría; coordinación con alta de clientes. |
-| 2E-7 | Nueva versión desde histórica con `version_origen_id`, copia lógica e idempotencia. |
+| 2E-7 | Nueva versión desde histórica con `version_origen_id`, copia física e idempotencia. |
 | 2E-8 | Frontend admin completo, pruebas por rol/concurrencia/archivo, builds y regresión integral del Lote 2. |
 
-No deben programarse sublotes que dependan de decisiones pendientes del 2E-0
-sin cerrarlas primero.
+La redacción de SQL de 2E-1 comienza únicamente después de cerrar los pendientes
+residuales de la sección 19 que afecten nombres, preflight o privilegios.
 
-## 15. Criterios de aceptación
+## 16. Criterios de aceptación
 
 1. Solo admin puede leer o mutar matrices y descargar el archivo.
 2. Ningún ID permite cruzar información entre empresas.
@@ -509,7 +685,7 @@ sin cerrarlas primero.
     y la variante simple sin totales; cualquier otro contenido ejecutable se
     rechaza.
 11. El backend recalcula y jamás usa el cache de fórmulas.
-12. El archivo máximo de 5 MB y sus metadatos/SHA-256 se conservan completos en
+12. El archivo máximo de 5 MiB y sus metadatos/SHA-256 se conservan completos en
     PostgreSQL; descarga solo admin.
 13. Mutaciones concurrentes respetan `If-Match`; reintentos respetan
     `Idempotency-Key` y no duplican efectos.
@@ -522,13 +698,14 @@ sin cerrarlas primero.
 17. Regresión: alta de cliente sin activa responde el `409` vigente; con activa
     continúa; CRUD de empresa y flujos PF/PM/Fideicomiso/terceros no cambian.
 
-## 16. Riesgos
+## 17. Riesgos
 
-- **Desfase de esquema:** desplegar código antes de 002 y la migración adicional
+- **Desfase de esquema:** desplegar código antes de 002 y la migración 003
   causaría fallos. Mitigación: orden de despliegue y verificación explícitos.
 - **TOCTOU con alta de clientes:** desactivar/activar puede competir con un alta.
-  Mitigación: cerrar en 2E-0 el protocolo transaccional común.
-- **Excel hostil/descompresión:** 5 MB comprimidos no limita expansión.
+  Mitigación aprobada: advisory lock exclusivo para vigencia y compartido para
+  el alta durante toda su transacción.
+- **Excel hostil/descompresión:** 5 MiB comprimidos no limita expansión.
   Mitigación: topes internos, parseo defensivo y rechazo de contenido activo.
 - **Parser incompleto:** librerías pueden no detectar todas las relaciones,
   macros u objetos. Mitigación: inspección del paquete OOXML y corpus adversarial.
@@ -537,7 +714,7 @@ sin cerrarlas primero.
 - **Carreras de numeración/pendiente/activa:** mitigación con restricciones de
   base, locks por empresa, `If-Match` e idempotencia.
 - **Crecimiento de PostgreSQL:** binarios y copias históricas incrementan
-  almacenamiento. Mitigación MVP: 5 MB, métricas y política futura aprobada.
+  almacenamiento. Mitigación MVP: 5 MiB, métricas y política futura aprobada.
 - **Filtración administrativa:** preview y archivo contienen lógica sensible.
   Mitigación: admin exclusivo, DTO separados, descarga autenticada y logs
   saneados.
@@ -545,66 +722,89 @@ sin cerrarlas primero.
   valores en universales. Mitigación: contrato estructural y reporte detallado,
   sin sustituciones silenciosas.
 
-## 17. Decisiones aprobadas explícitas
+## 18. Decisiones aprobadas del Sublote 2E-0
 
-1. Cada empresa carga su propio archivo PT/GR; Caviace y la plantilla son solo
-   referencia estructural. Contenido y parámetros proceden de cada archivo.
-2. Se aceptan las seis fórmulas contractuales en sus ubicaciones o la variante
-   simple sin fórmulas de totales. El backend no ejecuta ni confía en cache;
-   cualquier otra fórmula o contenido ejecutable bloquea.
-3. Publicar y activar son operaciones separadas: BORRADOR → VALIDADA →
-   PUBLICADA inactiva → ACTIVA.
-4. El Excel completo se conserva en PostgreSQL para el MVP, máximo 5 MB, solo
-   admin, con nombre, MIME, tamaño y SHA-256.
-5. Se requiere migración adicional para auditoría append-only e idempotencia.
-6. Solo existe una pendiente por empresa; BORRADOR y VALIDADA cuentan.
-7. Admin puede desactivar la activa y dejar temporalmente cero activas; se
-   bloquea alta de clientes y se exige motivo y auditoría.
-8. Toda reversión crea nueva versión con `version_origen_id`; nunca reactiva la
-   histórica.
-9. No se exige consultor asignado para activar en Lote 2E.
-10. Publicar cambia el estado de la misma fila; la nueva fila nace al abrir el
-    borrador.
-11. Una PUBLICADA es inmutable.
-12. Al activar una nueva, la anterior sigue PUBLICADA y queda `activa=false`.
-13. La migración 002 sigue NO ejecutada y NO autorizada en producción. Este
-    documento no ejecuta ni autoriza migración alguna.
+1. El binario se guarda directamente en
+   `matriz_archivo_fuente.contenido BYTEA NOT NULL`.
+2. Crear desde histórica copia físicamente el archivo y toda la definición
+   normalizada; no se aplica deduplicación física en el MVP.
+3. La 003 aborta si existen filas previas de `matriz_archivo_fuente` sin binario
+   confiable verificable.
+4. `Idempotency-Key` admite 16 a 128 ASCII visibles, se guarda solo como SHA-256
+   y expira a los 7 días; respuesta persistida máxima 64 KiB.
+5. El ETag fuerte es `"mve-<versionId>-r<revision>"` y `revision` es `BIGINT NOT
+   NULL DEFAULT 1`.
+6. Los advisory locks transaccionales por empresa son exclusivos para
+   crear/numerar, activar, desactivar y crear desde histórica, y compartidos en
+   alta de clientes desde antes de comprobar la activa hasta finalizar la
+   transacción.
+7. Los límites OOXML aprobados son 5 MiB comprimidos, 8 hojas, 500 filas por
+   hoja, 64 columnas por hoja, 10,000 celdas no vacías, 256 entradas ZIP, 25 MiB
+   totales descomprimidos, 10 MiB por entrada, ratio máximo
+   descomprimido:comprimido de 20:1 por entrada y global
+   (`tamaño_descomprimido / tamaño_comprimido <= 20`), y timeout total de 5
+   segundos.
+8. El usuario sube solo `.xlsx`; el backend inspecciona ZIP/OOXML antes de usar
+   `exceljs` y rechaza hojas extra, ocultas/very hidden, nombres definidos no
+   reconocidos, macros, OLE, objetos incrustados, vínculos externos, entradas
+   cifradas, rutas inseguras y partes fuera de allowlist.
+9. Auditoría es append-only mediante trigger `BEFORE UPDATE OR DELETE`; el rol
+   de aplicación tiene solo `SELECT` e `INSERT`, nunca `TRUNCATE`, y la
+   separación del rol propietario es requisito previo a producción.
+10. El origen queda confinado a la empresa mediante `UNIQUE (id, empresa_id)`,
+    `version_origen_empresa_id`, FK compuesta y CHECK de coincidencia.
+11. Longitudes: motivo 500 caracteres; nombre original 255 caracteres y 1024
+    bytes UTF-8; MIME 127; correlation/request ID 128 ASCII; acción/operación
+    40; resumen de auditoría 16 KiB; respuesta idempotente 64 KiB; y
+    `referencia_contenido` máximo 512 si se conserva utilizable.
+12. El DOWN es conservador, aborta si hay datos y no revierte después del primer
+    uso real.
+13. La limpieza de idempotencia es separada, observable y sin cron en la
+    migración; nunca borra auditoría.
+14. Se documenta un namespace fijo para advisory locks; su valor definitivo se
+    elige tras inspeccionar colisiones existentes.
+15. El orden obligatorio es `001 -> 002 -> VERIFY 002 -> 003 -> VERIFY 003`;
+    producción requiere autorización separada.
+16. Se mantienen las decisiones funcionales previas: una sola pendiente, una
+    sola activa, PUBLICADA inmutable, publicar y activar separados, reversión
+    mediante nueva versión, y activar sin exigir consultor.
+17. La migración 002 sigue **NO ejecutada y NO autorizada en producción**. Este
+    cambio documental no ejecuta ni autoriza migración alguna.
+18. `matriz_empresa_version` incorpora en la 003 `activada_por INTEGER NULL`,
+    `activada_en TIMESTAMPTZ NULL`, `desactivada_por INTEGER NULL` y
+    `desactivada_en TIMESTAMPTZ NULL`, con FKs restrictivas a `usuarios(id)`,
+    CHECK de coherencia para cada par actor/fecha.
+    Activar y desactivar persisten estos datos en la misma transacción que la
+    vigencia y la auditoría, sin alterar las decisiones funcionales previas.
 
-## 18. Puntos pendientes antes de implementar
+## 19. Pendientes residuales antes de escribir SQL
 
-No bloquean aprobar este contrato documental, pero pueden bloquear uno o más
-sublotes de implementación:
+El 2E-0 queda aprobado. Solo permanecen estos cierres operativos o nominales:
 
-1. Número exacto de ticket(s) `COR-XXX` y criterios de división por PR.
-2. Diseño físico y nombres de tablas/columnas para binario, eventos append-only,
-   idempotencia, token de concurrencia y actores/fechas de activación.
-3. Si el binario se copia físicamente al crear desde histórica o se referencia
-   de forma inmutable/deduplicada por SHA-256.
-4. Retención de claves idempotentes, longitud/formato admitido y forma exacta de
-   reproducir respuestas.
-5. Algoritmo y representación exactos del ETag/token de revisión.
-6. Protocolo transaccional común entre activar/desactivar y alta de clientes
-   para eliminar TOCTOU sin degradar concurrencia.
-7. Límites defensivos exactos de OOXML: hojas, filas, columnas, celdas, entradas
-   ZIP, ratio/tamaño descomprimido y timeout.
-8. Política exacta para hojas extra, ocultas, nombres definidos inocuos,
-   objetos incrustados y variantes sintácticas de las seis fórmulas. Hasta
-   aprobarla rige el criterio conservador de rechazo.
-9. Contrato estructural definitivo para tablas auxiliares empresariales de
-   edad, antigüedad, montos y marcas; existe evidencia de referencia, pero no
-   una plantilla empresarial final versionada que cubra todas las variantes.
-10. Códigos estables completos de validación y catálogo de advertencias frente
-    a errores bloqueantes.
-11. Paginación, filtros, forma definitiva del sobre `data`, DTO y política de
-    capacidades del frontend.
-12. Longitudes máximas de motivos, nombre original y metadatos; saneamiento y
-    cabeceras exactas de descarga.
-13. Retención definitiva del Excel, cifrado adicional, backups, métricas,
-    cuotas por empresa y eventual migración a almacenamiento externo.
-14. Herramienta o combinación de inspección OOXML que demuestre detección de
-    macros, vínculos, fórmulas y contenido activo con pruebas adversariales.
-15. Plan autorizado para probar y desplegar 002 y la migración adicional. La
-    autorización no se presume ni forma parte de este documento.
+1. Asignar el ticket `COR-XXX` de la migración 003 y fijar su nombre/key final.
+2. Inspeccionar el inventario real de advisory locks y elegir el valor numérico
+   sin colisiones para el namespace ya aprobado; documentar la función exacta
+   de derivación desde `empresa_id`.
+3. Identificar los nombres efectivos de rol propietario y rol de aplicación en
+   cada ambiente, y aprobar la matriz exacta de grants/revokes previa a
+   producción.
+4. Definir el mecanismo autorizado para recuperar/verificar binarios si al
+   preflight existieran filas de la 002; si no puede probarse integridad, la 003
+   debe abortar como ya quedó aprobado.
+5. Cerrar el contrato estructural de tablas auxiliares empresariales (edad,
+   antigüedad, montos y marcas), el catálogo estable de códigos de validación y
+   la allowlist OOXML concreta que implementará el inspector.
+6. Elegir y validar la herramienta de inspección ZIP/OOXML, incluida la forma de
+   imponer timeout y ratios antes de `exceljs`, mediante corpus adversarial.
+7. Precisar nombres finales de columnas de auditoría/idempotencia y si
+   `correlation_id` y `request_id` serán uno o dos campos, sin alterar límites ni
+   semántica aprobados.
+8. Aprobar por separado el plan de prueba/despliegue de 002 y 003. Ninguna
+   autorización se presume en este documento.
+9. Determinar, antes del SQL definitivo y según las consultas reales de
+   auditoría, si se requieren índices individuales por `activada_por` y
+   `desactivada_por` o un índice compuesto más útil.
 
-Hasta cerrar estos puntos, ninguna propuesta HTTP o física aquí descrita debe
-confundirse con una función disponible ni con autorización de despliegue.
+Estos pendientes deben cerrarse antes de escribir SQL cuando afecten el diseño
+físico. Ningún contrato propuesto equivale a capacidad disponible o permiso de
+ejecución.
