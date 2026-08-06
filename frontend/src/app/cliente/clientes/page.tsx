@@ -73,7 +73,7 @@ function parsePositiveId(v: any): number | null {
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, '') ||
-  'https://scmvp-1jhq.onrender.com';
+  'https://scmvp-nxtj.onrender.com';
 
 function getToken(): string {
   try {

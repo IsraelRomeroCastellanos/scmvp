@@ -182,7 +182,7 @@ export default function ImprimirClientePage() {
   const [fatal, setFatal] = useState<string | null>(null);
   const [cliente, setCliente] = useState<Cliente | null>(null);
 
-  const apiBase = useMemo(() => process.env.NEXT_PUBLIC_API_BASE_URL || 'https://scmvp-1jhq.onrender.com', []);
+  const apiBase = useMemo(() => process.env.NEXT_PUBLIC_API_BASE_URL || 'https://scmvp-nxtj.onrender.com', []);
 
   useEffect(() => {
     const token = localStorage.getItem('token');

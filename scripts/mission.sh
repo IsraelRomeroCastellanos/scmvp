@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ========== Config por ENV ==========
-BASE="${BASE:-https://scmvp-1jhq.onrender.com}"
+BASE="${BASE:-https://scmvp-nxtj.onrender.com}"
 EMAIL="${EMAIL:-admin@cumplimiento.com}"
 
 # Requerido por env (no prompt)
