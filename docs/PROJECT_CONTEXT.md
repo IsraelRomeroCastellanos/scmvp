@@ -1,5 +1,13 @@
 # SCMVP — Project Context
 
+## Checkpoint de infraestructura operativa — 2026-08-06
+
+- Backend vigente: https://scmvp-nxtj.onrender.com
+- DB lógica vigente: `scmvp_q69o`.
+- `scmvp-1jhq.onrender.com` y `scmvp_0plk` quedan clasificados como infraestructura histórica/anterior.
+- Este cambio documental no acredita por sí mismo que las migraciones 002 o 003 hayan sido ejecutadas.
+- La migración 002 continúa documentada como no autorizada y no ejecutada en producción, salvo evidencia posterior expresa.
+
 <!-- RELEASE-CHECKPOINT-01:START -->
 ## RELEASE-CHECKPOINT-01 — contexto vigente del proyecto
 

@@ -10,7 +10,7 @@ import { Alert, Button, Card, Input } from '@/components/ui';
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   process.env.NEXT_PUBLIC_BACKEND_URL ||
-  'https://scmvp-1jhq.onrender.com';
+  'https://scmvp-nxtj.onrender.com';
 
 const setCookie = (name: string, value: string, days = 7) => {
   const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString();
