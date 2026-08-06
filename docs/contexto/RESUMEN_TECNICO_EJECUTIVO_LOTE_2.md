@@ -12,24 +12,28 @@
 
 ### Situación actual
 
-- Rama confirmada: `main`.
-- Base: `5dc8596`; PR más reciente `#97`, fusionado.
-- Commit de merge actual: `5dc8596 Merge pull request #97 from
-  IsraelRomeroCastellanos/feat/lote-2d-bloqueo-frontend-sin-matriz`.
+- Rama documental actual: `docs/actualizar-contexto-lote-2e1`.
+- Base canónica: `de7dc9d`; `main`, `origin/main` y `origin/HEAD` quedaron
+  alineados en ese commit.
+- El Lote 2E-1 se implementó en `feat/lote-2e1-inspector-ooxml`, commit
+  `17d0d25 feat: agregar inspector defensivo OOXML para matrices`.
+- PR más reciente: `#105`, fusionado correctamente; merge commit `de7dc9d`.
 - La migración 001 está registrada en la base desplegada.
 - La migración 002 está versionada, pero **no se ha ejecutado en producción**.
 - El backend ya gestiona empresas, configuración PLD y clientes con aislamiento
   por empresa.
 - Los Lotes 2A, 2B, 2C y 2D están implementados y fusionados mediante los PR
   `#94`, `#95`, `#96` y `#97`, respectivamente.
-- Existe consulta reutilizable, indicador en los DTO y bloqueo en backend y
-  frontend. No existe todavía gestión administrativa completa de matrices.
+- Existe consulta reutilizable, indicador en los DTO, bloqueo en backend y
+  frontend e inspector defensivo OOXML. No existe todavía gestión
+  administrativa completa de matrices.
 
 ### Objetivo
 
 El objetivo de los Lotes 2A–2D quedó cerrado: hacer exigible la condición de
-matriz utilizable antes del alta de clientes. El siguiente objetivo es definir
-el Lote 2E para la gestión administrativa mínima, sin declarar como existentes
+matriz utilizable antes del alta de clientes. El Lote 2E-1 también quedó
+completado, versionado y fusionado como frontera defensiva previa a ExcelJS. El
+siguiente sublote debe definirse sin declarar como existentes
 el motor PT/GR, la evaluación histórica ni un despliegue productivo dependiente
 de la migración 002.
 
@@ -78,6 +82,8 @@ navegador.
   para admin frente a consultor/cliente.
 - `exceljs` y `express-fileupload` figuran como dependencias, pero esto no
   demuestra un flujo de carga de matrices implementado.
+- `backend/src/services/matriz-ooxml-inspector.service.ts` expone
+  `inspectMatrizXlsxOoxml(input: Buffer): Promise<MatrizOoxmlInspectionResult>`.
 
 ### Lotes cerrados
 
@@ -87,6 +93,39 @@ navegador.
   `409` con el mensaje: “No es posible registrar clientes para esta empresa
   porque aún no cuenta con una matriz PT/GR publicada y activa.”
 - **2D — PR #97:** bloqueo defensivo de frontend en listado y formulario.
+- **2E-1 — PR #105:** inspector defensivo OOXML, commit `17d0d25`, fusionado
+  en `main` mediante `de7dc9d`.
+
+### Cierre técnico del Lote 2E-1
+
+El inspector se ejecuta en `worker_threads.Worker`, con timeout total de 5
+segundos y terminación real. Limita el archivo a 5 MiB comprimidos, 256
+entradas, 10 MiB reales por entrada, 25 MiB reales acumulados y ratio máximo
+20 por entrada y acumulado. Drena todas las entradas y valida CRC32 incremental.
+
+Solo admite ZIP32 con Store/Deflate. Valida EOCD, directorio central, cabeceras
+locales, descriptores de datos y correspondencia de nombres, flags, tamaños,
+métodos, CRC y offsets. Rechaza ZIP64, multidisco, cifrado, flags o métodos no
+permitidos, offsets duplicados, solapamientos, prefijos, huecos, regiones no
+referenciadas y trailing data; exige cobertura continua desde 0 hasta
+`centralOffset`.
+
+Usa `saxes` 5.0.1 con namespaces y rechaza XML mal formado, NUL, UTF-8
+inválido, DTD, declaraciones de entidades, instrucciones de procesamiento y CDATA. Valida
+Content Types y relaciones raíz, de workbook y de hojas; rechaza relaciones
+externas, duplicadas, desconocidas o huérfanas. Mediante SAX valida
+`sheet1.xml` y `sheet2.xml` y exige exactamente `PERFIL TRANSACCIONAL` y
+`GRADO DE RIESGO DE CLIENTE`. También rechaza hojas ocultas o `veryHidden`,
+hojas físicas adicionales y partes no permitidas, con soporte controlado para
+`sharedStrings`, `calcChain`, `theme`, `printerSettings` y `docProps` cuando
+las relaciones son válidas. No usa ExcelJS, Express, disco, red ni base de
+datos.
+
+Archivos versionados: `backend/package.json`, `backend/package-lock.json`,
+`backend/src/types/unzipper.d.ts` y
+`backend/src/services/matriz-ooxml-inspector.service.ts`. `saxes` 5.0.1 es
+dependencia directa, `unzipper` 0.10.14 permanece fijada y sus tipos locales
+se ampliaron para los metadatos ZIP utilizados.
 
 El backend conserva la autoridad final. El riesgo TOCTOU se acepta
 temporalmente hasta que existan flujos coordinados de publicación y activación.
@@ -98,10 +137,24 @@ temporalmente hasta que existan flujos coordinados de publicación y activación
 - `git diff --check` limpio;
 - revisiones independientes aprobadas;
 - cambios limitados al alcance.
+- Para el Lote 2E-1: `npm run build` correcto; las plantillas
+  `PLANTILLA_SIMPLE_MATRIZ_PT_GR_EMPRESA.xlsx` y `docs/PT Y GR Caviace.xlsx`
+  fueron aceptadas.
+- Se rechazaron: entrada no ZIP, VBA, hoja oculta, hoja física adicional,
+  relación externa, DTD en workbook o `sheet1`, XML mal formado en `sheet2`,
+  relación duplicada, Content Type desconocido, trailing data, prefijo no
+  referenciado, hueco entre entradas y bytes no referenciados antes del
+  directorio central.
+- Las revisiones independientes fueron `NO APROBABLE` mientras hubo defectos
+  bloqueantes. Corregidos antes de staging, el veredicto final fue `APROBABLE`,
+  sin hallazgos críticos, altos ni medios que bloquearan staging, commit o PR.
+- Los archivos untracked protegidos permanecieron intactos y fuera del commit.
 
 ### Pendientes
 
 - migración 002 versionada, pero no ejecutada ni autorizada en producción;
+- migración `20260805_003_gestion_matrices_empresa` planificada y no
+  implementada;
 - gestión administrativa para crear borrador, cargar estructura, validar,
   publicar, activar/desactivar y sustituir versión;
 - motor PT/GR y evaluación histórica;
@@ -114,6 +167,8 @@ temporalmente hasta que existan flujos coordinados de publicación y activación
 
 - Ejecución productiva de la migración 002.
 - Importación, validación, vista previa y publicación completa de Excel.
+- Rutas, controladores, frontend, persistencia y procesamiento funcional de la
+  matriz.
 - Motor PT/GR, evaluaciones históricas y correo.
 - Clasificaciones globales, GAFI y regímenes fiscales.
 - Proveedor de almacenamiento o cifrado.
@@ -132,6 +187,9 @@ temporalmente hasta que existan flujos coordinados de publicación y activación
 | Exponer auditoría manipulable | Tomar identificadores futuros de `req.user.id`, no del body. |
 | Ampliar el lote | Implementar cambios pequeños y excluir motor/importación/publicación. |
 | Cambio concurrente de estado de matriz (TOCTOU) | Riesgo aceptado temporalmente hasta coordinar los flujos de publicación/activación. |
+| Respuesta del Worker | Endurecimiento opcional de longitud exacta de `sheetNames` y limpieza defensiva adicional en `onError`. |
+| Dependencia ZIP | Conservar fijado y vigilar el comportamiento de `unzipper` 0.10.14. |
+| Alcance de validación | La inspección de hojas es estructural; no valida el esquema completo ni el contenido funcional. |
 
 ### Dependencias del Lote 2E
 
@@ -144,18 +202,27 @@ temporalmente hasta que existan flujos coordinados de publicación y activación
 
 ### Próximo bloque de trabajo
 
-El próximo paso inmediato es únicamente definir, inspeccionar y aprobar el
-contrato técnico del Lote 2E antes de programar. La secuencia futura objetivo es:
+El Lote 2E-1 está **COMPLETADO, versionado y fusionado**. El siguiente sublote
+debe definirse desde `main` en `de7dc9d`, consultando primero este resumen y la
+memoria técnica operativa como fuentes canónicas. La secuencia futura objetivo
+continúa siendo:
 
 ```text
 crear borrador -> cargar estructura -> validar -> publicar -> activar
 ```
 
 Antes de programar deben aprobarse los contratos indicados en dependencias. No
-se ejecutará la migración 002 sin autorización separada.
+se ejecutará la migración 002 sin autorización separada. La migración
+`20260805_003_gestion_matrices_empresa` continúa planificada y no implementada.
+Se conservan las reglas permanentes: un paso por vez, cambios con Codex,
+validación antes de avanzar, revisión independiente, pruebas antes de commit,
+staging selectivo, PR obligatorio y protección de archivos untracked.
 
 ### Estado de producción
 
 La migración `20260801_002_matrices_pt_gr_empresa` no está ejecutada ni
 autorizada en producción. En consecuencia, la gestión funcional de matrices y
-el bloqueo dependiente de esas tablas tampoco deben declararse desplegados.
+el bloqueo dependiente de esas tablas tampoco deben declararse desplegados. El
+inspector OOXML fusionado es una frontera defensiva previa a ExcelJS, no prueba
+que el flujo completo de carga, validación, publicación o activación esté
+desplegado. No hubo migraciones ni conexión a PostgreSQL en el Lote 2E-1.
