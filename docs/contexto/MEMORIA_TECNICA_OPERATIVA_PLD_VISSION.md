@@ -1,6 +1,6 @@
 # PLD VISSION / SCMVP
 
-## Checkpoint de infraestructura operativa — 2026-08-06
+## Checkpoint de infraestructura operativa — 2026-08-08
 
 - Backend vigente: https://scmvp-nxtj.onrender.com
 - DB lógica vigente: `scmvp_q69o`.
@@ -14,13 +14,13 @@
 
 | Dato | Valor confirmado |
 |---|---|
-| Última actualización | 2026-08-06 |
-| Rama activa | `docs/actualizar-contexto-lote-2e1` |
-| Commit base canónico | `de7dc9d` en `main`, `origin/main` y `origin/HEAD` |
-| PR más reciente | `#105`, fusionado |
-| Lote actual | Lotes 2A–2D y Lote 2E-1 completados, versionados y fusionados |
+| Última actualización | 2026-08-08 |
+| Rama final | `main` |
+| Commit base canónico | `23fa6f3` en `main`, `origin/main` y `origin/HEAD` |
+| PR más reciente | `#107`, `feat: agregar parser de matriz PT GR por empresa`, fusionado |
+| Lote actual | Lotes 2A–2D, 2E-1 y 2E-2 completados, aprobados y fusionados |
 | Producción | La migración 002 no ha sido ejecutada |
-| Próximo paso exacto | Definir el siguiente sublote desde `main` en `de7dc9d`, consultando primero estas fuentes canónicas y sin ejecutar las migraciones pendientes. |
+| Próximo paso exacto | Definir el siguiente sublote desde `main` en `23fa6f3`, consultando primero estas fuentes canónicas y sin ejecutar las migraciones pendientes. |
 
 ## 1. Propósito y mantenimiento
 
@@ -68,9 +68,15 @@ alcance, pruebas, riesgos o archivos protegidos. Cada actualización debe:
 
 ## 3. Estado Git confirmado
 
-- Rama documental actual: `docs/actualizar-contexto-lote-2e1`.
-- Base canónica para el siguiente sublote: `de7dc9d`.
-- `main`, `origin/main` y `origin/HEAD` quedaron alineados en `de7dc9d`.
+- Rama final: `main`.
+- Base canónica para el siguiente sublote: `23fa6f3`.
+- `main`, `origin/main` y `origin/HEAD` quedaron alineados en `23fa6f3`.
+- Rama de implementación del Lote 2E-2:
+  `feat/lote-2e2-parser-matriz-excel`.
+- Commit de implementación previo al merge: `f43a1a0`.
+- PR del Lote 2E-2: `#107`, `feat: agregar parser de matriz PT GR por
+  empresa`, fusionado correctamente.
+- Merge commit en `main`: `23fa6f3`.
 - Rama de implementación del Lote 2E-1:
   `feat/lote-2e1-inspector-ooxml`.
 - Commit de implementación: `17d0d25 feat: agregar inspector defensivo OOXML
@@ -191,10 +197,18 @@ no una capacidad actual.
 - `backend/src/services/matriz-ooxml-inspector.service.ts`: frontera defensiva
   OOXML incorporada en el Lote 2E-1; expone
   `inspectMatrizXlsxOoxml(input: Buffer): Promise<MatrizOoxmlInspectionResult>`.
+- `backend/src/services/matriz-excel-parser.service.ts`: parser funcional V1
+  de matrices PT/GR por empresa, con versión lógica `PT_GR_EMPRESA_V1`; ejecuta
+  previamente el inspector OOXML y lee, valida y normaliza la configuración de
+  la plantilla a una estructura tipada.
 
-El inspector no procesa ni interpreta funcionalmente la matriz y no incorpora
-rutas, controladores, frontend, persistencia, gestión editorial, motor de
-cálculo ni almacenamiento. Esas capacidades siguen pendientes.
+El parser valida el contrato físico y funcional V1 —encabezados, merges,
+posiciones, valoraciones, KYC, rangos y celdas permitidas—, pero no evalúa a un
+cliente, no selecciona sus respuestas o condiciones, no suma las cuatro
+valoraciones de una evaluación real ni determina su resultado PT o GR. No
+incorpora motor de evaluación final, rutas, controladores, frontend,
+persistencia, gestión editorial, publicación ni almacenamiento. Esas
+capacidades siguen pendientes.
 
 ### Inspector defensivo OOXML del Lote 2E-1
 
@@ -218,8 +232,10 @@ cálculo ni almacenamiento. Esas capacidades siguen pendientes.
   CDATA.
 - Valida Content Types, relaciones raíz, relaciones del workbook y relaciones
   de hojas. Rechaza relaciones externas, duplicadas, desconocidas o huérfanas.
-- Valida `sheet1.xml` y `sheet2.xml` mediante SAX y exige exactamente, en ese
-  orden, `PERFIL TRANSACCIONAL` y `GRADO DE RIESGO DE CLIENTE`.
+- Exige exactamente las hojas contractuales `PERFIL TRANSACCIONAL` y `GRADO DE
+  RIESGO DE CLIENTE`. Resuelve cada una dinámicamente por nombre → `r:id` →
+  relationship → worksheet part; no congela `sheetId`, orden interno ni
+  `sheet1.xml`/`sheet2.xml`.
 - Rechaza hojas ocultas o `veryHidden`, hojas físicas adicionales y partes no
   permitidas. Conserva soporte controlado para `sharedStrings`, `calcChain`,
   `theme`, `printerSettings` y `docProps` cuando sus relaciones son válidas.
@@ -235,6 +251,40 @@ Archivos versionados en el Lote 2E-1:
 `saxes` 5.0.1 quedó declarada como dependencia directa; `unzipper` 0.10.14
 permanece fijada y sus tipos locales se ampliaron para los metadatos ZIP
 utilizados.
+
+### Parser funcional V1 del Lote 2E-2
+
+- Contrato físico exhaustivo `A1:G19` para PT y `A1:H19` para GR, con conjunto
+  exacto de merges V1, mapa exhaustivo de celdas permitidas y vacíos
+  obligatorios.
+- `A1` y `A2` exigen texto empresarial, sin congelar su contenido; `B3`, `B7`,
+  `B11` y `B15` contienen `Descripción`.
+- Las valoraciones literales son `C=3`, `D=2` y `E=1`. Cada fila tiene
+  exactamente una valoración y cada bloque distribuye una vez `1`, `2` y `3`.
+- PT contiene cuatro bloques, tres respuestas por bloque y tres resultados. GR
+  contiene cuatro criterios, tres condiciones por criterio y tres resultados,
+  con una indicación KYC funcional por criterio.
+- `C19:E19` pueden estar vacías o contener cualquier fórmula XLSX válida. Son
+  fórmulas visuales, ignoradas y no autoritativas; cualquier fórmula fuera de
+  esas celdas está prohibida. El contrato V1 establece que el futuro motor de
+  evaluación deberá calcular PT y GR independientemente de esas fórmulas,
+  sumando las cuatro valoraciones seleccionadas y comparando el total contra
+  los rangos configurados; este cálculo no está implementado por el parser.
+- Los rangos deben cubrir exactamente los enteros `4..12`, sin huecos ni
+  solapes.
+- El inspector impide contenido OOXML independiente en celdas secundarias de
+  merges; una secundaria que solo contiene estilo sigue permitida.
+- Toda celda SpreadsheetML `<c>` exige una referencia `r` explícita, única,
+  sin namespace y en formato A1 canónico. Se rechazan coordenadas implícitas;
+  los límites son columnas `A:XFD` y filas `1:1048576`.
+- Se preservan las protecciones de ZIP, CRC, ratios, paths, relationships,
+  content types, macros, VML y timeout del worker.
+
+Archivos integrados en el Lote 2E-2:
+
+- `backend/src/services/matriz-excel-parser.service.ts`
+- `backend/src/services/matriz-ooxml-inspector.service.ts`
+- `docs/contexto/CONTRATO_PLANTILLA_MATRIZ_PT_GR_V1.md`
 
 ## 9. Contrato autenticado y auditoría
 
@@ -308,7 +358,22 @@ final.
 - Hubo revisiones independientes sucesivas con veredicto `NO APROBABLE`
   mientras existieron defectos bloqueantes; estos se corrigieron antes de
   staging. El veredicto independiente final fue `APROBABLE`, sin hallazgos
-  críticos, altos ni medios que bloquearan staging, commit o PR.
+críticos, altos ni medios que bloquearan staging, commit o PR.
+
+### Validaciones confirmadas del Lote 2E-2
+
+- `npm run build`: correcto; caso positivo V1 y regresión positiva final:
+  correctos.
+- Estructura obtenida: cuatro bloques PT, cuatro criterios GR, tres resultados
+  PT y tres resultados GR.
+- Merge adicional, merge obligatorio faltante, contenido en celda no
+  autorizada y fórmula fuera de `C19:E19`: rechazados.
+- Fórmula arbitraria en `C19`: aceptada.
+- Contenido OOXML independiente en una secundaria contractual: rechazado con
+  `INDEPENDENT_MERGED_CELL_CONTENT`.
+- Celda `<c>` sin atributo `r`: rechazada con `INVALID_SHEETS`.
+- `git diff --check` y checks de archivos nuevos: correctos.
+- Revisión independiente definitiva: `APROBABLE`.
 
 Riesgos residuales bajos: endurecimiento opcional de la longitud exacta de
 `sheetNames` en la respuesta del Worker; limpieza defensiva adicional en
@@ -354,6 +419,9 @@ contenido funcional.
   errores del indicador respecto del listado.
 - **Lote 2E-1 (`#105`):** inspector defensivo OOXML previo a ExcelJS,
   versionado en `17d0d25` y fusionado en `main` mediante `de7dc9d`.
+- **Lote 2E-2 (`#107`):** parser funcional V1 de matrices PT/GR por empresa,
+  versión lógica `PT_GR_EMPRESA_V1`, implementado en `f43a1a0` y fusionado en
+  `main` mediante `23fa6f3`. Cierre definitivo: **APROBADO**.
 
 En el Lote 2E-1 no se ejecutaron SQL ni migraciones y no hubo conexión a
 PostgreSQL. Los archivos untracked protegidos permanecieron intactos y fuera
@@ -372,7 +440,11 @@ que existan flujos coordinados de publicación y activación.
   implementada;
 - gestión administrativa para crear borrador, cargar estructura, validar,
   publicar, activar/desactivar y sustituir versión;
-- motor PT/GR y evaluación histórica;
+- motor de evaluación final y evaluación histórica;
+- endpoints de gestión, carga o publicación que todavía no existen;
+- vinculación técnica definitiva de campos KYC;
+- generación del Excel canónico final;
+- migraciones no ejecutadas y frontend no implementado en este lote;
 - pruebas automatizadas completas;
 - pruebas controladas reales con empresa sin matriz y con matriz activa;
 - pruebas por rol, manipulación de `empresa_id` y regresión integral de PF,
@@ -392,8 +464,9 @@ que existan flujos coordinados de publicación y activación.
   `datos_completos` o `deepMerge`.
 - Ejecución productiva de la migración 002.
 - Implementación o ejecución de la migración 003.
-- Rutas, controladores, frontend, persistencia y procesamiento o interpretación
-  funcional de la matriz.
+- Rutas, controladores, frontend, persistencia, gestión, carga y publicación de
+  la matriz. El parser funcional V1 sí está implementado; no equivale al motor
+  de evaluación final.
 
 ## 14. Archivos protegidos y reglas Git
 
@@ -417,9 +490,10 @@ siempre el conjunto exacto de archivos antes de staging selectivo.
 
 ## 15. Próximo punto de trabajo
 
-El Lote 2E-1 está **COMPLETADO, versionado y fusionado**. El siguiente sublote
-debe definirse desde `main` en `de7dc9d` y consultar primero esta memoria y el
-resumen técnico ejecutivo como fuentes canónicas. La secuencia futura objetivo
+El Lote 2E-2 está **COMPLETADO, APROBADO, versionado y fusionado**. El siguiente
+sublote debe definirse desde `main` en `23fa6f3` y consultar primero esta
+memoria y el resumen técnico ejecutivo como fuentes canónicas. La secuencia
+futura objetivo
 continúa siendo:
 
 ```text
