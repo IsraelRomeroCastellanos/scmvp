@@ -9,7 +9,7 @@ export type MatrizOoxmlInspectionErrorCode =
   | 'INVALID_ENTRY_SIZE' | 'ENTRY_TOO_LARGE' | 'ARCHIVE_TOO_LARGE'
   | 'COMPRESSION_RATIO_EXCEEDED' | 'FORBIDDEN_ENTRY' | 'REQUIRED_ENTRY_MISSING'
   | 'INVALID_CONTENT_TYPES' | 'INVALID_RELATIONSHIP' | 'EXTERNAL_RELATIONSHIP'
-  | 'INVALID_WORKBOOK' | 'INVALID_SHEETS';
+  | 'INVALID_WORKBOOK' | 'INVALID_SHEETS' | 'INDEPENDENT_MERGED_CELL_CONTENT';
 
 export class MatrizOoxmlInspectionError extends Error {
   constructor(public readonly code: MatrizOoxmlInspectionErrorCode, message: string) {
@@ -55,14 +55,21 @@ const MC_NS = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
 const REVISION_NAMESPACES = new Set(['http://schemas.microsoft.com/office/spreadsheetml/2014/revision',
   'http://schemas.microsoft.com/office/spreadsheetml/2016/revision']);
 const SHEET_NAMES = ['PERFIL TRANSACCIONAL', 'GRADO DE RIESGO DE CLIENTE'] as const;
+const CONTRACTUAL_MERGE_SECONDARIES: Record<typeof SHEET_NAMES[number], ReadonlySet<string>> = {
+  'PERFIL TRANSACCIONAL': new Set(['B1', 'C1', 'D1', 'E1', 'B2', 'C2', 'D2', 'E2', 'G3']),
+  'GRADO DE RIESGO DE CLIENTE': new Set([
+    'B1', 'C1', 'D1', 'E1', 'B2', 'C2', 'D2', 'E2', 'H3',
+    'F5', 'F6', 'F9', 'F10', 'F13', 'F14', 'F17', 'F18',
+  ]),
+};
 const REQUIRED_ENTRIES = ['[Content_Types].xml', '_rels/.rels', 'xl/workbook.xml',
-  'xl/_rels/workbook.xml.rels', 'xl/styles.xml', 'xl/worksheets/sheet1.xml',
-  'xl/worksheets/sheet2.xml'] as const;
+  'xl/_rels/workbook.xml.rels', 'xl/styles.xml'] as const;
 const EXACT_ALLOWED_ENTRIES = new Set<string>([...REQUIRED_ENTRIES, 'xl/sharedStrings.xml',
   'xl/calcChain.xml', 'docProps/core.xml', 'docProps/app.xml']);
+const ALLOWED_DIRECTORY_ENTRIES = new Set<string>(['_rels/', 'xl/', 'xl/_rels/',
+  'xl/worksheets/', 'xl/theme/', 'docProps/']);
 const STRUCTURAL_XML = new Set<string>(['[Content_Types].xml', '_rels/.rels', 'xl/workbook.xml',
   'xl/_rels/workbook.xml.rels']);
-const WORKSHEET_XML = new Set<string>(['xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml']);
 const ZIP_FLAGS_ALLOWED = (1 << 1) | (1 << 2) | (1 << 3) | (1 << 11);
 
 const CT = {
@@ -170,7 +177,7 @@ const ERROR_CODES = new Set<MatrizOoxmlInspectionErrorCode>(['INVALID_INPUT', 'F
   'DUPLICATE_ENTRY', 'INVALID_ENTRY_SIZE', 'ENTRY_TOO_LARGE', 'ARCHIVE_TOO_LARGE',
   'COMPRESSION_RATIO_EXCEEDED', 'FORBIDDEN_ENTRY', 'REQUIRED_ENTRY_MISSING',
   'INVALID_CONTENT_TYPES', 'INVALID_RELATIONSHIP', 'EXTERNAL_RELATIONSHIP',
-  'INVALID_WORKBOOK', 'INVALID_SHEETS']);
+  'INVALID_WORKBOOK', 'INVALID_SHEETS', 'INDEPENDENT_MERGED_CELL_CONTENT']);
 function isErrorCode(value: unknown): value is MatrizOoxmlInspectionErrorCode {
   return typeof value === 'string' && ERROR_CODES.has(value as MatrizOoxmlInspectionErrorCode);
 }
@@ -188,41 +195,46 @@ async function inspectInWorker(input: Buffer): Promise<MatrizOoxmlInspectionResu
   let declaredTotal = 0; let declaredCompressedTotal = 0;
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index]; const physical = geometry.entries[index];
-    const path = validateEntry(entry, physical);
+    const { path, directory: isDirectory } = validateEntry(entry, physical);
     const key = path.toLowerCase();
     if (folded.has(key)) throw err('DUPLICATE_ENTRY');
-    folded.add(key); entryMap.set(path, entry);
+    folded.add(key);
     declaredTotal = safeSum(declaredTotal, entry.uncompressedSize);
     declaredCompressedTotal = safeSum(declaredCompressedTotal, physical.compressedSize);
     if (entry.uncompressedSize > MAX_ENTRY_BYTES) throw err('ENTRY_TOO_LARGE');
     if (declaredTotal > MAX_UNCOMPRESSED_BYTES) throw err('ARCHIVE_TOO_LARGE');
     validateActualRatio(entry.uncompressedSize, physical.compressedSize);
     validateActualRatio(declaredTotal, declaredCompressedTotal);
+    if (!isDirectory) entryMap.set(path, entry);
   }
   for (const required of REQUIRED_ENTRIES) if (!entryMap.has(required)) throw err('REQUIRED_ENTRY_MISSING');
   const xml = new Map<string, string>();
+  const worksheetOwnContent = new Map<string, Set<string>>();
   let total = 0; let compressedTotal = 0;
   const physicalByPath = new Map(geometry.entries.map((item) => [item.path, item]));
   for (const [path, entry] of entryMap) {
     const physical = physicalByPath.get(path); if (physical === undefined) throw err('INVALID_ZIP');
     const capture = STRUCTURAL_XML.has(path) || isSheetRelationship(path);
-    const drained = await drainEntry(entry, physical, total, compressedTotal, capture, WORKSHEET_XML.has(path));
+    const drained = await drainEntry(entry, physical, total, compressedTotal, capture, isWorksheet(path));
     total += drained.bytes; compressedTotal += physical.compressedSize;
     if (drained.xml !== undefined) xml.set(path, drained.xml);
+    if (drained.worksheetOwnContent !== undefined) worksheetOwnContent.set(path, drained.worksheetOwnContent);
   }
   validateContentTypes(requireXml(xml, '[Content_Types].xml'), entryMap);
   const rootRefs = validateRootRelationships(requireXml(xml, '_rels/.rels'), entryMap);
   const workbookRefs = validateWorkbookRelationships(requireXml(xml, 'xl/_rels/workbook.xml.rels'), entryMap);
   validateSheetRelationships(xml, entryMap);
-  validateWorkbook(requireXml(xml, 'xl/workbook.xml'), workbookRefs);
+  const worksheetParts = validateWorkbook(requireXml(xml, 'xl/workbook.xml'), workbookRefs);
+  validateContractualMergeSecondaries(worksheetParts, worksheetOwnContent);
   validateNoOrphans(entryMap, rootRefs, workbookRefs, xml);
   return { compressedBytes: input.length, uncompressedBytes: total, entryCount: entries.length, sheetNames: [...SHEET_NAMES] };
 }
 
-function validateEntry(entry: ZipEntry, physical: PhysicalEntry): string {
-  if (entry.type !== 'File') throw err('FORBIDDEN_ENTRY');
-  const path = validatePath(entry.path, 'UNSAFE_PATH');
-  if (!isAllowedEntry(path)) throw err('FORBIDDEN_ENTRY');
+function validateEntry(entry: ZipEntry, physical: PhysicalEntry): { path: string; directory: boolean } {
+  const directory = entry.path.endsWith('/');
+  const path = directory ? validateDirectoryPath(entry.path) : validatePath(entry.path, 'UNSAFE_PATH');
+  if (directory ? entry.type !== 'Directory' : entry.type !== 'File') throw err('FORBIDDEN_ENTRY');
+  if (!directory && !isAllowedEntry(path)) throw err('FORBIDDEN_ENTRY');
   if (path !== physical.path) throw err('INVALID_ZIP');
   for (const size of [entry.compressedSize, entry.uncompressedSize, entry.offsetToLocalFileHeader,
     entry.versionsNeededToExtract, entry.flags, entry.compressionMethod, entry.diskNumber, entry.crc32])
@@ -232,7 +244,10 @@ function validateEntry(entry: ZipEntry, physical: PhysicalEntry): string {
     || entry.offsetToLocalFileHeader !== physical.localOffset || entry.versionsNeededToExtract !== physical.versionNeeded
     || entry.flags !== physical.flags || entry.compressionMethod !== physical.method
     || (entry.crc32 >>> 0) !== physical.crc32) throw err('INVALID_ZIP');
-  return path;
+  if (directory && (entry.compressedSize !== 0 || entry.uncompressedSize !== 0 || entry.crc32 !== 0
+    || physical.compressedSize !== 0 || physical.uncompressedSize !== 0 || physical.crc32 !== 0
+    || entry.flags !== 0 || entry.compressionMethod !== 0)) throw err('FORBIDDEN_ENTRY');
+  return { path, directory };
 }
 
 function validateZipGeometry(input: Buffer): ZipGeometry {
@@ -344,7 +359,7 @@ function decodeCanonicalZipName(name: Buffer): string {
   if (name.length === 0 || Array.from(name).some((byte) => byte === 0 || byte > 0x7f)) throw err('INVALID_ZIP');
   const path = name.toString('ascii');
   if (!Buffer.from(path, 'utf8').equals(name)) throw err('INVALID_ZIP');
-  return validatePath(path, 'UNSAFE_PATH');
+  return path.endsWith('/') ? validateDirectoryPath(path) : validatePath(path, 'UNSAFE_PATH');
 }
 function requireRegion(input: Buffer, offset: number, length: number): void {
   if (!isSafeSize(offset) || !isSafeSize(length) || checkedAdd(offset, length) > input.length) throw err('INVALID_ZIP');
@@ -355,7 +370,7 @@ function checkedAdd(...values: number[]): number {
 }
 
 async function drainEntry(entry: ZipEntry, physical: PhysicalEntry, priorTotal: number, priorCompressed: number,
-  captureXml: boolean, validateSheet: boolean): Promise<{ bytes: number; xml?: string }> {
+  captureXml: boolean, validateSheet: boolean): Promise<{ bytes: number; xml?: string; worksheetOwnContent?: Set<string> }> {
   let stream: import('stream').Readable;
   try { stream = entry.stream(); } catch { throw err('INVALID_ZIP'); }
   let bytes = 0; let crc = 0xffffffff; const chunks: Buffer[] = [];
@@ -382,26 +397,39 @@ async function drainEntry(entry: ZipEntry, physical: PhysicalEntry, priorTotal: 
   if (sheetValidator !== undefined) sheetValidator.close();
   if (bytes !== entry.uncompressedSize) throw err('INVALID_ENTRY_SIZE');
   if ((crc ^ 0xffffffff) >>> 0 !== entry.crc32 >>> 0) throw err('INVALID_ENTRY_SIZE');
-  if (!captureXml) return { bytes };
+  if (!captureXml) return { bytes, worksheetOwnContent: sheetValidator?.ownContent };
   const content = Buffer.concat(chunks);
   if (content.includes(0)) throw err('INVALID_ZIP');
   let text: string;
   try { text = new TextDecoder('utf-8', { fatal: true }).decode(content); } catch { throw err('INVALID_ZIP'); }
-  return { bytes, xml: text };
+  return { bytes, xml: text, worksheetOwnContent: sheetValidator?.ownContent };
 }
 
-function createWorksheetValidator(): { write: (chunk: Buffer, bytes: number) => void; close: () => void } {
+function createWorksheetValidator(): { write: (chunk: Buffer, bytes: number) => void; close: () => void; ownContent: Set<string> } {
   const parser = new SaxesParser({ xmlns: true }); const decoder = new TextDecoder('utf-8', { fatal: true });
   let depth = 0; let nodes = 0; let roots = 0; let rootOpen = false;
+  let cellDepth = 0; let cellReference: string | undefined; const ownContent = new Set<string>();
   const fail = (): never => { throw err('INVALID_SHEETS'); };
   parser.on('doctype', fail); parser.on('processinginstruction', fail); parser.on('cdata', fail); parser.on('error', fail);
   parser.on('text', (value: string) => { if (!rootOpen && value.trim().length !== 0) fail(); });
   parser.on('opentag', (tag: SaxesTagNS) => {
     if (depth === 0) { roots += 1; if (roots !== 1 || tag.local !== 'worksheet' || tag.uri !== SPREADSHEET_NS) fail(); rootOpen = true; }
     depth += 1; nodes += 1; if (depth > 64 || nodes > 10000) fail();
+    if (tag.local === 'c' && tag.uri === SPREADSHEET_NS) {
+      const references = Object.values(tag.attributes).filter((item) => item.local === 'r' && item.uri === '');
+      const allReferences = Object.values(tag.attributes).filter((item) => item.local === 'r');
+      if (allReferences.length !== 1 || references.length !== 1 || !isCanonicalCellReference(references[0].value)) fail();
+      if (cellDepth === 0) { cellDepth = depth; cellReference = references[0].value; }
+    } else if (cellDepth !== 0 && tag.uri === SPREADSHEET_NS
+      && (tag.local === 'f' || tag.local === 'v' || tag.local === 'is')
+      && cellReference !== undefined) ownContent.add(cellReference);
   });
-  parser.on('closetag', () => { depth -= 1; if (depth === 0) rootOpen = false; });
+  parser.on('closetag', () => {
+    if (depth === cellDepth) { cellDepth = 0; cellReference = undefined; }
+    depth -= 1; if (depth === 0) rootOpen = false;
+  });
   return {
+    ownContent,
     write: (chunk: Buffer, bytes: number): void => {
       if (bytes > MAX_SHEET_XML_BYTES || chunk.includes(0)) fail();
       try { parser.write(decoder.decode(chunk, { stream: true })); } catch { fail(); }
@@ -411,6 +439,15 @@ function createWorksheetValidator(): { write: (chunk: Buffer, bytes: number) => 
       if (roots !== 1 || depth !== 0) fail();
     },
   };
+}
+
+function isCanonicalCellReference(value: string): boolean {
+  const match = /^([A-Z]{1,3})([1-9][0-9]{0,6})$/.exec(value);
+  if (match === null) return false;
+  let column = 0;
+  for (const character of match[1]) column = column * 26 + character.charCodeAt(0) - 64;
+  const row = Number(match[2]);
+  return column <= 16384 && row <= 1048576;
 }
 
 function validateActualRatio(expanded: number, compressed: number): void {
@@ -478,8 +515,8 @@ function validateContentTypes(text: string, entries: EntryMap): void {
     } else {
       exactAttributes(node, [['Extension', ''], ['ContentType', '']], 'INVALID_CONTENT_TYPES');
       const extension = (attr(node, 'Extension', '', 'INVALID_CONTENT_TYPES') as string).toLowerCase(); const type = attr(node, 'ContentType', '', 'INVALID_CONTENT_TYPES') as string;
-      if (!['rels', 'xml', 'bin'].includes(extension) || defaults.has(extension)) throw err('INVALID_CONTENT_TYPES');
-      if ((extension === 'rels' && type !== CT.relationships) || (extension === 'xml' && type !== CT.xml) || (extension === 'bin' && type !== CT.printerSettings)) throw err('INVALID_CONTENT_TYPES'); defaults.set(extension, type);
+      if (!['rels', 'xml', 'bin', 'vml'].includes(extension) || defaults.has(extension)) throw err('INVALID_CONTENT_TYPES');
+      if ((extension === 'rels' && type !== CT.relationships) || (extension === 'xml' && type !== CT.xml) || (extension === 'bin' && type !== CT.printerSettings) || (extension === 'vml' && type !== 'application/vnd.openxmlformats-officedocument.vmlDrawing')) throw err('INVALID_CONTENT_TYPES'); defaults.set(extension, type);
     }
   }
   for (const path of entries.keys()) if (path !== '[Content_Types].xml') {
@@ -488,7 +525,7 @@ function validateContentTypes(text: string, entries: EntryMap): void {
   }
   for (const path of byPart.keys()) if (!entries.has(path)) throw err('INVALID_CONTENT_TYPES');
   for (const extension of defaults.keys()) {
-    if (extension === 'rels' || extension === 'xml') continue;
+    if (extension === 'rels' || extension === 'xml' || extension === 'vml') continue;
     if (extension === 'bin') {
       if (!Array.from(entries.keys()).some(isPrinterSettings)) throw err('INVALID_CONTENT_TYPES');
       continue;
@@ -526,7 +563,7 @@ function validateRootRelationships(text: string, entries: EntryMap): Set<string>
 function validateWorkbookRelationships(text: string, entries: EntryMap): Relationship[] {
   const rels = parseRelationships(text, 'xl', entries); const counts = new Map<string, number>();
   for (const rel of rels) {
-    const valid = (rel.type === RT.worksheet && (rel.resolved === 'xl/worksheets/sheet1.xml' || rel.resolved === 'xl/worksheets/sheet2.xml'))
+    const valid = (rel.type === RT.worksheet && isWorksheet(rel.resolved))
       || (rel.type === RT.styles && rel.resolved === 'xl/styles.xml')
       || (rel.type === RT.sharedStrings && rel.resolved === 'xl/sharedStrings.xml')
       || (rel.type === RT.calcChain && rel.resolved === 'xl/calcChain.xml')
@@ -541,19 +578,19 @@ function validateWorkbookRelationships(text: string, entries: EntryMap): Relatio
 function validateSheetRelationships(xml: Map<string, string>, entries: EntryMap): void {
   const binRefs = new Map<string, number>();
   for (const [path, text] of xml) if (isSheetRelationship(path)) {
-    const sheetNumber = path.includes('sheet1.xml.rels') ? 1 : 2;
+    const worksheetPath = worksheetForRelationship(path);
     const rels = parseRelationships(text, 'xl/worksheets', entries);
     if (rels.length === 0) throw err('INVALID_RELATIONSHIP');
     for (const rel of rels) {
       if (rel.type !== RT.printerSettings || !isPrinterSettings(rel.resolved)) throw err('INVALID_RELATIONSHIP');
       binRefs.set(rel.resolved, (binRefs.get(rel.resolved) ?? 0) + 1);
     }
-    if (!entries.has(`xl/worksheets/sheet${sheetNumber}.xml`)) throw err('INVALID_RELATIONSHIP');
+    if (!entries.has(worksheetPath)) throw err('INVALID_RELATIONSHIP');
   }
   for (const path of entries.keys()) if (isPrinterSettings(path) && binRefs.get(path) !== 1) throw err('INVALID_RELATIONSHIP');
 }
 
-function validateWorkbook(text: string, rels: Relationship[]): void {
+function validateWorkbook(text: string, rels: Relationship[]): Map<typeof SHEET_NAMES[number], string> {
   const root = parseXml(text, 'workbook', SPREADSHEET_NS, 'INVALID_WORKBOOK');
   exactAttributes(root, [['Ignorable', MC_NS]], 'INVALID_WORKBOOK');
   const knownSpreadsheet = new Set(['fileVersion', 'workbookPr', 'bookViews', 'sheets', 'definedNames', 'calcPr', 'extLst']);
@@ -565,16 +602,37 @@ function validateWorkbook(text: string, rels: Relationship[]): void {
   }
   const containers = root.children.filter((child) => child.local === 'sheets' && child.uri === SPREADSHEET_NS);
   if (containers.length !== 1) throw err('INVALID_SHEETS'); const sheets = containers[0].children;
-  if (sheets.length !== 2) throw err('INVALID_SHEETS'); const ids = new Set<string>(); const relationshipIds = new Set<string>();
-  for (let index = 0; index < 2; index += 1) {
-    const node = sheets[index]; if (node.local !== 'sheet' || node.uri !== SPREADSHEET_NS || node.children.length !== 0) throw err('INVALID_SHEETS');
+  if (sheets.length !== 2) throw err('INVALID_SHEETS');
+  const names = new Set<string>(); const ids = new Set<string>(); const relationshipIds = new Set<string>(); const worksheetParts = new Set<string>();
+  const partsByName = new Map<typeof SHEET_NAMES[number], string>();
+  for (const node of sheets) {
+    if (node.local !== 'sheet' || node.uri !== SPREADSHEET_NS || node.children.length !== 0) throw err('INVALID_SHEETS');
     exactAttributes(node, [['name', ''], ['sheetId', ''], ['state', ''], ['id', OFFICE_REL_NS]], 'INVALID_SHEETS');
-    const name = attr(node, 'name', '', 'INVALID_SHEETS'); const sheetId = attr(node, 'sheetId', '', 'INVALID_SHEETS');
+    const name = attr(node, 'name', '', 'INVALID_SHEETS') as string; const sheetId = attr(node, 'sheetId', '', 'INVALID_SHEETS') as string;
     const relationshipId = attr(node, 'id', OFFICE_REL_NS, 'INVALID_SHEETS') as string; const state = attr(node, 'state', '', 'INVALID_SHEETS', true);
-    if (name !== SHEET_NAMES[index] || sheetId !== String(index + 1) || (state !== undefined && state !== 'visible')) throw err('INVALID_SHEETS');
-    if (ids.has(sheetId as string) || relationshipIds.has(relationshipId)) throw err('INVALID_SHEETS'); ids.add(sheetId as string); relationshipIds.add(relationshipId);
+    if (!SHEET_NAMES.includes(name as typeof SHEET_NAMES[number]) || !isValidSheetId(sheetId)
+      || (state !== undefined && state !== 'visible')) throw err('INVALID_SHEETS');
+    if (names.has(name) || ids.has(sheetId) || relationshipIds.has(relationshipId)) throw err('INVALID_SHEETS');
+    names.add(name); ids.add(sheetId); relationshipIds.add(relationshipId);
     const matching = rels.filter((rel) => rel.id === relationshipId && rel.type === RT.worksheet);
-    if (matching.length !== 1 || matching[0].resolved !== `xl/worksheets/sheet${index + 1}.xml`) throw err('INVALID_SHEETS');
+    if (matching.length !== 1 || !isWorksheet(matching[0].resolved) || worksheetParts.has(matching[0].resolved)) throw err('INVALID_SHEETS');
+    worksheetParts.add(matching[0].resolved);
+    partsByName.set(name as typeof SHEET_NAMES[number], matching[0].resolved);
+  }
+  if (SHEET_NAMES.some((name) => !names.has(name))) throw err('INVALID_SHEETS');
+  return partsByName;
+}
+
+function validateContractualMergeSecondaries(
+  worksheetParts: Map<typeof SHEET_NAMES[number], string>,
+  worksheetOwnContent: Map<string, Set<string>>,
+): void {
+  for (const sheetName of SHEET_NAMES) {
+    const part = worksheetParts.get(sheetName); const ownContent = part === undefined ? undefined : worksheetOwnContent.get(part);
+    if (ownContent === undefined) throw err('INVALID_SHEETS');
+    for (const reference of CONTRACTUAL_MERGE_SECONDARIES[sheetName]) {
+      if (ownContent.has(reference)) throw err('INDEPENDENT_MERGED_CELL_CONTENT');
+    }
   }
 }
 
@@ -583,7 +641,10 @@ function validateNoOrphans(entries: EntryMap, rootRefs: Set<string>, workbookRef
   for (const path of entries.keys()) {
     if (REQUIRED_ENTRIES.includes(path as typeof REQUIRED_ENTRIES[number]) || path === '[Content_Types].xml' || path === '_rels/.rels') continue;
     if (path.startsWith('docProps/')) { if (!rootRefs.has(path)) throw err('INVALID_RELATIONSHIP'); continue; }
-    if (isSheetRelationship(path)) continue;
+    if (isSheetRelationship(path)) {
+      if (!workbookTargets.has(worksheetForRelationship(path))) throw err('INVALID_RELATIONSHIP');
+      continue;
+    }
     if (isPrinterSettings(path)) continue;
     if (!workbookTargets.has(path)) throw err('INVALID_RELATIONSHIP');
   }
@@ -600,15 +661,31 @@ function validatePath(path: string, code: MatrizOoxmlInspectionErrorCode): strin
   if (path.length === 0 || !isAscii(path) || path.includes('\\') || path.startsWith('/') || path.includes(':')) throw err(code);
   const parts = path.split('/'); if (parts.some((part) => part === '' || part === '.' || part === '..')) throw err(code); return path;
 }
+function validateDirectoryPath(path: string): string {
+  if (!path.endsWith('/') || path.endsWith('//')) throw err('UNSAFE_PATH');
+  validatePath(path.slice(0, -1), 'UNSAFE_PATH');
+  if (!ALLOWED_DIRECTORY_ENTRIES.has(path)) throw err('FORBIDDEN_ENTRY');
+  return path;
+}
 function isAscii(value: string): boolean { for (let i = 0; i < value.length; i += 1) if (value.charCodeAt(i) > 0x7f || value.charCodeAt(i) === 0) return false; return true; }
-function isAllowedEntry(path: string): boolean { return EXACT_ALLOWED_ENTRIES.has(path) || isTheme(path) || isPrinterSettings(path) || isSheetRelationship(path); }
+function isAllowedEntry(path: string): boolean { return EXACT_ALLOWED_ENTRIES.has(path) || isWorksheet(path) || isTheme(path) || isPrinterSettings(path) || isSheetRelationship(path); }
+function isWorksheet(path: string): boolean { return numberedPath(path, 'xl/worksheets/sheet', '.xml'); }
 function isTheme(path: string): boolean { return numberedPath(path, 'xl/theme/theme', '.xml'); }
 function isPrinterSettings(path: string): boolean { return numberedPath(path, 'xl/printerSettings/printerSettings', '.bin'); }
-function isSheetRelationship(path: string): boolean { return path === 'xl/worksheets/_rels/sheet1.xml.rels' || path === 'xl/worksheets/_rels/sheet2.xml.rels'; }
+function isSheetRelationship(path: string): boolean { return numberedPath(path, 'xl/worksheets/_rels/sheet', '.xml.rels'); }
+function worksheetForRelationship(path: string): string {
+  if (!isSheetRelationship(path)) throw err('INVALID_RELATIONSHIP');
+  return `xl/worksheets/${path.slice('xl/worksheets/_rels/'.length, -'.rels'.length)}`;
+}
+function isValidSheetId(value: string): boolean {
+  if (value.length === 0 || value[0] === '0' || !Array.from(value).every((ch) => ch >= '0' && ch <= '9')) return false;
+  const numeric = Number(value);
+  return Number.isSafeInteger(numeric) && numeric <= 0xffffffff;
+}
 function numberedPath(path: string, prefix: string, suffix: string): boolean { if (!path.startsWith(prefix) || !path.endsWith(suffix)) return false; const number = path.slice(prefix.length, -suffix.length); return number.length > 0 && number[0] !== '0' && Array.from(number).every((ch) => ch >= '0' && ch <= '9'); }
 function expectedContentType(path: string): string {
   if (path.endsWith('.rels')) return CT.relationships; if (path === 'xl/workbook.xml') return CT.workbook;
-  if (path === 'xl/worksheets/sheet1.xml' || path === 'xl/worksheets/sheet2.xml') return CT.worksheet;
+  if (isWorksheet(path)) return CT.worksheet;
   if (path === 'xl/styles.xml') return CT.styles; if (path === 'xl/sharedStrings.xml') return CT.sharedStrings;
   if (path === 'xl/calcChain.xml') return CT.calcChain; if (isTheme(path)) return CT.theme; if (isPrinterSettings(path)) return CT.printerSettings;
   if (path === 'docProps/core.xml') return CT.core; if (path === 'docProps/app.xml') return CT.app; throw err('INVALID_CONTENT_TYPES');
@@ -619,6 +696,6 @@ function safeSum(left: number, right: number): number { const value = left + rig
 function err(code: MatrizOoxmlInspectionErrorCode): MatrizOoxmlInspectionError { return new MatrizOoxmlInspectionError(code, publicMessage(code)); }
 function publicMessage(code: MatrizOoxmlInspectionErrorCode): string {
   const messages: Record<MatrizOoxmlInspectionErrorCode, string> = {
-    INVALID_INPUT: 'Entrada no válida.', FILE_TOO_LARGE: 'Archivo demasiado grande.', INSPECTION_TIMEOUT: 'Inspección agotada.', INVALID_ZIP: 'ZIP no válido.', TOO_MANY_ENTRIES: 'Demasiadas entradas.', ENCRYPTED_ENTRY: 'Entrada cifrada.', UNSAFE_PATH: 'Ruta no segura.', DUPLICATE_ENTRY: 'Entrada duplicada.', INVALID_ENTRY_SIZE: 'Tamaño de entrada no válido.', ENTRY_TOO_LARGE: 'Entrada demasiado grande.', ARCHIVE_TOO_LARGE: 'Archivo expandido demasiado grande.', COMPRESSION_RATIO_EXCEEDED: 'Compresión no permitida.', FORBIDDEN_ENTRY: 'Entrada no permitida.', REQUIRED_ENTRY_MISSING: 'Falta una entrada requerida.', INVALID_CONTENT_TYPES: 'Tipos de contenido no válidos.', INVALID_RELATIONSHIP: 'Relaciones no válidas.', EXTERNAL_RELATIONSHIP: 'Relación externa no permitida.', INVALID_WORKBOOK: 'Libro no válido.', INVALID_SHEETS: 'Hojas no válidas.',
+    INVALID_INPUT: 'Entrada no válida.', FILE_TOO_LARGE: 'Archivo demasiado grande.', INSPECTION_TIMEOUT: 'Inspección agotada.', INVALID_ZIP: 'ZIP no válido.', TOO_MANY_ENTRIES: 'Demasiadas entradas.', ENCRYPTED_ENTRY: 'Entrada cifrada.', UNSAFE_PATH: 'Ruta no segura.', DUPLICATE_ENTRY: 'Entrada duplicada.', INVALID_ENTRY_SIZE: 'Tamaño de entrada no válido.', ENTRY_TOO_LARGE: 'Entrada demasiado grande.', ARCHIVE_TOO_LARGE: 'Archivo expandido demasiado grande.', COMPRESSION_RATIO_EXCEEDED: 'Compresión no permitida.', FORBIDDEN_ENTRY: 'Entrada no permitida.', REQUIRED_ENTRY_MISSING: 'Falta una entrada requerida.', INVALID_CONTENT_TYPES: 'Tipos de contenido no válidos.', INVALID_RELATIONSHIP: 'Relaciones no válidas.', EXTERNAL_RELATIONSHIP: 'Relación externa no permitida.', INVALID_WORKBOOK: 'Libro no válido.', INVALID_SHEETS: 'Hojas no válidas.', INDEPENDENT_MERGED_CELL_CONTENT: 'Existe contenido independiente en una celda secundaria de una combinación contractual.',
   }; return messages[code];
 }
