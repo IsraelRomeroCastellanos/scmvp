@@ -1,6 +1,6 @@
 # PLD VISSION / SCMVP
 
-## Checkpoint de infraestructura operativa — 2026-08-08
+## Checkpoint de infraestructura operativa — 2026-08-09
 
 - Backend vigente: https://scmvp-nxtj.onrender.com
 - DB lógica vigente: `scmvp_q69o`.
@@ -14,13 +14,13 @@
 
 | Dato | Valor confirmado |
 |---|---|
-| Última actualización | 2026-08-08 |
+| Última actualización | 2026-08-09 |
 | Rama final | `main` |
-| Commit base canónico | `23fa6f3` en `main`, `origin/main` y `origin/HEAD` |
-| PR más reciente | `#107`, `feat: agregar parser de matriz PT GR por empresa`, fusionado |
-| Lote actual | Lotes 2A–2D, 2E-1 y 2E-2 completados, aprobados y fusionados |
-| Producción | La migración 002 no ha sido ejecutada |
-| Próximo paso exacto | Definir el siguiente sublote desde `main` en `23fa6f3`, consultando primero estas fuentes canónicas y sin ejecutar las migraciones pendientes. |
+| Commit base canónico | `763811b9f2be2e8f339802256457bfd0907126a9` en `main`, `origin/main` y `origin/HEAD` |
+| PR más reciente | `#109`, migración `20260805_003_gestion_matrices_empresa`, fusionado |
+| Lote actual | Lotes 2A–2D, inspector OOXML 2E-1, parser V1 2E-2 y sublote posterior de migración 003 cerrados y fusionados |
+| Producción | Las migraciones 002 y 003 no han sido ejecutadas ni aplicadas en PostgreSQL o producción |
+| Próximo paso exacto | Definir el siguiente sublote desde `main` en `763811b9f2be2e8f339802256457bfd0907126a9`, sin ejecutar las migraciones pendientes de aplicación. |
 
 ## 1. Propósito y mantenimiento
 
@@ -68,15 +68,20 @@ alcance, pruebas, riesgos o archivos protegidos. Cada actualización debe:
 
 ## 3. Estado Git confirmado
 
-- Rama final: `main`.
-- Base canónica para el siguiente sublote: `23fa6f3`.
-- `main`, `origin/main` y `origin/HEAD` quedaron alineados en `23fa6f3`.
+- Rama de actualización documental: `docs/actualizar-contexto-migracion-003`.
+- Base canónica para el siguiente sublote: `763811b9f2be2e8f339802256457bfd0907126a9`.
+- `main`, `origin/main` y `origin/HEAD` están alineados en
+  `763811b9f2be2e8f339802256457bfd0907126a9`.
+- PR más reciente: `#109`, fusionado; agregó únicamente los archivos UP,
+  VERIFY y DOWN de `20260805_003_gestion_matrices_empresa`, con 1123 líneas
+  nuevas en total. Commit funcional de la rama: `59e141b`.
 - Rama de implementación del Lote 2E-2:
   `feat/lote-2e2-parser-matriz-excel`.
 - Commit de implementación previo al merge: `f43a1a0`.
 - PR del Lote 2E-2: `#107`, `feat: agregar parser de matriz PT GR por
   empresa`, fusionado correctamente.
-- Merge commit en `main`: `23fa6f3`.
+- Merge commit en `main`: `23fa6f3`. Este dato se conserva como cierre
+  funcional histórico de 2E-2; ya no es el HEAD actual.
 - Rama de implementación del Lote 2E-1:
   `feat/lote-2e1-inspector-ooxml`.
 - Commit de implementación: `17d0d25 feat: agregar inspector defensivo OOXML
@@ -147,14 +152,17 @@ con una estructura ya desplegada:
 | `matriz_opcion` | Opciones y puntajes pertenecientes a un criterio. |
 | `matriz_rango` | Rangos parametrizados y sus límites/resultados. |
 | `matriz_regla` | Reglas por versión, marca o condición, prioridad y alto automático. |
-| `matriz_archivo_fuente` | Metadatos y referencia del archivo original; no guarda el binario en PostgreSQL. |
+| `matriz_archivo_fuente` | En la 002: metadatos y referencia. La 003 versionada la complementa con el XLSX íntegro en `contenido BYTEA NOT NULL` y endurece sus metadatos. |
 
 Estados editoriales permitidos: `BORRADOR`, `VALIDADA`, `PUBLICADA`.
 
 La vigencia es independiente mediante `activa`. El esquema exige que una
 versión activa sea `PUBLICADA` y el índice único parcial permite como máximo
-una activa por empresa. La inmutabilidad de una versión publicada deberá
-aplicarse en runtime; la migración no crea triggers.
+una activa por empresa. La 003 preserva esa garantía, agrega una sola pendiente
+`BORRADOR`/`VALIDADA` por empresa, revisión positiva, confinamiento del origen
+a la misma empresa, actores/fechas de activación y desactivación, idempotencia y
+auditoría append-only protegida contra `UPDATE`, `DELETE` y `TRUNCATE`. Esto
+describe SQL versionado, no un esquema ya aplicado.
 
 ## 7. Rutas backend existentes y relevantes
 
@@ -375,6 +383,13 @@ críticos, altos ni medios que bloquearan staging, commit o PR.
 - `git diff --check` y checks de archivos nuevos: correctos.
 - Revisión independiente definitiva: `APROBABLE`.
 
+### Validación confirmada del sublote posterior de migración 003
+
+- La revisión independiente estática final fue `APROBABLE`.
+- La migración quedó versionada y fusionada en `main` mediante el PR `#109`.
+- Esta validación fue estática: no se ejecutó SQL, no hubo conexión a
+  PostgreSQL y no acredita pruebas reales de UP, VERIFY o DOWN.
+
 Riesgos residuales bajos: endurecimiento opcional de la longitud exacta de
 `sheetNames` en la respuesta del Worker; limpieza defensiva adicional en
 `onError`; dependencia del comportamiento fijado de `unzipper` 0.10.14; y
@@ -422,6 +437,10 @@ contenido funcional.
 - **Lote 2E-2 (`#107`):** parser funcional V1 de matrices PT/GR por empresa,
   versión lógica `PT_GR_EMPRESA_V1`, implementado en `f43a1a0` y fusionado en
   `main` mediante `23fa6f3`. Cierre definitivo: **APROBADO**.
+- **Sublote posterior — migración 003 (`#109`):** UP, VERIFY y DOWN de
+  `20260805_003_gestion_matrices_empresa`, implementados en `59e141b` y
+  fusionados en `main`. Revisión estática final: **APROBABLE**. La migración
+  está versionada, no ejecutada ni aplicada.
 
 En el Lote 2E-1 no se ejecutaron SQL ni migraciones y no hubo conexión a
 PostgreSQL. Los archivos untracked protegidos permanecieron intactos y fuera
@@ -435,9 +454,10 @@ que existan flujos coordinados de publicación y activación.
 
 ### Pendientes reales
 
-- ejecución productiva de la migración 002, solo con autorización separada;
-- migración `20260805_003_gestion_matrices_empresa`, planificada pero no
-  implementada;
+- ejecución/aplicación controlada de las migraciones 002 y 003, solo con
+  autorización separada y en el orden documentado;
+- identificación de los roles efectivos de PostgreSQL y definición nominal de
+  `GRANT`/`REVOKE`;
 - gestión administrativa para crear borrador, cargar estructura, validar,
   publicar, activar/desactivar y sustituir versión;
 - motor de evaluación final y evaluación histórica;
@@ -463,7 +483,7 @@ que existan flujos coordinados de publicación y activación.
 - Alteraciones a PF, PM, Fideicomiso, Recursos de Terceros,
   `datos_completos` o `deepMerge`.
 - Ejecución productiva de la migración 002.
-- Implementación o ejecución de la migración 003.
+- Ejecución o aplicación de las migraciones 002 y 003.
 - Rutas, controladores, frontend, persistencia, gestión, carga y publicación de
   la matriz. El parser funcional V1 sí está implementado; no equivale al motor
   de evaluación final.
@@ -490,8 +510,9 @@ siempre el conjunto exacto de archivos antes de staging selectivo.
 
 ## 15. Próximo punto de trabajo
 
-El Lote 2E-2 está **COMPLETADO, APROBADO, versionado y fusionado**. El siguiente
-sublote debe definirse desde `main` en `23fa6f3` y consultar primero esta
+El Lote 2E-2 y el sublote posterior de migración 003 están cerrados,
+versionados y fusionados. El siguiente sublote debe definirse desde `main` en
+`763811b9f2be2e8f339802256457bfd0907126a9` y consultar primero esta
 memoria y el resumen técnico ejecutivo como fuentes canónicas. La secuencia
 futura objetivo
 continúa siendo:
@@ -503,8 +524,9 @@ crear borrador -> cargar estructura -> validar -> publicar -> activar
 Antes de programar deben inspeccionarse los contratos existentes y aprobarse
 la API, los estados, los permisos, la auditoría y la estrategia transaccional.
 La gestión de activar/desactivar y sustituir versiones debe quedar contemplada
-en el contrato. No ejecutar la migración 002 ni declarar implementada la 003
-sin autorización y evidencia separadas. Se mantienen las reglas permanentes:
+en el contrato. La 003 ya está implementada y versionada; no ejecutar ni
+declarar aplicadas la 002 o la 003 sin autorización y evidencia separadas. Se
+mantienen las reglas permanentes:
 un paso por vez, cambios con Codex, validación antes de avanzar, revisión
 independiente, pruebas antes de commit, staging selectivo, PR obligatorio y
 protección de archivos untracked.
