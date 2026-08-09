@@ -13,15 +13,14 @@
 ### Situación actual
 
 - Rama final: `main`.
-- Base canónica: `763811b9f2be2e8f339802256457bfd0907126a9`; `main`,
+- Base canónica: `e759621026d704bd8f989fdae7f9bd6906f7054b`; `main`,
   `origin/main` y `origin/HEAD` están alineados en ese commit.
 - El Lote 2E-2 se implementó en `feat/lote-2e2-parser-matriz-excel`, commit
   previo al merge `f43a1a0`.
 - El PR `#107`, fusionado mediante `23fa6f3`, se conserva como cierre funcional
   histórico del parser V1 de 2E-2; no representa el HEAD actual.
-- PR más reciente: `#109`, que fusionó únicamente los tres archivos de la
-  migración `20260805_003_gestion_matrices_empresa` (UP, VERIFY y DOWN), 1123
-  líneas nuevas en total. Commit funcional: `59e141b`.
+- PR más reciente: `#110`, que actualizó únicamente el contrato técnico, la
+  memoria técnica operativa y este resumen tras la migración 003.
 - El Lote 2E-1 se implementó en `feat/lote-2e1-inspector-ooxml`, commit
   `17d0d25 feat: agregar inspector defensivo OOXML para matrices`.
 - PR del Lote 2E-1: `#105`, fusionado correctamente; merge commit `de7dc9d`.
@@ -113,8 +112,9 @@ navegador.
   Estado definitivo: **CERRADO Y APROBADO**.
 - **Sublote posterior — PR #109:** migración
   `20260805_003_gestion_matrices_empresa`, implementada en `59e141b` y
-  fusionada en `main`. Revisión independiente estática final: `APROBABLE`.
-  No hubo ejecución SQL ni prueba real contra PostgreSQL.
+  fusionada en `main` mediante `763811b9f2be2e8f339802256457bfd0907126a9`.
+  Revisión independiente estática final: `APROBABLE`. No hubo ejecución SQL
+  ni prueba real contra PostgreSQL.
 
 ### Cierre técnico del sublote de migración 003
 
@@ -296,7 +296,7 @@ temporalmente hasta que existan flujos coordinados de publicación y activación
 
 El Lote 2E-2 y el sublote posterior de migración 003 están cerrados,
 versionados y fusionados. El siguiente sublote debe definirse desde `main` en
-`763811b9f2be2e8f339802256457bfd0907126a9`, consultando primero este
+`e759621026d704bd8f989fdae7f9bd6906f7054b`, consultando primero este
 resumen y la memoria técnica operativa como fuentes canónicas. La secuencia
 futura objetivo
 continúa siendo:

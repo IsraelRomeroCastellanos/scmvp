@@ -16,11 +16,11 @@
 |---|---|
 | Última actualización | 2026-08-09 |
 | Rama final | `main` |
-| Commit base canónico | `763811b9f2be2e8f339802256457bfd0907126a9` en `main`, `origin/main` y `origin/HEAD` |
-| PR más reciente | `#109`, migración `20260805_003_gestion_matrices_empresa`, fusionado |
+| Commit base canónico | `e759621026d704bd8f989fdae7f9bd6906f7054b` en `main`, `origin/main` y `origin/HEAD` |
+| PR más reciente | `#110`, actualización de contexto tras la migración 003, fusionado |
 | Lote actual | Lotes 2A–2D, inspector OOXML 2E-1, parser V1 2E-2 y sublote posterior de migración 003 cerrados y fusionados |
 | Producción | Las migraciones 002 y 003 no han sido ejecutadas ni aplicadas en PostgreSQL o producción |
-| Próximo paso exacto | Definir el siguiente sublote desde `main` en `763811b9f2be2e8f339802256457bfd0907126a9`, sin ejecutar las migraciones pendientes de aplicación. |
+| Próximo paso exacto | Definir el siguiente sublote desde `main` en `e759621026d704bd8f989fdae7f9bd6906f7054b`, sin ejecutar las migraciones pendientes de aplicación. |
 
 ## 1. Propósito y mantenimiento
 
@@ -68,13 +68,12 @@ alcance, pruebas, riesgos o archivos protegidos. Cada actualización debe:
 
 ## 3. Estado Git confirmado
 
-- Rama de actualización documental: `docs/actualizar-contexto-migracion-003`.
-- Base canónica para el siguiente sublote: `763811b9f2be2e8f339802256457bfd0907126a9`.
+- Rama histórica de actualización documental del PR `#110`: `docs/actualizar-contexto-migracion-003`.
+- Base canónica para el siguiente sublote: `e759621026d704bd8f989fdae7f9bd6906f7054b`.
 - `main`, `origin/main` y `origin/HEAD` están alineados en
-  `763811b9f2be2e8f339802256457bfd0907126a9`.
-- PR más reciente: `#109`, fusionado; agregó únicamente los archivos UP,
-  VERIFY y DOWN de `20260805_003_gestion_matrices_empresa`, con 1123 líneas
-  nuevas en total. Commit funcional de la rama: `59e141b`.
+  `e759621026d704bd8f989fdae7f9bd6906f7054b`.
+- PR más reciente: `#110`, fusionado; actualizó únicamente el contrato técnico,
+  esta memoria y el resumen técnico ejecutivo tras la migración 003.
 - Rama de implementación del Lote 2E-2:
   `feat/lote-2e2-parser-matriz-excel`.
 - Commit de implementación previo al merge: `f43a1a0`.
@@ -386,7 +385,8 @@ críticos, altos ni medios que bloquearan staging, commit o PR.
 ### Validación confirmada del sublote posterior de migración 003
 
 - La revisión independiente estática final fue `APROBABLE`.
-- La migración quedó versionada y fusionada en `main` mediante el PR `#109`.
+- La migración quedó versionada y fusionada en `main` mediante el PR `#109`,
+  con cierre histórico en `763811b9f2be2e8f339802256457bfd0907126a9`.
 - Esta validación fue estática: no se ejecutó SQL, no hubo conexión a
   PostgreSQL y no acredita pruebas reales de UP, VERIFY o DOWN.
 
@@ -439,8 +439,9 @@ contenido funcional.
   `main` mediante `23fa6f3`. Cierre definitivo: **APROBADO**.
 - **Sublote posterior — migración 003 (`#109`):** UP, VERIFY y DOWN de
   `20260805_003_gestion_matrices_empresa`, implementados en `59e141b` y
-  fusionados en `main`. Revisión estática final: **APROBABLE**. La migración
-  está versionada, no ejecutada ni aplicada.
+  fusionados en `main` mediante `763811b9f2be2e8f339802256457bfd0907126a9`.
+  Revisión estática final: **APROBABLE**. La migración está versionada, no
+  ejecutada ni aplicada.
 
 En el Lote 2E-1 no se ejecutaron SQL ni migraciones y no hubo conexión a
 PostgreSQL. Los archivos untracked protegidos permanecieron intactos y fuera
@@ -512,7 +513,7 @@ siempre el conjunto exacto de archivos antes de staging selectivo.
 
 El Lote 2E-2 y el sublote posterior de migración 003 están cerrados,
 versionados y fusionados. El siguiente sublote debe definirse desde `main` en
-`763811b9f2be2e8f339802256457bfd0907126a9` y consultar primero esta
+`e759621026d704bd8f989fdae7f9bd6906f7054b` y consultar primero esta
 memoria y el resumen técnico ejecutivo como fuentes canónicas. La secuencia
 futura objetivo
 continúa siendo:
