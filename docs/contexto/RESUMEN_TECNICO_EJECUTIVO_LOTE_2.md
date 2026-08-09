@@ -1,6 +1,6 @@
 # PLD VISSION / SCMVP
 
-## Checkpoint de infraestructura operativa — 2026-08-08
+## Checkpoint de infraestructura operativa — 2026-08-09
 
 - Backend vigente: https://scmvp-nxtj.onrender.com
 - DB lógica vigente: `scmvp_q69o`.
@@ -13,17 +13,21 @@
 ### Situación actual
 
 - Rama final: `main`.
-- Base canónica: `23fa6f3`; `main`, `origin/main` y `origin/HEAD` quedaron
-  alineados en ese commit.
+- Base canónica: `763811b9f2be2e8f339802256457bfd0907126a9`; `main`,
+  `origin/main` y `origin/HEAD` están alineados en ese commit.
 - El Lote 2E-2 se implementó en `feat/lote-2e2-parser-matriz-excel`, commit
   previo al merge `f43a1a0`.
-- PR más reciente: `#107`, `feat: agregar parser de matriz PT GR por empresa`,
-  fusionado mediante `23fa6f3`.
+- El PR `#107`, fusionado mediante `23fa6f3`, se conserva como cierre funcional
+  histórico del parser V1 de 2E-2; no representa el HEAD actual.
+- PR más reciente: `#109`, que fusionó únicamente los tres archivos de la
+  migración `20260805_003_gestion_matrices_empresa` (UP, VERIFY y DOWN), 1123
+  líneas nuevas en total. Commit funcional: `59e141b`.
 - El Lote 2E-1 se implementó en `feat/lote-2e1-inspector-ooxml`, commit
   `17d0d25 feat: agregar inspector defensivo OOXML para matrices`.
 - PR del Lote 2E-1: `#105`, fusionado correctamente; merge commit `de7dc9d`.
 - La migración 001 está registrada en la base desplegada.
-- La migración 002 está versionada, pero **no se ha ejecutado en producción**.
+- Las migraciones 002 y 003 están versionadas, pero **no se han ejecutado ni
+  aplicado en PostgreSQL o producción**.
 - El backend ya gestiona empresas, configuración PLD y clientes con aislamiento
   por empresa.
 - Los Lotes 2A, 2B, 2C y 2D están implementados y fusionados mediante los PR
@@ -107,6 +111,29 @@ navegador.
 - **2E-2 — PR #107:** parser funcional V1 de matrices PT/GR por empresa,
   implementado en `f43a1a0` y fusionado en `main` mediante `23fa6f3`.
   Estado definitivo: **CERRADO Y APROBADO**.
+- **Sublote posterior — PR #109:** migración
+  `20260805_003_gestion_matrices_empresa`, implementada en `59e141b` y
+  fusionada en `main`. Revisión independiente estática final: `APROBABLE`.
+  No hubo ejecución SQL ni prueba real contra PostgreSQL.
+
+### Cierre técnico del sublote de migración 003
+
+La 003 complementa y no reemplaza la 002. Versiona el XLSX íntegro en
+`matriz_archivo_fuente.contenido BYTEA`, endurece metadatos, exige `revision
+BIGINT` positiva y confina `version_origen_id` a la misma empresa mediante
+`version_origen_empresa_id`. Agrega actores y fechas de activación/desactivación,
+una sola versión pendiente `BORRADOR`/`VALIDADA` por empresa, idempotencia y
+auditoría append-only protegida mediante trigger contra `UPDATE`, `DELETE` y
+`TRUNCATE`, preservando la única activa definida por la 002.
+
+`correlation_id` y `request_id` son campos separados, opcionales y limitados a
+128 caracteres ASCII visibles. UP tiene preflight estricto contra el contrato
+físico de la 002 y aborta ante filas previas incompatibles en
+`matriz_archivo_fuente`; VERIFY es read-only y comprueba BIGSERIAL, constraints,
+índices, FKs y SHA-256 cuando `pgcrypto.digest` está disponible. Si hay archivos
+y no puede acreditarse SHA-256, VERIFY falla. DOWN es conservador. Los
+`GRANT`/`REVOKE` nominales no se cierran hasta identificar los roles efectivos
+de PostgreSQL.
 
 ### Cierre técnico del Lote 2E-2
 
@@ -213,9 +240,9 @@ temporalmente hasta que existan flujos coordinados de publicación y activación
 
 ### Pendientes
 
-- migración 002 versionada, pero no ejecutada ni autorizada en producción;
-- migración `20260805_003_gestion_matrices_empresa` planificada y no
-  implementada;
+- ejecución/aplicación controlada de 002 y 003; ambas están versionadas, pero
+  no ejecutadas ni aplicadas;
+- identificación de roles efectivos de PostgreSQL y `GRANT`/`REVOKE` nominales;
 - gestión administrativa para crear borrador, cargar estructura, validar,
   publicar, activar/desactivar y sustituir versión;
 - motor de evaluación final y evaluación histórica;
@@ -230,7 +257,7 @@ temporalmente hasta que existan flujos coordinados de publicación y activación
 
 ### Fuera de alcance
 
-- Ejecución productiva de la migración 002.
+- Ejecución o aplicación de las migraciones 002 y 003.
 - Gestión, carga, vista previa y publicación completa de Excel.
 - Rutas, controladores, frontend y persistencia de la matriz. El parser
   funcional V1 sí existe; no constituye el motor de evaluación final.
@@ -247,7 +274,7 @@ temporalmente hasta que existan flujos coordinados de publicación y activación
 | Confiar en el frontend | Validación implementada y obligatoria en backend. |
 | Usar empresa manipulada | Derivar tenant de `req.user` para consultor/cliente y validar selección admin. |
 | Bloqueo después de insertar | Comprobar matriz dentro del flujo transaccional y antes de mutaciones. |
-| Confundir SQL versionado con producción | Mantener explícito que la migración 002 no está aplicada. |
+| Confundir SQL versionado con producción | Mantener explícito que las migraciones 002 y 003 no están aplicadas. |
 | Romper capturas existentes | Regresión de PF, PM, Fideicomiso, terceros y contratos actuales. |
 | Exponer auditoría manipulable | Tomar identificadores futuros de `req.user.id`, no del body. |
 | Ampliar el lote | Mantener fuera el motor final, endpoints, persistencia, frontend y publicación. |
@@ -261,14 +288,15 @@ temporalmente hasta que existan flujos coordinados de publicación y activación
 - Inspección de contratos existentes y aprobación previa de API, estados,
   permisos, auditoría y estrategia transaccional.
 - Migración 001 aplicada, ya confirmada.
-- Migración 002 probada en restauración desechable y autorizada antes de que
-  un backend dependiente de sus tablas pueda desplegarse.
+- Migraciones 002 y 003 probadas en restauración desechable y autorizadas antes
+  de que un backend dependiente de sus objetos pueda desplegarse.
 - Preservación del aislamiento multiempresa y de los contratos actuales.
 
 ### Próximo bloque de trabajo
 
-El Lote 2E-2 está **COMPLETADO, APROBADO, versionado y fusionado**. El siguiente
-sublote debe definirse desde `main` en `23fa6f3`, consultando primero este
+El Lote 2E-2 y el sublote posterior de migración 003 están cerrados,
+versionados y fusionados. El siguiente sublote debe definirse desde `main` en
+`763811b9f2be2e8f339802256457bfd0907126a9`, consultando primero este
 resumen y la memoria técnica operativa como fuentes canónicas. La secuencia
 futura objetivo
 continúa siendo:
@@ -278,16 +306,17 @@ crear borrador -> cargar estructura -> validar -> publicar -> activar
 ```
 
 Antes de programar deben aprobarse los contratos indicados en dependencias. No
-se ejecutará la migración 002 sin autorización separada. La migración
-`20260805_003_gestion_matrices_empresa` continúa planificada y no implementada.
+se ejecutarán ni aplicarán las migraciones 002 o 003 sin autorización separada.
+La 003 ya está implementada y versionada; ello no acredita ejecución real.
 Se conservan las reglas permanentes: un paso por vez, cambios con Codex,
 validación antes de avanzar, revisión independiente, pruebas antes de commit,
 staging selectivo, PR obligatorio y protección de archivos untracked.
 
 ### Estado de producción
 
-La migración `20260801_002_matrices_pt_gr_empresa` no está ejecutada ni
-autorizada en producción. En consecuencia, la gestión funcional de matrices y
+Las migraciones `20260801_002_matrices_pt_gr_empresa` y
+`20260805_003_gestion_matrices_empresa` no están ejecutadas ni autorizadas en
+producción. En consecuencia, la gestión funcional de matrices y
 el bloqueo dependiente de esas tablas tampoco deben declararse desplegados. El
 inspector OOXML y el parser V1 fusionados no prueban que el flujo completo de
 gestión, carga, publicación o activación esté desplegado. No debe afirmarse que

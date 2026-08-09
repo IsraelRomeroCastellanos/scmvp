@@ -6,12 +6,40 @@
 
 | Dato | Valor |
 |---|---|
-| Estado | APROBADO para diseño e implementación futura por sublotes |
+| Estado | Contrato histórico APROBADO; estado posterior comprobado de la migración 003 documentado abajo |
 | Fecha | 2026-08-05 |
 | Alcance | Gestión administrativa mínima de versiones de matrices PT/GR por empresa |
-| Naturaleza | Contrato funcional y técnico; no acredita implementación ni despliegue |
-| Producción | La migración `20260801_002_matrices_pt_gr_empresa` sigue NO ejecutada y NO autorizada |
+| Naturaleza | Contrato funcional y técnico histórico; por sí solo no acredita implementación ni despliegue |
+| Producción | Las migraciones 002 y 003 siguen NO ejecutadas, NO aplicadas y NO autorizadas |
 | Sublote 2E-0 | CERRADO; decisiones físicas APROBADAS para diseñar la migración 003 |
+
+### Nota de actualización posterior comprobada — 2026-08-09
+
+La numeración de sublotes de la sección 15 refleja el plan histórico de este
+contrato y no se renumera, para no romper trazabilidad. El trabajo real posterior
+fue 2E-1 inspector OOXML, 2E-2 parser funcional V1 y, después, el sublote de la
+migración 003. Esta última quedó implementada en `59e141b`, con revisión
+independiente estática final `APROBABLE`, y fusionada en `main` mediante el PR
+`#109`; el HEAD canónico actual es
+`763811b9f2be2e8f339802256457bfd0907126a9`. El PR agregó únicamente UP, VERIFY
+y DOWN, 1123 líneas nuevas en total. No se ejecutó SQL, no hubo conexión a
+PostgreSQL y no se acredita aplicación ni prueba real de ejecución.
+
+La 003 implementada complementa la 002 y materializa el diseño de las secciones
+10 y 11: contenido XLSX íntegro en `BYTEA`, metadatos endurecidos, revisión
+`BIGINT` positiva, origen confinado a la empresa, actores/fechas de activación y
+desactivación, una sola pendiente por empresa, auditoría append-only protegida,
+idempotencia y `correlation_id`/`request_id` separados. Su preflight es estricto
+contra el contrato físico de 002, VERIFY es read-only y DOWN conservador.
+VERIFY comprueba también BIGSERIAL, constraints, índices, FKs y SHA-256 cuando
+`pgcrypto.digest` está disponible; si existen archivos y no puede acreditarse
+SHA-256, falla. UP aborta ante filas previas incompatibles de
+`matriz_archivo_fuente`. Los roles efectivos y los `GRANT`/`REVOKE` nominales
+siguen pendientes.
+
+El parser V1 que otros contratos aún puedan describir como pendiente ya fue
+implementado y cerrado en 2E-2 por el PR `#107` (`23fa6f3` es su cierre
+histórico, no el HEAD actual).
 
 ## 1. Objetivo y alcance
 
@@ -67,7 +95,7 @@ Dependencias obligatorias para implementar:
 1. La migración 001 debe existir en el ambiente objetivo.
 2. La migración 002 deberá aprobarse y desplegarse mediante un proceso separado;
    este documento no lo autoriza.
-3. Debe diseñarse, revisarse y aprobarse la migración 003 que complete
+3. La migración 003, posteriormente diseñada, revisada y versionada, completa
    almacenamiento binario, auditoría append-only, idempotencia, control de
    concurrencia y la restricción de una sola versión pendiente.
 4. Backend y frontend del flujo 2E solo podrán desplegarse cuando el esquema que
@@ -464,11 +492,11 @@ de auditoría tiene máximo 16 KiB; `accion` tiene máximo 40 caracteres y
 `correlation_id`/`request_id`, cuando se conserven por separado, máximo 128
 caracteres ASCII visibles.
 
-## 10. Diseño físico aprobado de la futura migración 003
+## 10. Diseño físico históricamente aprobado y posteriormente implementado en la migración 003
 
 La 003 complementa, no reemplaza, las seis tablas de la 002. Los nombres aquí
-son el contrato propuesto para redactar SQL; cualquier cambio nominal durante
-la revisión debe conservar las invariantes y documentarse antes de ejecutar.
+fueron el contrato propuesto para redactar SQL y quedaron materializados por el
+PR `#109`; esto no significa que el SQL haya sido ejecutado.
 
 ### 10.1 Cambios sobre tablas de la 002
 
@@ -492,7 +520,7 @@ confiable e íntegro, verificable contra `tamano_bytes` y `sha256`. No inventa
 contenido, no deja `contenido` nulo y no convierte una referencia no verificable
 en prueba de integridad.
 
-### 10.2 Tablas nuevas propuestas
+### 10.2 Tablas nuevas definidas por la 003 versionada
 
 `matriz_auditoria_evento` contiene como mínimo: `id BIGSERIAL`, `empresa_id`,
 `matriz_version_id`, `version_origen_id`, `actor_usuario_id`, `accion
@@ -558,7 +586,7 @@ posterior al MVP quedan pendientes; no autorizan borrar fuentes durante 2E.
 ## 11. Estrategia UP, VERIFY y DOWN de la 003
 
 El nombre/key definitivo de la migración 003 es
-`20260805_003_gestion_matrices_empresa`. Sus archivos previstos son:
+`20260805_003_gestion_matrices_empresa`. Sus archivos versionados son:
 
 - `backend/migrations/20260805_003_gestion_matrices_empresa.up.sql`;
 - `backend/migrations/20260805_003_gestion_matrices_empresa.verify.sql`;
@@ -666,6 +694,13 @@ existentes cuando se desactive una matriz.
 Cada sublote debe corresponder a un ticket `COR-XXX`, revisar dependencias y
 completar build, prueba del caso y regresión antes de avanzar.
 
+> **Registro histórico supersedido en su numeración:** la tabla siguiente fue
+> el plan aprobado en 2E-0. No describe la numeración que finalmente siguió el
+> trabajo: 2E-1 fue el inspector OOXML, 2E-2 el parser V1 y la migración 003 se
+> cerró en un sublote posterior mediante el PR `#109`. Se conserva sin
+> renumerarla únicamente por trazabilidad. Sus endpoints, servicios, pantallas y
+> flujo administrativo continúan pendientes donde no exista evidencia posterior.
+
 | Sublote | Entregable acotado |
 |---|---|
 | 2E-0 | CERRADO: diseño físico y decisiones de seguridad aprobados en este contrato. Sin ejecutar migraciones. |
@@ -678,8 +713,9 @@ completar build, prueba del caso y regresión antes de avanzar.
 | 2E-7 | Nueva versión desde histórica con `version_origen_id`, copia física e idempotencia. |
 | 2E-8 | Frontend admin completo, pruebas por rol/concurrencia/archivo, builds y regresión integral del Lote 2. |
 
-La redacción de SQL de 2E-1 comienza únicamente después de cerrar los pendientes
-residuales de la sección 19 que afecten nombres, preflight o privilegios.
+La condición anterior a redactar SQL quedó supersedida por la implementación
+fusionada de la 003. La ejecución/aplicación de 002+003 y la definición nominal
+de privilegios siguen sujetas a los pendientes actuales de la sección 19.
 
 ## 16. Criterios de aceptación
 
@@ -794,41 +830,38 @@ residuales de la sección 19 que afecten nombres, preflight o privilegios.
     Activar y desactivar persisten estos datos en la misma transacción que la
     vigencia y la auditoría, sin alterar las decisiones funcionales previas.
 19. El nombre/key definitivo de la migración 003 es
-    `20260805_003_gestion_matrices_empresa`, con archivos previstos `.up.sql`,
-    `.verify.sql` y `.down.sql` bajo `backend/migrations/` y con ese mismo
-    nombre base.
+    `20260805_003_gestion_matrices_empresa`, con archivos posteriormente
+    versionados `.up.sql`, `.verify.sql` y `.down.sql` bajo
+    `backend/migrations/` y con ese mismo nombre base.
 20. El lock textual propio de la migración es
     `pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtext('20260805_003_gestion_matrices_empresa'))`.
     Es distinto del namespace operativo `2205` por empresa; ambos mecanismos
     tienen propósitos diferentes y no deben mezclarse.
 
-## 19. Pendientes residuales antes de escribir SQL
+## 19. Estado posterior y pendientes reales
 
-El 2E-0 queda aprobado. Solo permanecen estos cierres operativos o nominales:
+La lista original “antes de escribir SQL” quedó parcialmente supersedida por el
+inspector OOXML de 2E-1, el parser V1 de 2E-2 y la migración 003 fusionada por el
+PR `#109`. En particular, ya se resolvieron la inspección previa a ExcelJS, los
+nombres físicos de auditoría/idempotencia, la separación de `correlation_id` y
+`request_id`, el preflight y el comportamiento de UP/VERIFY/DOWN. No se asigna
+retroactivamente un ticket no comprobado ni se reescribe el cierre histórico.
 
-1. Asignar el ticket `COR-###` de la migración 003. Continúa pendiente porque
-   el repositorio no contiene una numeración real; este documento no inventa un
-   ticket.
+Permanecen:
+
+1. Ejecutar/aplicar de forma controlada 002 y 003 en el orden
+   `001 -> 002 -> VERIFY 002 -> 003 -> VERIFY 003`, con autorización y evidencia
+   separadas. El estado versionado no equivale a ejecución.
 2. Identificar los nombres efectivos de rol propietario y rol de aplicación en
-   cada ambiente, y aprobar la matriz exacta de grants/revokes previa a
-   producción.
-3. Definir el mecanismo autorizado para recuperar/verificar binarios si al
-   preflight existieran filas de la 002; si no puede probarse integridad, la 003
-   debe abortar como ya quedó aprobado.
-4. Cerrar el contrato estructural de tablas auxiliares empresariales (edad,
-   antigüedad, montos y marcas), el catálogo estable de códigos de validación y
-   la allowlist OOXML concreta que implementará el inspector.
-5. Elegir y validar la herramienta de inspección ZIP/OOXML, incluida la forma de
-   imponer timeout y ratios antes de `exceljs`, mediante corpus adversarial.
-6. Precisar nombres finales de columnas de auditoría/idempotencia y si
-   `correlation_id` y `request_id` serán uno o dos campos, sin alterar límites ni
-   semántica aprobados.
-7. Aprobar por separado el plan de prueba/despliegue de 002 y 003. Ninguna
-   autorización se presume en este documento.
-8. Determinar, antes del SQL definitivo y según las consultas reales de
-   auditoría, si se requieren índices individuales por `activada_por` y
-   `desactivada_por` o un índice compuesto más útil.
+   cada ambiente y definir los `GRANT`/`REVOKE` nominales antes de aplicar en
+   PostgreSQL.
+3. Implementar endpoints, servicios y pantallas de gestión de matrices.
+4. Implementar el flujo completo
+   `crear borrador -> cargar -> validar -> publicar -> activar`, incluida la
+   administración de activación, desactivación y nuevas versiones.
+5. Completar la integración técnica de mappings KYC donde siga pendiente.
+6. Implementar el motor de evaluación PT/GR y los demás elementos expresamente
+   fuera de alcance en este contrato.
 
-Estos pendientes deben cerrarse antes de escribir SQL cuando afecten el diseño
-físico. Ningún contrato propuesto equivale a capacidad disponible o permiso de
-ejecución.
+Ninguna descripción contractual o migración versionada equivale a capacidad
+desplegada, permiso de ejecución o prueba real contra PostgreSQL.
