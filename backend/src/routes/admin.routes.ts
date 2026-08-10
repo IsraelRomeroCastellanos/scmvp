@@ -14,11 +14,88 @@ import {
   resolveActiveActivitiesByKeys,
 } from '../services/actividades-vulnerables.service';
 import {
+  CrearBorradorMatrizError,
+  createEmptyCompanyMatrixDraft,
   getPublishedActiveMatrixStatusByCompanyIds,
   hasPublishedActiveCompanyMatrix,
 } from '../services/matrices-empresa.service';
 
 const router = Router();
+
+function matrizError(res: any, status: number, codigo: string, mensaje: string) {
+  return res.status(status).json({
+    error: { codigo, mensaje, detalles: [] },
+  });
+}
+
+// ===============================
+// CREAR BORRADOR DE MATRIZ (ADMIN)
+// ===============================
+router.post(
+  '/empresas/:empresaId/matrices',
+  authenticate,
+  authorizeRoles('admin'),
+  async (req, res) => {
+    const idempotencyKey = req.get('Idempotency-Key');
+    if (idempotencyKey === undefined) {
+      return matrizError(
+        res,
+        400,
+        'MATRIZ_IDEMPOTENCY_KEY_REQUERIDA',
+        'Idempotency-Key es obligatorio',
+      );
+    }
+    if (!/^[\x21-\x7e]{16,128}$/.test(idempotencyKey)) {
+      return matrizError(
+        res,
+        400,
+        'MATRIZ_IDEMPOTENCY_KEY_INVALIDA',
+        'Idempotency-Key debe tener entre 16 y 128 caracteres ASCII visibles',
+      );
+    }
+
+    const empresaId = Number(req.params.empresaId);
+    const actorUsuarioId = req.user?.id;
+    if (
+      !Number.isInteger(empresaId) ||
+      empresaId <= 0 ||
+      !Number.isInteger(actorUsuarioId) ||
+      (actorUsuarioId ?? 0) <= 0
+    ) {
+      return matrizError(
+        res,
+        404,
+        'MATRIZ_EMPRESA_NO_ENCONTRADA',
+        'Empresa no encontrada',
+      );
+    }
+
+    try {
+      const response = await createEmptyCompanyMatrixDraft(
+        pool,
+        empresaId,
+        actorUsuarioId!,
+        idempotencyKey,
+      );
+      return res.status(201).json(response);
+    } catch (error) {
+      if (error instanceof CrearBorradorMatrizError) {
+        if (error.status === 500) {
+          console.error('Error al crear borrador de matriz:', error);
+        }
+        return matrizError(res, error.status, error.code, error.message);
+      }
+
+      console.error('Error inesperado al crear borrador de matriz:', error);
+      return matrizError(
+        res,
+        500,
+        'MATRIZ_CREAR_BORRADOR_ERROR',
+        'No fue posible crear el borrador de matriz',
+      );
+    }
+  },
+);
 
 /**
  * ===============================
