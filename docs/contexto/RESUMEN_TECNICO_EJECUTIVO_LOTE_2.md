@@ -13,14 +13,18 @@
 ### Situación actual
 
 - Rama final: `main`.
-- Base canónica: `e759621026d704bd8f989fdae7f9bd6906f7054b`; `main`,
+- Base canónica: `e87ba26dc365903189e96247373e2b3ae3a791e4`; `main`,
   `origin/main` y `origin/HEAD` están alineados en ese commit.
 - El Lote 2E-2 se implementó en `feat/lote-2e2-parser-matriz-excel`, commit
   previo al merge `f43a1a0`.
 - El PR `#107`, fusionado mediante `23fa6f3`, se conserva como cierre funcional
   histórico del parser V1 de 2E-2; no representa el HEAD actual.
-- PR más reciente: `#110`, que actualizó únicamente el contrato técnico, la
-  memoria técnica operativa y este resumen tras la migración 003.
+- PR más reciente: `#112`, crear borrador de matriz por empresa, implementado
+  en `90850b5` y fusionado mediante el HEAD canónico actual. Agregó únicamente
+  `backend/src/routes/admin.routes.ts` y
+  `backend/src/services/matrices-empresa.service.ts`.
+- El PR `#111`, fusionado mediante `059e472`, se conserva como cierre histórico
+  documental previo.
 - El Lote 2E-1 se implementó en `feat/lote-2e1-inspector-ooxml`, commit
   `17d0d25 feat: agregar inspector defensivo OOXML para matrices`.
 - PR del Lote 2E-1: `#105`, fusionado correctamente; merge commit `de7dc9d`.
@@ -33,7 +37,8 @@
   `#94`, `#95`, `#96` y `#97`, respectivamente.
 - Existe consulta reutilizable, indicador en los DTO, bloqueo en backend y
   frontend, inspector defensivo OOXML y parser funcional V1 de matrices PT/GR
-  por empresa. No existe todavía gestión administrativa completa de matrices.
+  por empresa. Crear borrador ya está implementado; no existe todavía gestión
+  administrativa completa de matrices.
 
 ### Objetivo
 
@@ -43,7 +48,8 @@ completado, versionado y fusionado como frontera defensiva previa a ExcelJS. El
 Lote 2E-2 quedó cerrado y aprobado con el parser `PT_GR_EMPRESA_V1`. El
 siguiente sublote debe definirse sin declarar como existentes
 el motor PT/GR, la evaluación histórica ni un despliegue productivo dependiente
-de la migración 002.
+de las migraciones 002 y 003. La migración 003 y crear borrador también están
+cerrados.
 
 ### Regla aprobada
 
@@ -115,6 +121,39 @@ navegador.
   fusionada en `main` mediante `763811b9f2be2e8f339802256457bfd0907126a9`.
   Revisión independiente estática final: `APROBABLE`. No hubo ejecución SQL
   ni prueba real contra PostgreSQL.
+- **Crear borrador por empresa — PR #112:** endpoint
+  `POST /api/admin/empresas/:empresaId/matrices`, implementado en `90850b5` y
+  fusionado mediante `e87ba26dc365903189e96247373e2b3ae3a791e4`. Solo admin;
+  crea BORRADOR vacío, inactivo, con revisión 1, siguiente número de versión,
+  una sola pendiente, idempotencia, lock transaccional y auditoría.
+
+### Cierre técnico de crear borrador por empresa
+
+El endpoint toma `empresaId` del path y el actor de `req.user.id`. Exige
+`Idempotency-Key` de 16 a 128 caracteres ASCII visibles y usa la operación
+`CREAR_BORRADOR`, auditoría `BORRADOR_CREADO` y estados idempotentes
+`EN_PROCESO -> COMPLETADA`, sin persistir `FALLIDA`. El request canónico es
+`{"operacion":"CREAR_BORRADOR","empresa_id":<empresaId>,"actor_usuario_id":<actorId>}`.
+El ámbito de la clave es empresa + actor + operación; igual clave y request
+distinto en el mismo ámbito produce `409 MATRIZ_IDEMPOTENCIA_CONFLICTO`.
+
+Bajo `pg_catalog.pg_advisory_xact_lock(2205, empresa_id)`, la transacción
+comprueba empresa y pendiente, calcula `MAX(numero_version)+1`, crea la versión
+y su auditoría, y exige exactamente una transición idempotente final. Una fila
+idempotente expirada a los 7 días se elimina transaccionalmente y se trata como
+nueva; la auditoría nunca se elimina. El replay reproduce la respuesta sin
+segunda versión ni segunda auditoría. `revision` BIGINT se normaliza a número
+seguro y `creada_en` a ISO.
+
+Errores aprobados: `400 MATRIZ_IDEMPOTENCY_KEY_REQUERIDA`, `400
+MATRIZ_IDEMPOTENCY_KEY_INVALIDA`, `404 MATRIZ_EMPRESA_NO_ENCONTRADA`, `409
+MATRIZ_PENDIENTE_EXISTENTE`, `409 MATRIZ_IDEMPOTENCIA_CONFLICTO`, `409
+MATRIZ_CONFLICTO_CONCURRENCIA` y `500 MATRIZ_CREAR_BORRADOR_ERROR`.
+
+Build backend, `git diff --check`, pruebas con `PoolClient` simulado y regresión
+fueron correctos; revisión independiente final `APROBABLE`. No hubo conexión ni
+prueba real contra PostgreSQL ni despliegue productivo. Hallazgo residual bajo:
+un `empresaId` mayor a 2147483647 puede responder `500` en vez de `404`.
 
 ### Cierre técnico del sublote de migración 003
 
@@ -243,10 +282,10 @@ temporalmente hasta que existan flujos coordinados de publicación y activación
 - ejecución/aplicación controlada de 002 y 003; ambas están versionadas, pero
   no ejecutadas ni aplicadas;
 - identificación de roles efectivos de PostgreSQL y `GRANT`/`REVOKE` nominales;
-- gestión administrativa para crear borrador, cargar estructura, validar,
-  publicar, activar/desactivar y sustituir versión;
+- gestión administrativa restante para cargar/reemplazar XLSX, validar,
+  publicar, activar/desactivar, listar, detalle/preview y sustituir versión;
 - motor de evaluación final y evaluación histórica;
-- endpoints de gestión, carga o publicación que todavía no existen;
+- endpoints de gestión restantes que todavía no existen;
 - vinculación técnica definitiva de campos KYC y generación del Excel canónico
   final;
 - migraciones no ejecutadas y frontend no implementado en el Lote 2E-2;
@@ -259,8 +298,9 @@ temporalmente hasta que existan flujos coordinados de publicación y activación
 
 - Ejecución o aplicación de las migraciones 002 y 003.
 - Gestión, carga, vista previa y publicación completa de Excel.
-- Rutas, controladores, frontend y persistencia de la matriz. El parser
-  funcional V1 sí existe; no constituye el motor de evaluación final.
+- Frontend y flujo restante de carga, consulta, validación, publicación y
+  activación. Crear borrador y el parser V1 sí existen; no constituyen el motor
+  de evaluación final.
 - Motor PT/GR, evaluaciones históricas y correo.
 - Clasificaciones globales, GAFI y regímenes fiscales.
 - Proveedor de almacenamiento o cifrado.
@@ -294,15 +334,15 @@ temporalmente hasta que existan flujos coordinados de publicación y activación
 
 ### Próximo bloque de trabajo
 
-El Lote 2E-2 y el sublote posterior de migración 003 están cerrados,
-versionados y fusionados. El siguiente sublote debe definirse desde `main` en
-`e759621026d704bd8f989fdae7f9bd6906f7054b`, consultando primero este
+El inspector 2E-1, el parser 2E-2, la migración 003 y crear borrador están
+cerrados, versionados y fusionados. El siguiente sublote debe definirse desde
+`main` en `e87ba26dc365903189e96247373e2b3ae3a791e4`, consultando primero este
 resumen y la memoria técnica operativa como fuentes canónicas. La secuencia
 futura objetivo
 continúa siendo:
 
 ```text
-crear borrador -> cargar estructura -> validar -> publicar -> activar
+cargar/reemplazar XLSX -> validar -> publicar -> activar/desactivar
 ```
 
 Antes de programar deben aprobarse los contratos indicados en dependencias. No
@@ -316,8 +356,9 @@ staging selectivo, PR obligatorio y protección de archivos untracked.
 
 Las migraciones `20260801_002_matrices_pt_gr_empresa` y
 `20260805_003_gestion_matrices_empresa` no están ejecutadas ni autorizadas en
-producción. En consecuencia, la gestión funcional de matrices y
-el bloqueo dependiente de esas tablas tampoco deben declararse desplegados. El
+producción. En consecuencia, el endpoint de crear borrador, la gestión de
+matrices y el bloqueo dependiente de esas tablas tampoco deben declararse
+desplegados. El
 inspector OOXML y el parser V1 fusionados no prueban que el flujo completo de
 gestión, carga, publicación o activación esté desplegado. No debe afirmarse que
 funcionalidades dependientes de migraciones estén desplegadas.

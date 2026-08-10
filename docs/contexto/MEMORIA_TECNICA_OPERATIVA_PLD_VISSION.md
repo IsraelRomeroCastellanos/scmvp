@@ -16,11 +16,11 @@
 |---|---|
 | Última actualización | 2026-08-09 |
 | Rama final | `main` |
-| Commit base canónico | `e759621026d704bd8f989fdae7f9bd6906f7054b` en `main`, `origin/main` y `origin/HEAD` |
-| PR más reciente | `#110`, actualización de contexto tras la migración 003, fusionado |
-| Lote actual | Lotes 2A–2D, inspector OOXML 2E-1, parser V1 2E-2 y sublote posterior de migración 003 cerrados y fusionados |
+| Commit base canónico | `e87ba26dc365903189e96247373e2b3ae3a791e4` en `main`, `origin/main` y `origin/HEAD` |
+| PR más reciente | `#112`, crear borrador de matriz por empresa, fusionado |
+| Lote actual | Lotes 2A–2D, inspector OOXML 2E-1, parser V1 2E-2, migración 003 y crear borrador de matriz por empresa cerrados y fusionados |
 | Producción | Las migraciones 002 y 003 no han sido ejecutadas ni aplicadas en PostgreSQL o producción |
-| Próximo paso exacto | Definir el siguiente sublote desde `main` en `e759621026d704bd8f989fdae7f9bd6906f7054b`, sin ejecutar las migraciones pendientes de aplicación. |
+| Próximo paso exacto | Definir el siguiente sublote desde `main` en `e87ba26dc365903189e96247373e2b3ae3a791e4`, sin ejecutar las migraciones pendientes de aplicación. |
 
 ## 1. Propósito y mantenimiento
 
@@ -68,12 +68,16 @@ alcance, pruebas, riesgos o archivos protegidos. Cada actualización debe:
 
 ## 3. Estado Git confirmado
 
-- Rama histórica de actualización documental del PR `#110`: `docs/actualizar-contexto-migracion-003`.
-- Base canónica para el siguiente sublote: `e759621026d704bd8f989fdae7f9bd6906f7054b`.
+- Rama final y base reutilizable: `main`.
+- Base canónica para el siguiente sublote: `e87ba26dc365903189e96247373e2b3ae3a791e4`.
 - `main`, `origin/main` y `origin/HEAD` están alineados en
-  `e759621026d704bd8f989fdae7f9bd6906f7054b`.
-- PR más reciente: `#110`, fusionado; actualizó únicamente el contrato técnico,
-  esta memoria y el resumen técnico ejecutivo tras la migración 003.
+  `e87ba26dc365903189e96247373e2b3ae3a791e4`.
+- PR más reciente: `#112`, fusionado; su commit funcional previo al merge fue
+  `90850b5` y agregó únicamente `backend/src/routes/admin.routes.ts` y
+  `backend/src/services/matrices-empresa.service.ts` (368 inserciones y una
+  eliminación).
+- El PR `#111`, fusionado mediante `059e472`, se conserva como cierre histórico
+  documental previo; no representa el HEAD actual.
 - Rama de implementación del Lote 2E-2:
   `feat/lote-2e2-parser-matriz-excel`.
 - Commit de implementación previo al merge: `f43a1a0`.
@@ -92,8 +96,8 @@ alcance, pruebas, riesgos o archivos protegidos. Cada actualización debe:
 - PR del Lote 2C: `#96`, fusionado.
 - PR del Lote 2D: `#97`, fusionado.
 - Commit funcional del Lote 1: `4e2a0a4`.
-- Los dos documentos canónicos de `docs/contexto/` están versionados y son el
-  único alcance de esta actualización.
+- Los tres documentos canónicos autorizados de `docs/contexto/` son el único
+  alcance de esta actualización.
 - Existen otros archivos untracked protegidos; no forman parte del lote y no
   deben limpiarse, modificarse ni agregarse.
 
@@ -180,16 +184,17 @@ Rutas existentes que forman puntos de integración del lote:
 | `GET /api/admin/empresas` | Admin global; consultor limitado a su empresa. | Expone `tiene_matriz_publicada_activa`; el listado usa consulta agrupada y evita N+1. |
 | `GET /api/admin/empresas/:id` | Admin o consultor autorizado; devuelve empresa y configuración PLD actual. | Expone `tiene_matriz_publicada_activa`. |
 | `POST /api/admin/empresas` | Admin; crea empresa y actividades vulnerables en transacción. | Debe seguir permitiendo empresa sin matriz. |
-| `PUT /api/admin/empresas/:id` | Admin; edita empresa y configuración autorizada. | No administra matriz actualmente. |
+| `PUT /api/admin/empresas/:id` | Admin; edita empresa y configuración autorizada. | No administra matriz. |
+| `POST /api/admin/empresas/:empresaId/matrices` | Solo admin; deriva empresa del path y actor de `req.user.id`. | Crea un BORRADOR vacío con idempotencia, transacción, auditoría y una sola pendiente. Depende del esquema 002+003. |
 | `GET /api/cliente/mi-empresa` | Obtiene la empresa de `req.user.empresa_id`. | Expone `tiene_matriz_publicada_activa`. |
 | `GET /api/cliente/clientes` | Lista con aislamiento por rol/empresa. | No es punto de creación; no requiere cambio para aplicar el bloqueo. |
 | `GET /api/cliente/clientes/:id` | Consulta detalle bajo aislamiento vigente. | Fuera del cambio mínimo de creación. |
 | `POST /api/cliente/registrar-cliente` | Admin, consultor o cliente; determina la empresa conforme al rol, valida su existencia y registra en transacción. | Valida dentro de la transacción y antes de insertar que exista matriz publicada y activa; rechaza con `409` cuando no existe. |
 | `PUT /api/cliente/clientes/:id` | Edita bajo controles vigentes. | El bloqueo de edición no está aprobado; no debe asumirse. |
 
-No existen endpoints de matrices. Cualquier ruta para cargar, validar,
-previsualizar, publicar, activar o consultar versiones es una propuesta futura,
-no una capacidad actual.
+El endpoint de crear borrador ya existe. Las rutas para cargar/reemplazar,
+validar, publicar, activar/desactivar, listar, consultar detalle o previsualizar
+siguen pendientes donde no exista evidencia posterior.
 
 ## 8. Servicios
 
@@ -199,8 +204,9 @@ no una capacidad actual.
   asignación por empresa, selecciones PLD y validaciones relacionadas.
 - `backend/src/services/auth.service.ts`: generación y verificación de JWT.
 - `backend/src/services/matrices-empresa.service.ts`: servicio reutilizable
-  incorporado en el Lote 2A; expone `hasPublishedActiveCompanyMatrix` y
-  consulta por empresa con `estado_editorial = 'PUBLICADA'` y `activa = TRUE`.
+  incorporado en el Lote 2A; conserva `hasPublishedActiveCompanyMatrix` y
+  además implementa la creación transaccional e idempotente de un BORRADOR
+  vacío por empresa.
 - `backend/src/services/matriz-ooxml-inspector.service.ts`: frontera defensiva
   OOXML incorporada en el Lote 2E-1; expone
   `inspectMatrizXlsxOoxml(input: Buffer): Promise<MatrizOoxmlInspectionResult>`.
@@ -390,6 +396,20 @@ críticos, altos ni medios que bloquearan staging, commit o PR.
 - Esta validación fue estática: no se ejecutó SQL, no hubo conexión a
   PostgreSQL y no acredita pruebas reales de UP, VERIFY o DOWN.
 
+### Validación confirmada de crear borrador por empresa
+
+- El PR `#112` cerró `POST /api/admin/empresas/:empresaId/matrices`; el commit
+  funcional previo al merge fue `90850b5` y el merge canónico es
+  `e87ba26dc365903189e96247373e2b3ae3a791e4`.
+- `npm run build` del backend, `git diff --check`, las pruebas con `PoolClient`
+  simulado y la regresión proporcional fueron correctos.
+- La revisión independiente final fue `APROBABLE`.
+- No se ejecutó SQL, no hubo conexión a PostgreSQL y no se acredita despliegue
+  productivo. El endpoint depende de 002+003 y no debe declararse funcional en
+  producción hasta aplicar y verificar ambas migraciones.
+- Hallazgo residual bajo no bloqueante: un `empresaId` mayor a 2147483647 puede
+  terminar en `500` en vez de `404`; queda como endurecimiento técnico.
+
 Riesgos residuales bajos: endurecimiento opcional de la longitud exacta de
 `sheetNames` en la respuesta del Worker; limpieza defensiva adicional en
 `onError`; dependencia del comportamiento fijado de `unzipper` 0.10.14; y
@@ -442,6 +462,12 @@ contenido funcional.
   fusionados en `main` mediante `763811b9f2be2e8f339802256457bfd0907126a9`.
   Revisión estática final: **APROBABLE**. La migración está versionada, no
   ejecutada ni aplicada.
+- **Crear borrador por empresa (`#112`):** endpoint
+  `POST /api/admin/empresas/:empresaId/matrices`, implementado en `90850b5` y
+  fusionado mediante `e87ba26dc365903189e96247373e2b3ae3a791e4`. Crea un
+  BORRADOR vacío, inactivo, revisión inicial 1 y siguiente número de versión;
+  exige admin, actor autenticado, `Idempotency-Key`, lock transaccional por
+  empresa, una sola pendiente y auditoría `BORRADOR_CREADO`.
 
 En el Lote 2E-1 no se ejecutaron SQL ni migraciones y no hubo conexión a
 PostgreSQL. Los archivos untracked protegidos permanecieron intactos y fuera
@@ -459,10 +485,11 @@ que existan flujos coordinados de publicación y activación.
   autorización separada y en el orden documentado;
 - identificación de los roles efectivos de PostgreSQL y definición nominal de
   `GRANT`/`REVOKE`;
-- gestión administrativa para crear borrador, cargar estructura, validar,
-  publicar, activar/desactivar y sustituir versión;
+- gestión administrativa restante para cargar/reemplazar XLSX, validar,
+  publicar, activar/desactivar, listar, consultar detalle/preview y sustituir
+  versión;
 - motor de evaluación final y evaluación histórica;
-- endpoints de gestión, carga o publicación que todavía no existen;
+- endpoints de gestión restantes que todavía no existen;
 - vinculación técnica definitiva de campos KYC;
 - generación del Excel canónico final;
 - migraciones no ejecutadas y frontend no implementado en este lote;
@@ -485,9 +512,9 @@ que existan flujos coordinados de publicación y activación.
   `datos_completos` o `deepMerge`.
 - Ejecución productiva de la migración 002.
 - Ejecución o aplicación de las migraciones 002 y 003.
-- Rutas, controladores, frontend, persistencia, gestión, carga y publicación de
-  la matriz. El parser funcional V1 sí está implementado; no equivale al motor
-  de evaluación final.
+- Frontend, carga/reemplazo, validación, publicación, activación/desactivación y
+  consultas de matriz aún pendientes. Crear borrador y el parser V1 sí están
+  implementados; no equivalen al motor de evaluación final.
 
 ## 14. Archivos protegidos y reglas Git
 
@@ -511,15 +538,15 @@ siempre el conjunto exacto de archivos antes de staging selectivo.
 
 ## 15. Próximo punto de trabajo
 
-El Lote 2E-2 y el sublote posterior de migración 003 están cerrados,
-versionados y fusionados. El siguiente sublote debe definirse desde `main` en
-`e759621026d704bd8f989fdae7f9bd6906f7054b` y consultar primero esta
+El inspector 2E-1, el parser 2E-2, la migración 003 y crear borrador están
+cerrados, versionados y fusionados. El siguiente sublote debe definirse desde
+`main` en `e87ba26dc365903189e96247373e2b3ae3a791e4` y consultar primero esta
 memoria y el resumen técnico ejecutivo como fuentes canónicas. La secuencia
 futura objetivo
 continúa siendo:
 
 ```text
-crear borrador -> cargar estructura -> validar -> publicar -> activar
+cargar/reemplazar XLSX -> validar -> publicar -> activar/desactivar
 ```
 
 Antes de programar deben inspeccionarse los contratos existentes y aprobarse

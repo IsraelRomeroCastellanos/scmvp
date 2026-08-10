@@ -6,7 +6,7 @@
 
 | Dato | Valor |
 |---|---|
-| Estado | Contrato histórico APROBADO; estado posterior comprobado de la migración 003 documentado abajo |
+| Estado | Contrato histórico APROBADO; migración 003 y crear borrador cerrados posteriormente |
 | Fecha | 2026-08-05 |
 | Alcance | Gestión administrativa mínima de versiones de matrices PT/GR por empresa |
 | Naturaleza | Contrato funcional y técnico histórico; por sí solo no acredita implementación ni despliegue |
@@ -17,13 +17,19 @@
 
 La numeración de sublotes de la sección 15 refleja el plan histórico de este
 contrato y no se renumera, para no romper trazabilidad. El trabajo real posterior
-fue 2E-1 inspector OOXML, 2E-2 parser funcional V1 y, después, el sublote de la
-migración 003. Esta última quedó implementada en `59e141b`, con revisión
+fue 2E-1 inspector OOXML, 2E-2 parser funcional V1, el sublote de la migración
+003 y crear borrador de matriz por empresa. La migración quedó implementada en
+`59e141b`, con revisión
 independiente estática final `APROBABLE`, y fusionada en `main` mediante el PR
-`#109`; el HEAD canónico actual es
-`763811b9f2be2e8f339802256457bfd0907126a9`. El PR agregó únicamente UP, VERIFY
-y DOWN, 1123 líneas nuevas en total. No se ejecutó SQL, no hubo conexión a
+`#109`, con cierre histórico `763811b`. Crear borrador quedó implementado en
+`90850b5` y fusionado por el PR `#112`; el HEAD canónico actual es
+`e87ba26dc365903189e96247373e2b3ae3a791e4`. El PR #109 agregó únicamente UP,
+VERIFY y DOWN, 1123 líneas nuevas en total. No se ejecutó SQL, no hubo conexión a
 PostgreSQL y no se acredita aplicación ni prueba real de ejecución.
+
+El PR `#111`, fusionado mediante `059e472`, se conserva como cierre histórico
+documental previo. El PR `#107`, fusionado mediante `23fa6f3`, conserva el
+cierre histórico del parser 2E-2. Ninguno representa el HEAD actual.
 
 La 003 implementada complementa la 002 y materializa el diseño de las secciones
 10 y 11: contenido XLSX íntegro en `BYTEA`, metadatos endurecidos, revisión
@@ -283,12 +289,19 @@ parseado y recalculado por backend.
 
 ### 6.4 Crear borrador
 
+- **Implementado y cerrado por el PR #112.** Solo admin; `empresaId` proviene
+  del path y el actor de `req.user.id`.
 - Crea la nueva fila de versión, no la publicación.
+- El BORRADOR nace vacío, `activa=false`, `revision=1` y
+  `numero_version=MAX(numero_version)+1`.
 - Rechaza si la empresa ya tiene BORRADOR o VALIDADA.
 - Asigna de forma transaccional `MAX(numero_version)+1` bajo bloqueo por empresa.
 - Para un borrador vacío, `version_origen_id` es nulo. Para nueva versión desde
   histórica se usa la operación específica.
 - Registra actor y evento de auditoría.
+- Exige idempotencia con operación `CREAR_BORRADOR`, auditoría
+  `BORRADOR_CREADO` y estados `EN_PROCESO -> COMPLETADA`, sin `FALLIDA`
+  persistida.
 
 ### 6.5 Cargar archivo
 
@@ -357,8 +370,8 @@ parseado y recalculado por backend.
 
 ## 7. Contratos HTTP propuestos
 
-Todos los endpoints requieren `authenticate` y `authorizeRoles('admin')`.
-Ninguno está implementado por este documento.
+Todos los endpoints requieren `authenticate` y `authorizeRoles('admin')`. El
+endpoint de crear borrador está implementado; los demás permanecen propuestos.
 
 | Método y ruta | Función | Éxito esperado |
 |---|---|---:|
@@ -376,8 +389,8 @@ Ninguno está implementado por este documento.
 
 Contrato de cuerpos mínimos:
 
-- crear borrador: sin `empresa_id`; puede incluir `motivo_nueva_version` solo si
-  una futura regla lo requiere;
+- crear borrador: sin `empresa_id` ni actor en body; ambos son autoritativos
+  desde path y sesión autenticada;
 - archivo: `multipart/form-data` con una sola parte `archivo`;
 - validar/publicar: body vacío o metadatos no autoritativos;
 - activar: `version_activa_esperada_id`, nullable cuando se espera ninguna;
@@ -420,6 +433,15 @@ se persiste en claro: se guarda únicamente su SHA-256. El ámbito único es act
 + empresa + operación + hash de clave; se guarda además hash canónico del
 request, estado y respuesta reproducible. Repetir clave y mismo request devuelve
 el resultado original; repetirla con otro request devuelve `409`.
+
+Para crear borrador, el request canónico exacto es
+`{"operacion":"CREAR_BORRADOR","empresa_id":<empresaId>,"actor_usuario_id":<actorId>}`
+y el ámbito es `empresa_id + actor_usuario_id + operacion`. La misma cadena
+puede existir en otra empresa, actor u operación. Una fila expirada se elimina
+transaccionalmente de `matriz_idempotencia` y se trata como nueva; la auditoría
+nunca se elimina. El UPDATE final exige exactamente una fila
+`EN_PROCESO -> COMPLETADA`; el replay reproduce la respuesta sin duplicar
+versión ni auditoría.
 
 La retención es 7 días desde creación. La respuesta persistida no supera 64
 KiB. La limpieza es un proceso separado, observable, por lotes y sin cron dentro
@@ -697,7 +719,8 @@ completar build, prueba del caso y regresión antes de avanzar.
 > **Registro histórico supersedido en su numeración:** la tabla siguiente fue
 > el plan aprobado en 2E-0. No describe la numeración que finalmente siguió el
 > trabajo: 2E-1 fue el inspector OOXML, 2E-2 el parser V1 y la migración 003 se
-> cerró en un sublote posterior mediante el PR `#109`. Se conserva sin
+> cerró en un sublote posterior mediante el PR `#109`; después se cerró crear
+> borrador mediante el PR `#112`. Se conserva sin
 > renumerarla únicamente por trazabilidad. Sus endpoints, servicios, pantallas y
 > flujo administrativo continúan pendientes donde no exista evidencia posterior.
 
@@ -706,7 +729,7 @@ completar build, prueba del caso y regresión antes de avanzar.
 | 2E-0 | CERRADO: diseño físico y decisiones de seguridad aprobados en este contrato. Sin ejecutar migraciones. |
 | 2E-1 | Migración 003 UP/VERIFY/DOWN y pruebas desechables autorizadas; despliegue productivo fuera de alcance hasta autorización separada. |
 | 2E-2 | Backend de listar, detalle, preview y descarga admin con aislamiento y ETag. |
-| 2E-3 | Backend de crear borrador y una sola pendiente, con transacción e idempotencia. |
+| 2E-3 | Plan histórico supersedido; crear borrador y una sola pendiente se cerró posteriormente mediante PR #112. |
 | 2E-4 | Carga segura, almacenamiento binario, SHA-256, parser y normalización atómica. |
 | 2E-5 | Validación estructural/contenido, allowlist de fórmulas, reportes por celda y transición a VALIDADA. |
 | 2E-6 | Publicar, activar y desactivar con inmutabilidad, sustitución atómica, motivo y auditoría; coordinación con alta de clientes. |
@@ -841,8 +864,9 @@ de privilegios siguen sujetas a los pendientes actuales de la sección 19.
 ## 19. Estado posterior y pendientes reales
 
 La lista original “antes de escribir SQL” quedó parcialmente supersedida por el
-inspector OOXML de 2E-1, el parser V1 de 2E-2 y la migración 003 fusionada por el
-PR `#109`. En particular, ya se resolvieron la inspección previa a ExcelJS, los
+inspector OOXML de 2E-1, el parser V1 de 2E-2, la migración 003 fusionada por el
+PR `#109` y crear borrador fusionado por el PR `#112`. En particular, ya se
+resolvieron la inspección previa a ExcelJS, los
 nombres físicos de auditoría/idempotencia, la separación de `correlation_id` y
 `request_id`, el preflight y el comportamiento de UP/VERIFY/DOWN. No se asigna
 retroactivamente un ticket no comprobado ni se reescribe el cierre histórico.
@@ -855,13 +879,33 @@ Permanecen:
 2. Identificar los nombres efectivos de rol propietario y rol de aplicación en
    cada ambiente y definir los `GRANT`/`REVOKE` nominales antes de aplicar en
    PostgreSQL.
-3. Implementar endpoints, servicios y pantallas de gestión de matrices.
-4. Implementar el flujo completo
-   `crear borrador -> cargar -> validar -> publicar -> activar`, incluida la
-   administración de activación, desactivación y nuevas versiones.
+3. Implementar los endpoints y pantallas restantes de gestión de matrices:
+   cargar/reemplazar XLSX, listar, detalle y preview donde sigan pendientes.
+4. Completar el flujo desde el BORRADOR ya implementado:
+   `cargar -> validar -> publicar -> activar`, incluida la administración de
+   activación, desactivación y nuevas versiones.
 5. Completar la integración técnica de mappings KYC donde siga pendiente.
 6. Implementar el motor de evaluación PT/GR y los demás elementos expresamente
    fuera de alcance en este contrato.
 
 Ninguna descripción contractual o migración versionada equivale a capacidad
 desplegada, permiso de ejecución o prueba real contra PostgreSQL.
+
+### 19.1 Evidencia de cierre de crear borrador
+
+El PR `#112` agregó únicamente `backend/src/routes/admin.routes.ts` y
+`backend/src/services/matrices-empresa.service.ts` (368 inserciones y una
+eliminación). El build backend, `git diff --check`, pruebas con `PoolClient`
+simulado y regresión proporcional fueron correctos; la revisión independiente
+final fue `APROBABLE`. `revision` BIGINT se normaliza a número seguro y
+`creada_en` a ISO.
+
+Errores aprobados: `400 MATRIZ_IDEMPOTENCY_KEY_REQUERIDA`, `400
+MATRIZ_IDEMPOTENCY_KEY_INVALIDA`, `404 MATRIZ_EMPRESA_NO_ENCONTRADA`, `409
+MATRIZ_PENDIENTE_EXISTENTE`, `409 MATRIZ_IDEMPOTENCIA_CONFLICTO`, `409
+MATRIZ_CONFLICTO_CONCURRENCIA` y `500 MATRIZ_CREAR_BORRADOR_ERROR`.
+
+No hubo conexión ni prueba real contra PostgreSQL ni despliegue productivo. El
+endpoint depende de 002+003 y no debe declararse funcional en producción hasta
+que ambas migraciones se apliquen y verifiquen. Hallazgo residual bajo no
+bloqueante: `empresaId > 2147483647` puede terminar en `500` en vez de `404`.
