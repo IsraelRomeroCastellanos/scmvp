@@ -1,12 +1,14 @@
 # PLD VISSION / SCMVP
 
-## Checkpoint de infraestructura operativa — 2026-08-09
+## Checkpoint de infraestructura operativa — 2026-08-12
 
 - Backend vigente: https://scmvp-nxtj.onrender.com
 - DB lógica vigente: `scmvp_q69o`.
 - `scmvp-1jhq.onrender.com` y `scmvp_0plk` quedan clasificados como infraestructura histórica/anterior.
-- Este cambio documental no acredita por sí mismo que las migraciones 002 o 003 hayan sido ejecutadas.
-- La migración 002 continúa documentada como no autorizada y no ejecutada en producción, salvo evidencia posterior expresa.
+- Este cambio documental no acredita por sí mismo que las migraciones 002, 003,
+  004 o 005 hayan sido ejecutadas.
+- Las migraciones 002–005 están versionadas y fusionadas, pero su aplicación en
+  PostgreSQL permanece **NO VERIFICADA**.
 
 ## Memoria técnica operativa canónica
 
@@ -14,13 +16,14 @@
 
 | Dato | Valor confirmado |
 |---|---|
-| Última actualización | 2026-08-09 |
-| Rama final | `main` |
-| Commit base canónico | `e87ba26dc365903189e96247373e2b3ae3a791e4` en `main`, `origin/main` y `origin/HEAD` |
-| PR más reciente | `#112`, crear borrador de matriz por empresa, fusionado |
-| Lote actual | Lotes 2A–2D, inspector OOXML 2E-1, parser V1 2E-2, migración 003 y crear borrador de matriz por empresa cerrados y fusionados |
-| Producción | Las migraciones 002 y 003 no han sido ejecutadas ni aplicadas en PostgreSQL o producción |
-| Próximo paso exacto | Definir el siguiente sublote desde `main` en `e87ba26dc365903189e96247373e2b3ae3a791e4`, sin ejecutar las migraciones pendientes de aplicación. |
+| Última actualización | 2026-08-12 |
+| Rama documental actual | `docs/actualizar-contexto-migracion-005` |
+| Commit base canónico | `62db132`, merge commit actualizado de `main` |
+| PR más reciente | `#115`, migración 005 de catálogos canónicos PT/GR, fusionado |
+| Commit funcional | `ce1fa7e` |
+| Lote actual | Migración 005 cerrada técnicamente; cierre documental en curso en esta rama, todavía sin commit, PR ni merge |
+| Producción | Las migraciones 002, 003, 004 y 005 están versionadas/mergeadas; no está confirmado que estén aplicadas o ejecutadas en PostgreSQL |
+| Próximo paso exacto | Cerrar esta actualización documental y definir el siguiente sublote funcional desde el contrato canónico, sin inventar runtime ni ejecutar migraciones. |
 
 ## 1. Propósito y mantenimiento
 
@@ -68,11 +71,11 @@ alcance, pruebas, riesgos o archivos protegidos. Cada actualización debe:
 
 ## 3. Estado Git confirmado
 
-- Rama final y base reutilizable: `main`.
-- Base canónica para el siguiente sublote: `e87ba26dc365903189e96247373e2b3ae3a791e4`.
-- `main`, `origin/main` y `origin/HEAD` están alineados en
-  `e87ba26dc365903189e96247373e2b3ae3a791e4`.
-- PR más reciente: `#112`, fusionado; su commit funcional previo al merge fue
+- Rama de esta actualización: `docs/actualizar-contexto-migracion-005`.
+- `main` fue actualizado hasta el merge commit `62db132`.
+- PR más reciente: `#115`, fusionado; commit funcional de la rama: `ce1fa7e`.
+- La migración 005 quedó versionada mediante sus archivos UP, VERIFY y DOWN.
+- PR histórico de crear borrador: `#112`, fusionado; su commit funcional previo al merge fue
   `90850b5` y agregó únicamente `backend/src/routes/admin.routes.ts` y
   `backend/src/services/matrices-empresa.service.ts` (368 inserciones y una
   eliminación).
@@ -123,7 +126,7 @@ activa = TRUE
   clientes para esta empresa porque aún no cuenta con una matriz PT/GR
   publicada y activa.”
 
-## 5. Migraciones 001 y 002
+## 5. Migraciones 001–005
 
 ### Confirmado
 
@@ -131,17 +134,65 @@ activa = TRUE
   base desplegada, conforme a la evidencia operativa documentada.
 - `20260801_002_matrices_pt_gr_empresa` depende explícitamente de la 001.
 - La 002 contiene UP, VERIFY y DOWN transaccionales y usa advisory lock.
-- La 002 está versionada en el repositorio, pero **no está ejecutada en
-  producción** y no tiene autorización productiva.
+- La 002 está versionada en el repositorio, pero su ejecución/aplicación en
+  PostgreSQL o producción no está confirmada en el estado documental actual.
 - La 002 no modifica `matrices_riesgo` ni
   `cliente_perfil_transaccional` y no incluye carga Excel, APIs, motor,
   evaluaciones históricas o frontend.
+- La 003 complementa la persistencia, idempotencia y auditoría de gestión de
+  matrices; la 004 define los resultados globales de matriz.
+- La 005 depende expresamente de 002, 003 y 004 y está versionada en:
+  `backend/migrations/20260812_005_catalogos_canonicos_matriz.up.sql`,
+  `backend/migrations/20260812_005_catalogos_canonicos_matriz.verify.sql` y
+  `backend/migrations/20260812_005_catalogos_canonicos_matriz.down.sql`.
+- La segunda revisión independiente de 005 concluyó **APROBABLE**.
+- En esta conversación no se ejecutó SQL, no hubo conexión a PostgreSQL y no
+  se verificó que 002, 003, 004 o 005 estén aplicadas.
 
 ### Condición previa a cualquier despliegue
 
 Probar UP → VERIFY → DOWN sobre una restauración desechable, revisar la
 identidad de base/esquema y la evidencia, y obtener autorización explícita. El
-DOWN solo admite rollback cuando las seis tablas están vacías.
+El DOWN de la migración 002 solo admite rollback cuando sus seis tablas están
+vacías. El DOWN de la migración 005 es conservador: bloquea la reversión si
+existen datos, referencias o procedencia incompatibles y exige poder restaurar
+el contrato de la migración 004 sin pérdida.
+
+### Modelo canónico aprobado por la migración 005
+
+- XLSX deja de ser el flujo primario. El inspector y parser se conservan como
+  legado/importación futura.
+- Los catálogos globales están completamente separados:
+  `catalogo_criterio_pt`, `catalogo_criterio_pt_version`,
+  `catalogo_criterio_gr` y `catalogo_criterio_gr_version`.
+- `codigo_canonico` cumple `^[A-Z][A-Z0-9_]{0,99}$` y es inmutable. Los únicos
+  estados son `ACTIVO` y `RETIRADO`.
+- Las versiones contractuales son append-only, usan `version_contrato > 0` y
+  una referencia explícita `version_vigente_id`; nunca se infiere vigencia con
+  `MAX(version_contrato)`.
+- La FK compuesta garantiza que la versión vigente pertenece a la misma
+  identidad. Un `CONSTRAINT TRIGGER DEFERRABLE INITIALLY DEFERRED` exige al
+  cierre transaccional: `ACTIVO` con versión vigente y `RETIRADO` sin ella.
+  Esto permite identidad → primera versión → puntero vigente → commit.
+- PT admite `CAPTURA_OPCIONES` con parametrización `OPCIONES` y unidad nula, o
+  `CAPTURA_RANGO_NUMERICO` con `RANGOS_NUMERICOS` y unidad canónica obligatoria.
+- GR admite `KYC_RANGO`, `CATALOGO_GLOBAL`, `DERIVADO` y `ESTRUCTURADO`.
+  `resolver_codigo` es técnico y controlado por backend. Sólo `KYC_RANGO` usa
+  rangos y unidad obligatoria; los otros tipos usan `NINGUNA` y unidad nula.
+  La 005 no introduce JSON genérico.
+- `matriz_criterio` incorpora referencias PT/GR nullable, sin backfill. Ambas
+  pueden ser nulas por compatibilidad, nunca ambas no nulas; PT exige ámbito PT
+  y GR exige ámbito GR.
+- `matriz_empresa_version.procedencia` es nullable para históricos y admite
+  `CREADA_EN_SISTEMA` o `IMPORTADA_XLSX`. El runtime futuro deberá asignarla.
+- Una matriz creada en sistema puede no tener fila en
+  `matriz_archivo_fuente`; si existe, `contenido` permanece `BYTEA NOT NULL`.
+- `matriz_opcion.puntaje` y `matriz_rango.puntaje` quedan obligatorios y
+  limitados a 1, 2 o 3. No hay autocorrección: el UP aborta ante datos previos
+  incompatibles.
+- `matriz_resultado` conserva tres posiciones por ámbito y extremos inclusivos;
+  sustituye 4..12 por enteros positivos y permite referencias XLSX nulas.
+  Cobertura N..3N, huecos y solapes se validarán en publicación/runtime futuro.
 
 ## 6. Modelo definido por la migración 002
 
@@ -410,6 +461,19 @@ críticos, altos ni medios que bloquearan staging, commit o PR.
 - Hallazgo residual bajo no bloqueante: un `empresaId` mayor a 2147483647 puede
   terminar en `500` en vez de `404`; queda como endurecimiento técnico.
 
+### Validación confirmada de la migración 005
+
+- PR `#115`, fusionado en `main` mediante `62db132`; commit funcional
+  `ce1fa7e`.
+- UP, VERIFY y DOWN quedaron versionados con preflights defensivos, advisory
+  lock en UP/DOWN, VERIFY estrictamente read-only y rollback conservador.
+- La revisión independiente final verificó catálogos separados, versiones
+  inmutables, FK compuesta, vigencia diferible, puntajes 1/2/3, procedencia,
+  resultados positivos, secuencias/defaults, índices y reversibilidad a 004.
+- Segunda revisión independiente: **APROBABLE**.
+- Fue una validación estática. No se ejecutó SQL, no hubo conexión a PostgreSQL
+  y no acredita aplicación real de 002, 003, 004 o 005.
+
 Riesgos residuales bajos: endurecimiento opcional de la longitud exacta de
 `sheetNames` en la respuesta del Worker; limpieza defensiva adicional en
 `onError`; dependencia del comportamiento fijado de `unzipper` 0.10.14; y
@@ -468,6 +532,11 @@ contenido funcional.
   BORRADOR vacío, inactivo, revisión inicial 1 y siguiente número de versión;
   exige admin, actor autenticado, `Idempotency-Key`, lock transaccional por
   empresa, una sola pendiente y auditoría `BORRADOR_CREADO`.
+- **Migración 005 (`#115`):** catálogos canónicos PT/GR separados y
+  versionados, referencias exactas desde `matriz_criterio`, procedencia de
+  matriz, puntajes 1/2/3 y resultados dinámicos positivos. Implementada en
+  `ce1fa7e` y fusionada mediante `62db132`. Segunda revisión independiente:
+  **APROBABLE**. Está versionada/mergeada, no confirmada como aplicada.
 
 En el Lote 2E-1 no se ejecutaron SQL ni migraciones y no hubo conexión a
 PostgreSQL. Los archivos untracked protegidos permanecieron intactos y fuera
@@ -481,17 +550,22 @@ que existan flujos coordinados de publicación y activación.
 
 ### Pendientes reales
 
-- ejecución/aplicación controlada de las migraciones 002 y 003, solo con
+- ejecución/aplicación controlada de las migraciones 002, 003, 004 y 005, solo con
   autorización separada y en el orden documentado;
 - identificación de los roles efectivos de PostgreSQL y definición nominal de
   `GRANT`/`REVOKE`;
-- gestión administrativa restante para cargar/reemplazar XLSX, validar,
-  publicar, activar/desactivar, listar, consultar detalle/preview y sustituir
-  versión;
+- siguiente sublote funcional de gestión directa en sistema todavía por
+  definir; no inventar contrato de runtime, API o UX;
+- publicación futura: mínimo 1 criterio PT y 1 GR, cantidad variable sin
+  máximo fijo, tres bandas y cobertura N..3N sin huecos ni solapes;
+- futuro motor GR: un dato fuente faltante produce `NO_EVALUABLE`, sin puntaje
+  ni resultado final mientras exista un criterio requerido no evaluable;
+- clonado futuro: toma la versión vigente de criterios `ACTIVO`; un criterio
+  `RETIRADO` exige sustitución o remoción antes de publicar, sin alterar
+  matrices históricas;
 - motor de evaluación final y evaluación histórica;
 - endpoints de gestión restantes que todavía no existen;
 - vinculación técnica definitiva de campos KYC;
-- generación del Excel canónico final;
 - migraciones no ejecutadas y frontend no implementado en este lote;
 - pruebas automatizadas completas;
 - pruebas controladas reales con empresa sin matriz y con matriz activa;
@@ -512,9 +586,11 @@ que existan flujos coordinados de publicación y activación.
   `datos_completos` o `deepMerge`.
 - Ejecución productiva de la migración 002.
 - Ejecución o aplicación de las migraciones 002 y 003.
-- Frontend, carga/reemplazo, validación, publicación, activación/desactivación y
-  consultas de matriz aún pendientes. Crear borrador y el parser V1 sí están
-  implementados; no equivalen al motor de evaluación final.
+- Ejecución o aplicación de las migraciones 004 y 005.
+- Seeds, runtime, motor, frontend, endpoints, implementación de resolvers,
+  publicación matemática, evaluación de clientes e importación XLSX operativa.
+- Reglas específicas de override: ninguna está aprobada todavía;
+  `matriz_regla` se conserva para trabajo futuro.
 
 ## 14. Archivos protegidos y reglas Git
 
@@ -538,23 +614,24 @@ siempre el conjunto exacto de archivos antes de staging selectivo.
 
 ## 15. Próximo punto de trabajo
 
-El inspector 2E-1, el parser 2E-2, la migración 003 y crear borrador están
-cerrados, versionados y fusionados. El siguiente sublote debe definirse desde
-`main` en `e87ba26dc365903189e96247373e2b3ae3a791e4` y consultar primero esta
-memoria y el resumen técnico ejecutivo como fuentes canónicas. La secuencia
-futura objetivo
-continúa siendo:
+La migración 005 está cerrada técnicamente. Su cierre documental está en curso
+mediante esta actualización en la rama
+`docs/actualizar-contexto-migracion-005`; una vez fusionada, podrá considerarse
+cerrada documentalmente. El flujo primario aprobado deja de ser XLSX: una
+matriz se crea y configura en sistema seleccionando versiones contractuales del catálogo PT/GR.
+El inspector y parser permanecen como legado/importación futura y no deben
+eliminarse.
 
 ```text
-cargar/reemplazar XLSX -> validar -> publicar -> activar/desactivar
+crear borrador -> seleccionar criterios canónicos -> parametrizar -> validar
+-> publicar -> activar
 ```
 
-Antes de programar deben inspeccionarse los contratos existentes y aprobarse
-la API, los estados, los permisos, la auditoría y la estrategia transaccional.
-La gestión de activar/desactivar y sustituir versiones debe quedar contemplada
-en el contrato. La 003 ya está implementada y versionada; no ejecutar ni
-declarar aplicadas la 002 o la 003 sin autorización y evidencia separadas. Se
-mantienen las reglas permanentes:
+Para publicar se aprobó un mínimo de 1 PT y 1 GR, sin máximo fijo; la composición
+publicada queda congelada y cualquier cambio exige nueva versión de matriz. El
+siguiente sublote funcional aún debe definirse sin inventar contrato. No
+ejecutar ni declarar aplicadas 002–005 sin autorización y evidencia separadas.
+Se mantienen las reglas permanentes:
 un paso por vez, cambios con Codex, validación antes de avanzar, revisión
 independiente, pruebas antes de commit, staging selectivo, PR obligatorio y
 protección de archivos untracked.
