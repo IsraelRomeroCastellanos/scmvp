@@ -1,26 +1,27 @@
 # PLD VISSION / SCMVP
 
-## Checkpoint de infraestructura operativa — 2026-08-09
+## Checkpoint de infraestructura operativa — 2026-08-12
 
 - Backend vigente: https://scmvp-nxtj.onrender.com
 - DB lógica vigente: `scmvp_q69o`.
 - `scmvp-1jhq.onrender.com` y `scmvp_0plk` quedan clasificados como infraestructura histórica/anterior.
-- Este cambio documental no acredita por sí mismo que las migraciones 002 o 003 hayan sido ejecutadas.
-- La migración 002 continúa documentada como no autorizada y no ejecutada en producción, salvo evidencia posterior expresa.
+- Este cambio documental no acredita que las migraciones 002–005 hayan sido
+  ejecutadas o aplicadas en PostgreSQL.
 
 ## Resumen técnico ejecutivo — Lote 2: Gestión de matriz por empresa
 
 ### Situación actual
 
-- Rama final: `main`.
-- Base canónica: `e87ba26dc365903189e96247373e2b3ae3a791e4`; `main`,
-  `origin/main` y `origin/HEAD` están alineados en ese commit.
+- Rama documental actual: `docs/actualizar-contexto-migracion-005`.
+- `main` actualizado hasta el merge commit `62db132`.
+- PR más reciente: `#115`; commit funcional: `ce1fa7e`.
 - El Lote 2E-2 se implementó en `feat/lote-2e2-parser-matriz-excel`, commit
   previo al merge `f43a1a0`.
 - El PR `#107`, fusionado mediante `23fa6f3`, se conserva como cierre funcional
   histórico del parser V1 de 2E-2; no representa el HEAD actual.
-- PR más reciente: `#112`, crear borrador de matriz por empresa, implementado
-  en `90850b5` y fusionado mediante el HEAD canónico actual. Agregó únicamente
+- PR histórico de crear borrador: `#112`, con commit funcional `90850b5` y
+  merge histórico `e87ba26dc365903189e96247373e2b3ae3a791e4`. El HEAD/base
+  actual posterior es `62db132`. Agregó únicamente
   `backend/src/routes/admin.routes.ts` y
   `backend/src/services/matrices-empresa.service.ts`.
 - El PR `#111`, fusionado mediante `059e472`, se conserva como cierre histórico
@@ -29,8 +30,8 @@
   `17d0d25 feat: agregar inspector defensivo OOXML para matrices`.
 - PR del Lote 2E-1: `#105`, fusionado correctamente; merge commit `de7dc9d`.
 - La migración 001 está registrada en la base desplegada.
-- Las migraciones 002 y 003 están versionadas, pero **no se han ejecutado ni
-  aplicado en PostgreSQL o producción**.
+- Las migraciones 002, 003, 004 y 005 están versionadas/mergeadas, pero **no se
+  ha confirmado que estén ejecutadas o aplicadas en PostgreSQL**.
 - El backend ya gestiona empresas, configuración PLD y clientes con aislamiento
   por empresa.
 - Los Lotes 2A, 2B, 2C y 2D están implementados y fusionados mediante los PR
@@ -38,7 +39,8 @@
 - Existe consulta reutilizable, indicador en los DTO, bloqueo en backend y
   frontend, inspector defensivo OOXML y parser funcional V1 de matrices PT/GR
   por empresa. Crear borrador ya está implementado; no existe todavía gestión
-  administrativa completa de matrices.
+  administrativa completa de matrices. La 005 sí cierra el contrato físico de
+  catálogos canónicos, no el runtime funcional.
 
 ### Objetivo
 
@@ -48,7 +50,7 @@ completado, versionado y fusionado como frontera defensiva previa a ExcelJS. El
 Lote 2E-2 quedó cerrado y aprobado con el parser `PT_GR_EMPRESA_V1`. El
 siguiente sublote debe definirse sin declarar como existentes
 el motor PT/GR, la evaluación histórica ni un despliegue productivo dependiente
-de las migraciones 002 y 003. La migración 003 y crear borrador también están
+de las migraciones 002–005. Las migraciones 003–005 y crear borrador están
 cerrados.
 
 ### Regla aprobada
@@ -102,6 +104,22 @@ navegador.
   funcional `PT_GR_EMPRESA_V1`: ejecuta previamente el inspector OOXML y lee,
   valida y normaliza la configuración de la plantilla a una estructura tipada;
   no evalúa clientes ni constituye el motor final de evaluación.
+- La migración 005 agrega catálogos separados `catalogo_criterio_pt` /
+  `catalogo_criterio_pt_version` y `catalogo_criterio_gr` /
+  `catalogo_criterio_gr_version`.
+- Las identidades usan código canónico inmutable, estados `ACTIVO`/`RETIRADO`
+  y versión vigente explícita del mismo criterio. La coherencia final se exige
+  mediante constraint triggers diferibles.
+- PT soporta `CAPTURA_OPCIONES` y `CAPTURA_RANGO_NUMERICO`; GR soporta
+  `KYC_RANGO`, `CATALOGO_GLOBAL`, `DERIVADO` y `ESTRUCTURADO`, con
+  `resolver_codigo` técnico. No existe JSON genérico.
+- `matriz_criterio` puede referenciar una versión PT o GR según su ámbito, sin
+  backfill histórico. `procedencia` distingue `CREADA_EN_SISTEMA` e
+  `IMPORTADA_XLSX` y permanece nullable para históricos.
+- Una matriz creada en sistema no requiere archivo. Si existe fila de archivo,
+  `matriz_archivo_fuente.contenido` conserva `BYTEA NOT NULL`.
+- Opciones y rangos exigen puntajes 1/2/3. Los resultados usan límites enteros
+  positivos y referencias XLSX nullable; la cobertura N..3N queda para runtime.
 
 ### Lotes cerrados
 
@@ -126,6 +144,24 @@ navegador.
   fusionado mediante `e87ba26dc365903189e96247373e2b3ae3a791e4`. Solo admin;
   crea BORRADOR vacío, inactivo, con revisión 1, siguiente número de versión,
   una sola pendiente, idempotencia, lock transaccional y auditoría.
+- **Migración 005 — PR #115:** implementada en `ce1fa7e` y fusionada mediante
+  `62db132`. UP, VERIFY read-only y DOWN conservador definen el modelo canónico
+  PT/GR. Segunda revisión independiente: **APROBABLE**. No hubo SQL ni conexión
+  a PostgreSQL; su aplicación real no está confirmada.
+
+### Cierre técnico de la migración 005
+
+XLSX deja de ser el flujo primario y queda como legado/importación futura. Las
+versiones contractuales son append-only, usan `version_contrato > 0` y una
+`version_vigente_id` explícita; no se usa `MAX()`. La FK compuesta acredita que
+la versión pertenece al mismo criterio. Un criterio `ACTIVO` termina con
+vigente y uno `RETIRADO` sin ella, permitiendo en una sola transacción identidad
+→ primera versión → puntero → commit.
+
+`matriz_opcion.puntaje` y `matriz_rango.puntaje` quedan `NOT NULL` y limitados
+a 1, 2 o 3, sin autocorrección. `matriz_resultado` deja 4..12, admite positivos
+y conserva tres posiciones y extremos inclusivos. No hay seeds, backfill,
+motor, runtime, frontend, endpoints, resolvers ni overrides aprobados.
 
 ### Cierre técnico de crear borrador por empresa
 
@@ -279,15 +315,19 @@ temporalmente hasta que existan flujos coordinados de publicación y activación
 
 ### Pendientes
 
-- ejecución/aplicación controlada de 002 y 003; ambas están versionadas, pero
-  no ejecutadas ni aplicadas;
+- ejecución/aplicación controlada de 002, 003, 004 y 005; están versionadas,
+  pero su aplicación no está confirmada;
 - identificación de roles efectivos de PostgreSQL y `GRANT`/`REVOKE` nominales;
-- gestión administrativa restante para cargar/reemplazar XLSX, validar,
-  publicar, activar/desactivar, listar, detalle/preview y sustituir versión;
+- definición del siguiente sublote de gestión directa en sistema;
+- publicación futura con mínimo 1 PT + 1 GR, cantidad variable sin máximo fijo
+  y tres bandas que cubran N..3N sin huecos ni solapes;
+- clonado futuro sin alterar históricos: criterios activos toman su versión
+  vigente; retirados requieren sustitución/remoción antes de publicar;
+- contrato futuro `NO_EVALUABLE` para GR sin dato fuente, sin puntaje ni
+  resultado final mientras subsista el dato faltante;
 - motor de evaluación final y evaluación histórica;
 - endpoints de gestión restantes que todavía no existen;
-- vinculación técnica definitiva de campos KYC y generación del Excel canónico
-  final;
+- vinculación técnica definitiva de campos KYC;
 - migraciones no ejecutadas y frontend no implementado en el Lote 2E-2;
 - pruebas automatizadas completas;
 - pruebas controladas reales con empresa sin matriz y con matriz activa;
@@ -296,11 +336,11 @@ temporalmente hasta que existan flujos coordinados de publicación y activación
 
 ### Fuera de alcance
 
-- Ejecución o aplicación de las migraciones 002 y 003.
-- Gestión, carga, vista previa y publicación completa de Excel.
-- Frontend y flujo restante de carga, consulta, validación, publicación y
-  activación. Crear borrador y el parser V1 sí existen; no constituyen el motor
-  de evaluación final.
+- Ejecución o aplicación de las migraciones 002–005.
+- Seeds, runtime, motor, frontend, endpoints, implementación de
+  `resolver_codigo`, publicación matemática y evaluación de clientes.
+- Importación XLSX operativa. Inspector y parser se conservan como legado.
+- Overrides específicos; `matriz_regla` se conserva para futuro.
 - Motor PT/GR, evaluaciones históricas y correo.
 - Clasificaciones globales, GAFI y regímenes fiscales.
 - Proveedor de almacenamiento o cifrado.
@@ -314,7 +354,7 @@ temporalmente hasta que existan flujos coordinados de publicación y activación
 | Confiar en el frontend | Validación implementada y obligatoria en backend. |
 | Usar empresa manipulada | Derivar tenant de `req.user` para consultor/cliente y validar selección admin. |
 | Bloqueo después de insertar | Comprobar matriz dentro del flujo transaccional y antes de mutaciones. |
-| Confundir SQL versionado con producción | Mantener explícito que las migraciones 002 y 003 no están aplicadas. |
+| Confundir SQL versionado con producción | Mantener explícito que 002–005 están mergeadas, pero su aplicación no está confirmada. |
 | Romper capturas existentes | Regresión de PF, PM, Fideicomiso, terceros y contratos actuales. |
 | Exponer auditoría manipulable | Tomar identificadores futuros de `req.user.id`, no del body. |
 | Ampliar el lote | Mantener fuera el motor final, endpoints, persistencia, frontend y publicación. |
@@ -328,35 +368,35 @@ temporalmente hasta que existan flujos coordinados de publicación y activación
 - Inspección de contratos existentes y aprobación previa de API, estados,
   permisos, auditoría y estrategia transaccional.
 - Migración 001 aplicada, ya confirmada.
-- Migraciones 002 y 003 probadas en restauración desechable y autorizadas antes
+- Migraciones 002–005 probadas en restauración desechable y autorizadas antes
   de que un backend dependiente de sus objetos pueda desplegarse.
 - Preservación del aislamiento multiempresa y de los contratos actuales.
 
 ### Próximo bloque de trabajo
 
-El inspector 2E-1, el parser 2E-2, la migración 003 y crear borrador están
-cerrados, versionados y fusionados. El siguiente sublote debe definirse desde
-`main` en `e87ba26dc365903189e96247373e2b3ae3a791e4`, consultando primero este
-resumen y la memoria técnica operativa como fuentes canónicas. La secuencia
-futura objetivo
-continúa siendo:
+La migración 005 está cerrada técnicamente. El cierre documental está en curso
+mediante esta actualización en la rama
+`docs/actualizar-contexto-migracion-005`, todavía sin commit, PR ni merge; una
+vez fusionada podrá considerarse cerrada documentalmente. El próximo sublote
+funcional aún debe definirse sin inventar contrato. El flujo primario objetivo es:
 
 ```text
-cargar/reemplazar XLSX -> validar -> publicar -> activar/desactivar
+crear borrador -> seleccionar criterios canónicos -> parametrizar -> validar
+-> publicar -> activar
 ```
 
-Antes de programar deben aprobarse los contratos indicados en dependencias. No
-se ejecutarán ni aplicarán las migraciones 002 o 003 sin autorización separada.
-La 003 ya está implementada y versionada; ello no acredita ejecución real.
+XLSX queda como legado/importación futura. Una composición publicada permanece
+congelada; los cambios requieren nueva versión. No se ejecutarán ni declararán
+aplicadas las migraciones 002–005 sin autorización y evidencia separadas.
 Se conservan las reglas permanentes: un paso por vez, cambios con Codex,
 validación antes de avanzar, revisión independiente, pruebas antes de commit,
 staging selectivo, PR obligatorio y protección de archivos untracked.
 
 ### Estado de producción
 
-Las migraciones `20260801_002_matrices_pt_gr_empresa` y
-`20260805_003_gestion_matrices_empresa` no están ejecutadas ni autorizadas en
-producción. En consecuencia, el endpoint de crear borrador, la gestión de
+Las migraciones 002, 003, 004 y 005 están versionadas/mergeadas, pero **NO se
+ha confirmado que estén ejecutadas o aplicadas en PostgreSQL**. En consecuencia,
+el endpoint de crear borrador, la gestión de
 matrices y el bloqueo dependiente de esas tablas tampoco deben declararse
 desplegados. El
 inspector OOXML y el parser V1 fusionados no prueban que el flujo completo de
