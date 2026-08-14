@@ -188,24 +188,24 @@ BEGIN
     ('matriz_archivo_fuente','ck_matriz_archivo_fuente_nombre','CHECK (octet_length(nombre_original::text) >= 1 AND octet_length(nombre_original::text) <= 1024)'),
     ('matriz_archivo_fuente','ck_matriz_archivo_fuente_mime','CHECK (length(mime_detectado::text) >= 1 AND length(mime_detectado::text) <= 127)'),
     ('matriz_archivo_fuente','ck_matriz_archivo_fuente_referencia','CHECK (referencia_contenido IS NULL OR length(referencia_contenido::text) >= 1 AND length(referencia_contenido::text) <= 512)'),
-    ('matriz_archivo_fuente','ck_matriz_archivo_fuente_tamano_maximo','CHECK (tamano_bytes <= 5 * 1024 * 1024)'),
+    ('matriz_archivo_fuente','ck_matriz_archivo_fuente_tamano_maximo','CHECK (tamano_bytes <= (5 * 1024 * 1024))'),
     ('matriz_archivo_fuente','ck_matriz_archivo_fuente_contenido_tamano','CHECK (octet_length(contenido) = tamano_bytes)'),
     ('matriz_auditoria_evento','ck_matriz_auditoria_evento_accion','CHECK (length(accion::text) >= 1 AND length(accion::text) <= 40)'),
     ('matriz_auditoria_evento','ck_matriz_auditoria_evento_operacion','CHECK (length(operacion::text) >= 1 AND length(operacion::text) <= 40)'),
-    ('matriz_auditoria_evento','ck_matriz_auditoria_evento_estados','CHECK ((estado_anterior IS NULL OR estado_anterior::text = ANY (ARRAY[''BORRADOR''::character varying, ''VALIDADA''::character varying, ''PUBLICADA''::character varying]::text[])) AND (estado_nuevo IS NULL OR estado_nuevo::text = ANY (ARRAY[''BORRADOR''::character varying, ''VALIDADA''::character varying, ''PUBLICADA''::character varying]::text[])))'),
+    ('matriz_auditoria_evento','ck_matriz_auditoria_evento_estados','CHECK ((estado_anterior IS NULL OR (estado_anterior::text = ANY (ARRAY[''BORRADOR''::character varying, ''VALIDADA''::character varying, ''PUBLICADA''::character varying]::text[]))) AND (estado_nuevo IS NULL OR (estado_nuevo::text = ANY (ARRAY[''BORRADOR''::character varying, ''VALIDADA''::character varying, ''PUBLICADA''::character varying]::text[]))))'),
     ('matriz_auditoria_evento','ck_matriz_auditoria_evento_motivo','CHECK (motivo IS NULL OR length(motivo::text) >= 1 AND length(motivo::text) <= 500)'),
     ('matriz_auditoria_evento','ck_matriz_auditoria_evento_archivo_nombre','CHECK (archivo_nombre_original IS NULL OR octet_length(archivo_nombre_original::text) >= 1 AND octet_length(archivo_nombre_original::text) <= 1024)'),
-    ('matriz_auditoria_evento','ck_matriz_auditoria_evento_archivo_tamano','CHECK (archivo_tamano_bytes IS NULL OR archivo_tamano_bytes >= 1 AND archivo_tamano_bytes <= 5 * 1024 * 1024)'),
+    ('matriz_auditoria_evento','ck_matriz_auditoria_evento_archivo_tamano','CHECK (archivo_tamano_bytes IS NULL OR archivo_tamano_bytes >= 1 AND archivo_tamano_bytes <= (5 * 1024 * 1024))'),
     ('matriz_auditoria_evento','ck_matriz_auditoria_evento_hashes','CHECK ((archivo_sha256 IS NULL OR archivo_sha256 ~ ''^[0-9a-f]{64}$''::text) AND (clave_idempotencia_sha256 IS NULL OR clave_idempotencia_sha256 ~ ''^[0-9a-f]{64}$''::text))'),
-    ('matriz_auditoria_evento','ck_matriz_auditoria_evento_correlation_id','CHECK (correlation_id IS NULL OR correlation_id::text COLLATE "C" ~ ''^[\x21-\x7e]{1,128}$''::text)'),
-    ('matriz_auditoria_evento','ck_matriz_auditoria_evento_request_id','CHECK (request_id IS NULL OR request_id::text COLLATE "C" ~ ''^[\x21-\x7e]{1,128}$''::text)'),
-    ('matriz_auditoria_evento','ck_matriz_auditoria_evento_resumen','CHECK (resumen IS NULL OR octet_length(resumen::text) <= 16 * 1024)'),
+    ('matriz_auditoria_evento','ck_matriz_auditoria_evento_correlation_id','CHECK (correlation_id IS NULL OR (correlation_id::text COLLATE "C") ~ ''^[\x21-\x7e]{1,128}$''::text)'),
+    ('matriz_auditoria_evento','ck_matriz_auditoria_evento_request_id','CHECK (request_id IS NULL OR (request_id::text COLLATE "C") ~ ''^[\x21-\x7e]{1,128}$''::text)'),
+    ('matriz_auditoria_evento','ck_matriz_auditoria_evento_resumen','CHECK (resumen IS NULL OR octet_length(resumen::text) <= (16 * 1024))'),
     ('matriz_idempotencia','ck_matriz_idempotencia_operacion','CHECK (length(operacion::text) >= 1 AND length(operacion::text) <= 40)'),
     ('matriz_idempotencia','ck_matriz_idempotencia_hashes','CHECK (clave_sha256 ~ ''^[0-9a-f]{64}$''::text AND request_sha256 ~ ''^[0-9a-f]{64}$''::text)'),
     ('matriz_idempotencia','ck_matriz_idempotencia_estado','CHECK (length(estado_ejecucion::text) >= 1 AND length(estado_ejecucion::text) <= 40)'),
     ('matriz_idempotencia','ck_matriz_idempotencia_codigo_http','CHECK (codigo_http IS NULL OR codigo_http >= 100 AND codigo_http <= 599)'),
-    ('matriz_idempotencia','ck_matriz_idempotencia_respuesta','CHECK (respuesta IS NULL OR octet_length(respuesta::text) <= 64 * 1024)'),
-    ('matriz_idempotencia','ck_matriz_idempotencia_fechas','CHECK (expira_en = creado_en + ''7 days''::interval AND (completado_en IS NULL OR completado_en >= creado_en))')
+    ('matriz_idempotencia','ck_matriz_idempotencia_respuesta','CHECK (respuesta IS NULL OR octet_length(respuesta::text) <= (64 * 1024))'),
+    ('matriz_idempotencia','ck_matriz_idempotencia_fechas','CHECK (expira_en = (creado_en + ''7 days''::interval) AND (completado_en IS NULL OR completado_en >= creado_en))')
   ) AS x(tabla,nombre,definicion) LOOP
     SELECT pg_catalog.lower(pg_catalog.regexp_replace(
              pg_catalog.pg_get_constraintdef(c.oid,true),'[[:space:]]+','','g'
