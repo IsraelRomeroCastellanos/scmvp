@@ -91,7 +91,7 @@ BEGIN
   END LOOP;
 
   FOR esperado IN SELECT * FROM (VALUES
-    ('uq_matriz_empresa_version_activa_empresa',ARRAY['empresa_id'],true,'activa'),
+    ('uq_matriz_empresa_version_activa_empresa',ARRAY['empresa_id'],true,'activa=true'),
     ('idx_matriz_empresa_version_estado',ARRAY['empresa_id','estado_editorial'],false,NULL),
     ('idx_matriz_empresa_version_origen',ARRAY['version_origen_id'],false,NULL),
     ('idx_matriz_empresa_version_creada_por',ARRAY['creada_por'],false,NULL),
