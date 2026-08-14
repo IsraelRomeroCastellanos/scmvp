@@ -235,7 +235,7 @@ BEGIN
       i.indnatts AS cantidad_atributos,
       pg_catalog.array_agg(a.attname::TEXT ORDER BY k.ord) FILTER (WHERE k.ord<=i.indnkeyatts) AS columnas,
       pg_catalog.bool_or(k.attnum=0) FILTER (WHERE k.ord<=i.indnkeyatts) AS tiene_expresiones,
-      pg_catalog.lower(pg_catalog.regexp_replace(pg_catalog.pg_get_expr(i.indpred,i.indrelid,true),'[[:space:]]+','','g')) AS predicado
+      pg_catalog.lower(pg_catalog.regexp_replace(pg_catalog.pg_get_expr(i.indpred,i.indrelid,false),'[[:space:]]+','','g')) AS predicado
       INTO real
       FROM pg_catalog.pg_index i
       JOIN pg_catalog.pg_class t ON t.oid=i.indrelid
