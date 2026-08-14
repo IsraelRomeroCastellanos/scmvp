@@ -25,8 +25,11 @@ import {
   listSelectableMatrixCriteria,
   replaceCompanyMatrixDraftComposition,
   saveCompanyMatrixCriterionParameters,
+  saveCompanyMatrixResults,
+  transitionCompanyMatrix,
   type CriterioComposicionInput,
   type ParametrizacionInput,
+  type ResultadosInput,
 } from '../services/configuracion-matriz.service';
 
 const router = Router();
@@ -150,6 +153,37 @@ function parseParameterizationBody(body: unknown): ParametrizacionInput | null {
   }
 
   return null;
+}
+
+function parseResultsBody(body: unknown): ResultadosInput | null {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+  const raw = body as Record<string, unknown>;
+  if (Object.keys(raw).some((key) => !['revision', 'resultados'].includes(key))) return null;
+  const revision = parsePositiveInteger(raw.revision);
+  if (revision === null || !Array.isArray(raw.resultados) || raw.resultados.length !== 3) {
+    return null;
+  }
+  const resultados: ResultadosInput['resultados'] = [];
+  for (const value of raw.resultados) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const item = value as Record<string, unknown>;
+    if (Object.keys(item).some((key) => !['nombre', 'minimo', 'maximo'].includes(key))) return null;
+    const nombre = typeof item.nombre === 'string' ? item.nombre.trim() : '';
+    if (
+      !nombre || nombre.length > 150 ||
+      !Number.isSafeInteger(item.minimo) || Number(item.minimo) <= 0 || Number(item.minimo) > 2147483647 ||
+      !Number.isSafeInteger(item.maximo) || Number(item.maximo) <= 0 || Number(item.maximo) > 2147483647
+    ) return null;
+    resultados.push({ nombre, minimo: Number(item.minimo), maximo: Number(item.maximo) });
+  }
+  return { revision, resultados };
+}
+
+function parseRevisionBody(body: unknown): number | null {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+  const raw = body as Record<string, unknown>;
+  if (Object.keys(raw).some((key) => key !== 'revision')) return null;
+  return parsePositiveInteger(raw.revision);
 }
 
 // ==========================================
@@ -320,6 +354,78 @@ router.put(
     }
   },
 );
+
+router.put(
+  '/empresas/:empresaId/matrices/:matrizId/resultados/:ambito',
+  authenticate,
+  authorizeRoles('admin'),
+  async (req, res) => {
+    const empresaId = Number(req.params.empresaId);
+    const matrizId = Number(req.params.matrizId);
+    const actorUsuarioId = req.user?.id;
+    const ambito = req.params.ambito;
+    const input = parseResultsBody(req.body);
+    if (
+      !Number.isSafeInteger(empresaId) || empresaId <= 0 ||
+      !Number.isSafeInteger(matrizId) || matrizId <= 0 ||
+      !Number.isSafeInteger(actorUsuarioId) || (actorUsuarioId ?? 0) <= 0
+    ) return matrizError(res, 404, 'BORRADOR_NO_ENCONTRADO', 'Borrador de matriz no encontrado');
+    if ((ambito !== 'PT' && ambito !== 'GR') || input === null) {
+      return matrizError(res, 400, 'RESULTADOS_INVALIDOS', 'Bandas finales invalidas');
+    }
+    try {
+      const data = await saveCompanyMatrixResults(
+        pool, empresaId, matrizId, ambito, actorUsuarioId!, input,
+      );
+      return res.json({ data });
+    } catch (error) {
+      if (error instanceof ConfiguracionMatrizError) {
+        return matrizError(res, error.status, error.code, error.message);
+      }
+      console.error('Error al guardar resultados de matriz:', error);
+      return matrizError(res, 500, 'RESULTADOS_GUARDAR_ERROR', 'No fue posible guardar las bandas');
+    }
+  },
+);
+
+for (const [path, transition] of [
+  ['validar', 'VALIDAR'],
+  ['publicar', 'PUBLICAR'],
+  ['reabrir', 'REABRIR'],
+  ['activar', 'ACTIVAR'],
+] as const) {
+  router.post(
+    `/empresas/:empresaId/matrices/:matrizId/${path}`,
+    authenticate,
+    authorizeRoles('admin'),
+    async (req, res) => {
+      const empresaId = Number(req.params.empresaId);
+      const matrizId = Number(req.params.matrizId);
+      const actorUsuarioId = req.user?.id;
+      const revision = parseRevisionBody(req.body);
+      if (
+        !Number.isSafeInteger(empresaId) || empresaId <= 0 ||
+        !Number.isSafeInteger(matrizId) || matrizId <= 0 ||
+        !Number.isSafeInteger(actorUsuarioId) || (actorUsuarioId ?? 0) <= 0
+      ) return matrizError(res, 404, 'BORRADOR_NO_ENCONTRADO', 'Matriz no encontrada');
+      if (revision === null) {
+        return matrizError(res, 400, 'REVISION_INVALIDA', 'Revision invalida');
+      }
+      try {
+        const data = await transitionCompanyMatrix(
+          pool, empresaId, matrizId, actorUsuarioId!, revision, transition,
+        );
+        return res.json({ data });
+      } catch (error) {
+        if (error instanceof ConfiguracionMatrizError) {
+          return matrizError(res, error.status, error.code, error.message);
+        }
+        console.error(`Error al ${path} matriz:`, error);
+        return matrizError(res, 500, 'TRANSICION_MATRIZ_ERROR', 'No fue posible cambiar el estado');
+      }
+    },
+  );
+}
 
 // ===============================
 // CREAR BORRADOR DE MATRIZ (ADMIN)

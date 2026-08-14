@@ -6,18 +6,24 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Badge, Button, Card, Input, LoadingState, PageHeader } from '@/components/ui';
 import { getCurrentUser, isAdmin } from '@/lib/auth';
 import {
+  activarMatrizEmpresa,
   crearBorradorMatrizEmpresa,
   getApiErrorMessage,
   guardarComposicionMatrizEmpresa,
   guardarOpcionesCriterioMatriz,
+  guardarResultadosMatrizEmpresa,
   isApiRequestCanceled,
   obtenerBorradorMatrizEmpresa,
   obtenerCatalogoCriteriosMatriz,
   obtenerEmpresaAdmin,
+  publicarMatrizEmpresa,
+  reabrirMatrizEmpresa,
+  validarMatrizEmpresa,
   type AmbitoMatriz,
   type BorradorMatrizEmpresa,
   type CriterioBorradorMatriz,
   type CriterioCatalogoMatriz,
+  type ResultadoMatrizEmpresa,
 } from '@/lib/api';
 
 type EmpresaResumen = { id: number; nombre_legal: string };
@@ -30,6 +36,16 @@ type CriterioEditable = {
   tipoResolucion: string;
   opciones: string[];
 };
+
+type BandaEditable = { nombre: string; minimo: string; maximo: string };
+
+function toBands(items: ResultadoMatrizEmpresa[]): BandaEditable[] {
+  return [0, 1, 2].map((index) => ({
+    nombre: items[index]?.nombre ?? '',
+    minimo: items[index] ? String(items[index].minimo) : '',
+    maximo: items[index] ? String(items[index].maximo) : '',
+  }));
+}
 
 function toEditable(items: CriterioBorradorMatriz[]): CriterioEditable[] {
   return items.map((item) => ({
@@ -49,6 +65,7 @@ function MatrixSection({
   disabled,
   savingParameterId,
   onChange,
+  onParameterChange,
   onSaveOptions,
 }: {
   ambito: AmbitoMatriz;
@@ -57,6 +74,7 @@ function MatrixSection({
   disabled: boolean;
   savingParameterId: number | null;
   onChange: (items: CriterioEditable[]) => void;
+  onParameterChange: (items: CriterioEditable[]) => void;
   onSaveOptions: (item: CriterioEditable) => void;
 }) {
   const selectedIds = new Set(selected.map((item) => item.versionId));
@@ -170,7 +188,7 @@ function MatrixSection({
                           const options = [...item.opciones];
                           options[optionIndex] = event.target.value;
                           next[index] = { ...item, opciones: options };
-                          onChange(next);
+                          onParameterChange(next);
                         }}
                       />
                     </div>
@@ -237,6 +255,83 @@ function MatrixSection({
   );
 }
 
+function ResultBandsSection({
+  ambito,
+  criterionCount,
+  bands,
+  disabled,
+  saving,
+  onChange,
+  onSave,
+}: {
+  ambito: AmbitoMatriz;
+  criterionCount: number;
+  bands: BandaEditable[];
+  disabled: boolean;
+  saving: boolean;
+  onChange: (bands: BandaEditable[]) => void;
+  onSave: () => void;
+}) {
+  const domain = criterionCount > 0 ? `${criterionCount}–${criterionCount * 3}` : 'sin dominio';
+  const incomplete = bands.some((band) => (
+    !band.nombre.trim() || !/^\d+$/.test(band.minimo) || !/^\d+$/.test(band.maximo)
+  ));
+  return (
+    <Card className="p-5">
+      <h3 className="font-semibold text-text-primary">
+        {ambito === 'PT' ? 'Bandas de Perfil Transaccional' : 'Bandas de Grado de Riesgo'}
+      </h3>
+      <p className="mt-1 text-sm text-text-secondary">
+        Dominio: {domain}. Las tres bandas deben cubrirlo sin huecos ni traslapes.
+      </p>
+      <div className="mt-4 space-y-3">
+        {bands.map((band, index) => (
+          <div key={index} className="grid gap-3 rounded-card border border-border-light p-3 md:grid-cols-3">
+            <Input
+              aria-label={`Nombre de banda ${index + 1} ${ambito}`}
+              placeholder={`Nombre de banda ${index + 1}`}
+              value={band.nombre}
+              disabled={disabled}
+              onChange={(event) => {
+                const next = [...bands];
+                next[index] = { ...band, nombre: event.target.value };
+                onChange(next);
+              }}
+            />
+            <Input
+              aria-label={`Mínimo de banda ${index + 1} ${ambito}`}
+              placeholder="Mínimo"
+              inputMode="numeric"
+              value={band.minimo}
+              disabled={disabled}
+              onChange={(event) => {
+                const next = [...bands];
+                next[index] = { ...band, minimo: event.target.value };
+                onChange(next);
+              }}
+            />
+            <Input
+              aria-label={`Máximo de banda ${index + 1} ${ambito}`}
+              placeholder="Máximo"
+              inputMode="numeric"
+              value={band.maximo}
+              disabled={disabled}
+              onChange={(event) => {
+                const next = [...bands];
+                next[index] = { ...band, maximo: event.target.value };
+                onChange(next);
+              }}
+            />
+          </div>
+        ))}
+      </div>
+      <Button className="mt-4" size="sm" disabled={disabled || saving || incomplete || criterionCount < 1} onClick={onSave}>
+        {saving ? 'Guardando bandas…' : `Guardar bandas ${ambito}`}
+      </Button>
+    </Card>
+  );
+}
+
 export default function ConfigurarMatrizEmpresaPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -247,9 +342,16 @@ export default function ConfigurarMatrizEmpresaPage() {
   const [catalogoGr, setCatalogoGr] = useState<CriterioCatalogoMatriz[]>([]);
   const [criteriosPt, setCriteriosPt] = useState<CriterioEditable[]>([]);
   const [criteriosGr, setCriteriosGr] = useState<CriterioEditable[]>([]);
+  const [bandasPt, setBandasPt] = useState<BandaEditable[]>(toBands([]));
+  const [bandasGr, setBandasGr] = useState<BandaEditable[]>(toBands([]));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingParameterId, setSavingParameterId] = useState<number | null>(null);
+  const [savingBands, setSavingBands] = useState<AmbitoMatriz | null>(null);
+  const [transitioning, setTransitioning] = useState(false);
+  const [compositionDirty, setCompositionDirty] = useState(false);
+  const [ptBandsDirty, setPtBandsDirty] = useState(false);
+  const [grBandsDirty, setGrBandsDirty] = useState(false);
   const [creating, setCreating] = useState(false);
   const [notFoundDraft, setNotFoundDraft] = useState(false);
   const [error, setError] = useState('');
@@ -277,6 +379,11 @@ export default function ConfigurarMatrizEmpresaPage() {
         setDraft(currentDraft);
         setCriteriosPt(toEditable(currentDraft.criterios_pt));
         setCriteriosGr(toEditable(currentDraft.criterios_gr));
+        setBandasPt(toBands(currentDraft.resultados_pt));
+        setBandasGr(toBands(currentDraft.resultados_gr));
+        setCompositionDirty(false);
+        setPtBandsDirty(false);
+        setGrBandsDirty(false);
         setNotFoundDraft(false);
       } catch (requestError: unknown) {
         const status = (requestError as { response?: { status?: number } })?.response?.status;
@@ -284,6 +391,11 @@ export default function ConfigurarMatrizEmpresaPage() {
           setDraft(null);
           setCriteriosPt([]);
           setCriteriosGr([]);
+          setBandasPt(toBands([]));
+          setBandasGr(toBands([]));
+          setCompositionDirty(false);
+          setPtBandsDirty(false);
+          setGrBandsDirty(false);
           setNotFoundDraft(true);
         } else {
           throw requestError;
@@ -311,6 +423,7 @@ export default function ConfigurarMatrizEmpresaPage() {
     () => [...criteriosPt, ...criteriosGr].some((item) => !item.texto.trim()),
     [criteriosPt, criteriosGr],
   );
+  const hasPendingChanges = compositionDirty || ptBandsDirty || grBandsDirty;
 
   const createDraft = async () => {
     setCreating(true);
@@ -347,6 +460,7 @@ export default function ConfigurarMatrizEmpresaPage() {
       setDraft(saved);
       setCriteriosPt(toEditable(saved.criterios_pt));
       setCriteriosGr(toEditable(saved.criterios_gr));
+      setCompositionDirty(false);
       setSuccess('Composición guardada correctamente.');
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, 'No fue posible guardar la composición'));
@@ -407,6 +521,79 @@ export default function ConfigurarMatrizEmpresaPage() {
     }
   };
 
+  const saveBands = async (ambito: AmbitoMatriz) => {
+    if (!draft) return;
+    const bands = ambito === 'PT' ? bandasPt : bandasGr;
+    setSavingBands(ambito);
+    setError('');
+    setSuccess('');
+    try {
+      const saved = await guardarResultadosMatrizEmpresa(
+        empresaId,
+        draft.id,
+        ambito,
+        draft.revision,
+        bands.map((band) => ({
+          nombre: band.nombre.trim(),
+          minimo: Number(band.minimo),
+          maximo: Number(band.maximo),
+        })),
+      );
+      setDraft(saved);
+      if (ambito === 'PT') {
+        setBandasPt(toBands(saved.resultados_pt));
+        setPtBandsDirty(false);
+      } else {
+        setBandasGr(toBands(saved.resultados_gr));
+        setGrBandsDirty(false);
+      }
+      setSuccess(`Bandas ${ambito} guardadas correctamente.`);
+    } catch (requestError) {
+      setError(getApiErrorMessage(requestError, 'Las bandas no cubren correctamente el dominio.'));
+    } finally {
+      setSavingBands(null);
+    }
+  };
+
+  const changeState = async (action: 'VALIDAR' | 'PUBLICAR' | 'REABRIR' | 'ACTIVAR') => {
+    if (!draft) return;
+    setTransitioning(true);
+    setError('');
+    setSuccess('');
+    try {
+      const saved = action === 'VALIDAR'
+        ? await validarMatrizEmpresa(empresaId, draft.id, draft.revision)
+        : action === 'PUBLICAR'
+          ? await publicarMatrizEmpresa(empresaId, draft.id, draft.revision)
+          : action === 'REABRIR'
+            ? await reabrirMatrizEmpresa(empresaId, draft.id, draft.revision)
+            : await activarMatrizEmpresa(empresaId, draft.id, draft.revision);
+      setDraft(saved);
+      setCriteriosPt(toEditable(saved.criterios_pt));
+      setCriteriosGr(toEditable(saved.criterios_gr));
+      setBandasPt(toBands(saved.resultados_pt));
+      setBandasGr(toBands(saved.resultados_gr));
+      setCompositionDirty(false);
+      setPtBandsDirty(false);
+      setGrBandsDirty(false);
+      setSuccess(
+        action === 'VALIDAR' ? 'Matriz validada correctamente.'
+          : action === 'PUBLICAR' ? 'Matriz publicada. Ya puede activarse.'
+            : action === 'REABRIR' ? 'Matriz reabierta para edición.'
+              : 'Matriz activada correctamente.',
+      );
+    } catch (requestError) {
+      setError(getApiErrorMessage(
+        requestError,
+        action === 'ACTIVAR'
+          ? 'No fue posible activar; verifica que no exista otra matriz activa.'
+          : 'La matriz está incompleta o cambió; revisa la configuración.',
+      ));
+    } finally {
+      setTransitioning(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -447,18 +634,26 @@ export default function ConfigurarMatrizEmpresaPage() {
             ambito="PT"
             catalogo={catalogoPt}
             selected={criteriosPt}
-            disabled={saving || savingParameterId !== null}
+            disabled={draft.estado_editorial !== 'BORRADOR' || saving || savingParameterId !== null}
             savingParameterId={savingParameterId}
-            onChange={setCriteriosPt}
+            onChange={(items) => {
+              setCriteriosPt(items);
+              setCompositionDirty(true);
+            }}
+            onParameterChange={setCriteriosPt}
             onSaveOptions={saveOptions}
           />
           <MatrixSection
             ambito="GR"
             catalogo={catalogoGr}
             selected={criteriosGr}
-            disabled={saving || savingParameterId !== null}
+            disabled={draft.estado_editorial !== 'BORRADOR' || saving || savingParameterId !== null}
             savingParameterId={savingParameterId}
-            onChange={setCriteriosGr}
+            onChange={(items) => {
+              setCriteriosGr(items);
+              setCompositionDirty(true);
+            }}
+            onParameterChange={setCriteriosGr}
             onSaveOptions={saveOptions}
           />
 
@@ -466,10 +661,88 @@ export default function ConfigurarMatrizEmpresaPage() {
             <Alert variant="danger">Todas las etiquetas visibles deben contener texto.</Alert>
           ) : null}
 
+          <Card className="p-5">
+            <h2 className="text-lg font-semibold text-text-primary">Clasificación final</h2>
+            <p className="mt-1 text-sm text-text-secondary">
+              Configura tres bandas inclusivas para cada ámbito.
+            </p>
+          </Card>
+          <ResultBandsSection
+            ambito="PT"
+            criterionCount={criteriosPt.length}
+            bands={bandasPt}
+            disabled={draft.estado_editorial !== 'BORRADOR' || savingBands !== null || transitioning}
+            saving={savingBands === 'PT'}
+            onChange={(bands) => {
+              setBandasPt(bands);
+              setPtBandsDirty(true);
+            }}
+            onSave={() => void saveBands('PT')}
+          />
+          <ResultBandsSection
+            ambito="GR"
+            criterionCount={criteriosGr.length}
+            bands={bandasGr}
+            disabled={draft.estado_editorial !== 'BORRADOR' || savingBands !== null || transitioning}
+            saving={savingBands === 'GR'}
+            onChange={(bands) => {
+              setBandasGr(bands);
+              setGrBandsDirty(true);
+            }}
+            onSave={() => void saveBands('GR')}
+          />
+
           <div className="flex justify-end">
-            <Button disabled={saving || savingParameterId !== null || invalidLabels} onClick={save}>
+            <Button
+              disabled={draft.estado_editorial !== 'BORRADOR' || saving || savingParameterId !== null || invalidLabels}
+              onClick={save}
+            >
               {saving ? 'Guardando…' : 'Guardar composición'}
             </Button>
+          </div>
+          {hasPendingChanges ? (
+            <Alert variant="warning">Guarda los cambios pendientes antes de validar.</Alert>
+          ) : null}
+          {draft.estado_editorial === 'VALIDADA' ? (
+            <Alert variant="info">
+              La matriz fue validada. Puedes publicarla o reabrirla para hacer cambios.
+            </Alert>
+          ) : null}
+          <div className="flex flex-wrap justify-end gap-3">
+            {draft.estado_editorial === 'BORRADOR' ? (
+              <Button
+                disabled={transitioning || saving || savingBands !== null || hasPendingChanges}
+                onClick={() => void changeState('VALIDAR')}
+              >
+                {transitioning ? 'Validando…' : 'Validar matriz'}
+              </Button>
+            ) : null}
+            {draft.estado_editorial === 'VALIDADA' ? (
+              <>
+                <Button
+                  variant="secondary"
+                  disabled={transitioning || hasPendingChanges}
+                  onClick={() => void changeState('REABRIR')}
+                >
+                  {transitioning ? 'Procesando…' : 'Reabrir edición'}
+                </Button>
+                <Button
+                  disabled={transitioning || hasPendingChanges}
+                  onClick={() => void changeState('PUBLICAR')}
+                >
+                  {transitioning ? 'Publicando…' : 'Publicar matriz'}
+                </Button>
+              </>
+            ) : null}
+            {draft.estado_editorial === 'PUBLICADA' && !draft.activa ? (
+              <Button
+                disabled={transitioning || hasPendingChanges}
+                onClick={() => void changeState('ACTIVAR')}
+              >
+                {transitioning ? 'Activando…' : 'Activar matriz'}
+              </Button>
+            ) : null}
+            {draft.activa ? <Badge variant="success">Matriz activa</Badge> : null}
           </div>
         </>
       ) : null}
