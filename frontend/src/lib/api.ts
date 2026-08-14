@@ -136,12 +136,22 @@ export interface BorradorMatrizEmpresa {
   id: number;
   empresa_id: number;
   numero_version: number;
-  estado_editorial: "BORRADOR";
-  activa: false;
+  estado_editorial: "BORRADOR" | "VALIDADA" | "PUBLICADA";
+  activa: boolean;
   revision: number;
   procedencia: "CREADA_EN_SISTEMA" | "IMPORTADA_XLSX" | null;
   criterios_pt: CriterioBorradorMatriz[];
   criterios_gr: CriterioBorradorMatriz[];
+  resultados_pt: ResultadoMatrizEmpresa[];
+  resultados_gr: ResultadoMatrizEmpresa[];
+}
+
+export interface ResultadoMatrizEmpresa {
+  id: number;
+  nombre: string;
+  minimo: number;
+  maximo: number;
+  orden: number;
 }
 
 export async function obtenerCatalogoCriteriosMatriz(
@@ -222,6 +232,49 @@ export async function guardarOpcionesCriterioMatriz(
   }
   return response.data.data;
 }
+
+export async function guardarResultadosMatrizEmpresa(
+  empresaId: string | number,
+  matrizId: number,
+  ambito: AmbitoMatriz,
+  revision: number,
+  resultados: Array<{ nombre: string; minimo: number; maximo: number }>,
+): Promise<BorradorMatrizEmpresa> {
+  const response = await api.put<{ data: BorradorMatrizEmpresa }>(
+    `/api/admin/empresas/${empresaId}/matrices/${matrizId}/resultados/${ambito}`,
+    { revision, resultados },
+  );
+  return response.data.data;
+}
+
+async function cambiarEstadoMatrizEmpresa(
+  empresaId: string | number,
+  matrizId: number,
+  accion: "validar" | "publicar" | "reabrir" | "activar",
+  revision: number,
+): Promise<BorradorMatrizEmpresa> {
+  const response = await api.post<{ data: BorradorMatrizEmpresa }>(
+    `/api/admin/empresas/${empresaId}/matrices/${matrizId}/${accion}`,
+    { revision },
+  );
+  return response.data.data;
+}
+
+export const validarMatrizEmpresa = (
+  empresaId: string | number, matrizId: number, revision: number,
+) => cambiarEstadoMatrizEmpresa(empresaId, matrizId, "validar", revision);
+
+export const publicarMatrizEmpresa = (
+  empresaId: string | number, matrizId: number, revision: number,
+) => cambiarEstadoMatrizEmpresa(empresaId, matrizId, "publicar", revision);
+
+export const reabrirMatrizEmpresa = (
+  empresaId: string | number, matrizId: number, revision: number,
+) => cambiarEstadoMatrizEmpresa(empresaId, matrizId, "reabrir", revision);
+
+export const activarMatrizEmpresa = (
+  empresaId: string | number, matrizId: number, revision: number,
+) => cambiarEstadoMatrizEmpresa(empresaId, matrizId, "activar", revision);
 
 export async function obtenerMiEmpresa<T>(signal?: AbortSignal): Promise<T> {
   const response = await api.get<{ empresa: T }>("/api/cliente/mi-empresa", { signal });
