@@ -224,25 +224,34 @@ BEGIN
   END LOOP;
 
   FOR esperado IN SELECT * FROM (VALUES
-    ('matriz_empresa_version','uq_matriz_empresa_version_pendiente_empresa',ARRAY['empresa_id'],true,'estado_editorial::text=any(array[''BORRADOR''::charactervarying,''VALIDADA''::charactervarying]::text[])'),
+    ('matriz_empresa_version','uq_matriz_empresa_version_pendiente_empresa',ARRAY['empresa_id'],true,'((estado_editorial)::text=any((array[''BORRADOR''::charactervarying,''VALIDADA''::charactervarying])::text[]))'),
     ('matriz_auditoria_evento','idx_matriz_auditoria_evento_empresa_fecha',ARRAY['empresa_id','creado_en'],false,NULL),
     ('matriz_auditoria_evento','idx_matriz_auditoria_evento_version_fecha',ARRAY['matriz_version_id','creado_en'],false,NULL),
     ('matriz_auditoria_evento','idx_matriz_auditoria_evento_actor_fecha',ARRAY['actor_usuario_id','creado_en'],false,NULL),
     ('matriz_idempotencia','idx_matriz_idempotencia_expira_en',ARRAY['expira_en'],false,NULL)
   ) AS i(tabla,nombre,columnas,unico,predicado_esperado) LOOP
-    SELECT i.indisunique AS unico,
+    SELECT i.indisunique AS unico, i.indisvalid AS valido, i.indisready AS listo,
+      am.amname AS metodo, i.indnkeyatts AS cantidad_claves,
+      i.indnatts AS cantidad_atributos,
       pg_catalog.array_agg(a.attname::TEXT ORDER BY k.ord) FILTER (WHERE k.ord<=i.indnkeyatts) AS columnas,
-      pg_catalog.lower(pg_catalog.regexp_replace(pg_catalog.pg_get_expr(i.indpred,i.indrelid,true),'[[:space:]()]','','g')) AS predicado
+      pg_catalog.bool_or(k.attnum=0) FILTER (WHERE k.ord<=i.indnkeyatts) AS tiene_expresiones,
+      pg_catalog.lower(pg_catalog.regexp_replace(pg_catalog.pg_get_expr(i.indpred,i.indrelid,true),'[[:space:]]+','','g')) AS predicado
       INTO real
       FROM pg_catalog.pg_index i
       JOIN pg_catalog.pg_class t ON t.oid=i.indrelid
       JOIN pg_catalog.pg_namespace n ON n.oid=t.relnamespace
       JOIN pg_catalog.pg_class x ON x.oid=i.indexrelid AND x.relnamespace=n.oid AND x.relname=esperado.nombre
+      JOIN pg_catalog.pg_am am ON am.oid=x.relam
       JOIN LATERAL pg_catalog.unnest(i.indkey) WITH ORDINALITY k(attnum,ord) ON true
       LEFT JOIN pg_catalog.pg_attribute a ON a.attrelid=t.oid AND a.attnum=k.attnum
      WHERE n.nspname='public' AND t.relname=esperado.tabla
-     GROUP BY i.indisunique,i.indpred,i.indrelid;
+     GROUP BY i.indisunique,i.indisvalid,i.indisready,am.amname,
+       i.indnkeyatts,i.indnatts,i.indpred,i.indrelid;
     IF NOT FOUND OR real.unico IS DISTINCT FROM esperado.unico
+       OR NOT real.valido OR NOT real.listo OR real.metodo IS DISTINCT FROM 'btree'
+       OR real.cantidad_claves IS DISTINCT FROM pg_catalog.cardinality(esperado.columnas)
+       OR real.cantidad_atributos IS DISTINCT FROM pg_catalog.cardinality(esperado.columnas)
+       OR real.tiene_expresiones
        OR real.columnas IS DISTINCT FROM esperado.columnas
        OR real.predicado IS DISTINCT FROM esperado.predicado_esperado THEN
       RAISE EXCEPTION 'Rollback no aplicable: indice public.% incompatible', esperado.nombre;
