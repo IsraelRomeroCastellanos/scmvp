@@ -91,7 +91,7 @@ BEGIN
   END LOOP;
 
   FOR esperado IN SELECT * FROM (VALUES
-    ('uq_matriz_empresa_version_activa_empresa',ARRAY['empresa_id'],true,'activa=true'),
+    ('uq_matriz_empresa_version_activa_empresa',ARRAY['empresa_id'],true,'(activa=true)'),
     ('idx_matriz_empresa_version_estado',ARRAY['empresa_id','estado_editorial'],false,NULL),
     ('idx_matriz_empresa_version_origen',ARRAY['version_origen_id'],false,NULL),
     ('idx_matriz_empresa_version_creada_por',ARRAY['creada_por'],false,NULL),
@@ -99,19 +99,28 @@ BEGIN
     ('idx_matriz_empresa_version_publicada_por',ARRAY['publicada_por'],false,NULL),
     ('idx_matriz_archivo_fuente_cargado_por',ARRAY['cargado_por'],false,NULL)
   ) AS x(nombre,columnas,unico,predicado) LOOP
-    SELECT i.indisunique AS unico,
+    SELECT i.indisunique AS unico, i.indisvalid AS valido, i.indisready AS listo,
+      am.amname AS metodo, i.indnkeyatts AS cantidad_claves,
+      i.indnatts AS cantidad_atributos,
       pg_catalog.array_agg(a.attname::TEXT ORDER BY k.ord) FILTER (WHERE k.ord<=i.indnkeyatts) AS columnas,
-      pg_catalog.lower(pg_catalog.regexp_replace(pg_catalog.pg_get_expr(i.indpred,i.indrelid,true),'[[:space:]()]','','g')) AS predicado
+      pg_catalog.bool_or(k.attnum=0) FILTER (WHERE k.ord<=i.indnkeyatts) AS tiene_expresiones,
+      pg_catalog.lower(pg_catalog.regexp_replace(pg_catalog.pg_get_expr(i.indpred,i.indrelid,true),'[[:space:]]+','','g')) AS predicado
       INTO real
       FROM pg_catalog.pg_index i
       JOIN pg_catalog.pg_class x ON x.oid=i.indexrelid
       JOIN pg_catalog.pg_namespace n ON n.oid=x.relnamespace
       JOIN pg_catalog.pg_class t ON t.oid=i.indrelid
+      JOIN pg_catalog.pg_am am ON am.oid=x.relam
       JOIN LATERAL pg_catalog.unnest(i.indkey) WITH ORDINALITY k(attnum,ord) ON true
       LEFT JOIN pg_catalog.pg_attribute a ON a.attrelid=t.oid AND a.attnum=k.attnum
      WHERE n.nspname='public' AND x.relname=esperado.nombre
-     GROUP BY i.indisunique,i.indpred,i.indrelid;
+     GROUP BY i.indisunique,i.indisvalid,i.indisready,am.amname,
+       i.indnkeyatts,i.indnatts,i.indpred,i.indrelid;
     IF NOT FOUND OR real.unico IS DISTINCT FROM esperado.unico
+       OR NOT real.valido OR NOT real.listo OR real.metodo IS DISTINCT FROM 'btree'
+       OR real.cantidad_claves IS DISTINCT FROM pg_catalog.cardinality(esperado.columnas)
+       OR real.cantidad_atributos IS DISTINCT FROM pg_catalog.cardinality(esperado.columnas)
+       OR real.tiene_expresiones
        OR real.columnas IS DISTINCT FROM esperado.columnas
        OR real.predicado IS DISTINCT FROM esperado.predicado THEN
       RAISE EXCEPTION 'Preflight fallido: indice 002 public.% incompatible', esperado.nombre;
