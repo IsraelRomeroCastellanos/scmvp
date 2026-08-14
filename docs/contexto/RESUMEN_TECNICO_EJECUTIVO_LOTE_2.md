@@ -1,20 +1,23 @@
 # PLD VISSION / SCMVP
 
-## Checkpoint de infraestructura operativa — 2026-08-12
+## Checkpoint de infraestructura operativa — 2026-08-14
 
 - Backend vigente: https://scmvp-nxtj.onrender.com
 - DB lógica vigente: `scmvp_q69o`.
+- Servidor de referencia: PostgreSQL 17.10.
 - `scmvp-1jhq.onrender.com` y `scmvp_0plk` quedan clasificados como infraestructura histórica/anterior.
-- Este cambio documental no acredita que las migraciones 002–005 hayan sido
-  ejecutadas o aplicadas en PostgreSQL.
+- Este es el supuesto de producción, entorno equivalente de prueba y base de
+  referencia operativa porque no existe un ambiente de pruebas separado; no es
+  producción real.
+- Las migraciones 001–007 están aplicadas; 002–007 terminaron con VERIFY OK.
 
 ## Resumen técnico ejecutivo — Lote 2: Gestión de matriz por empresa
 
 ### Situación actual
 
-- Rama documental actual: `docs/actualizar-contexto-migracion-005`.
-- `main` actualizado hasta el merge commit `62db132`.
-- PR más reciente: `#115`; commit funcional: `ce1fa7e`.
+- Rama documental actual: `docs/cierre-migraciones-002-007`.
+- `main` confirmado en el merge commit `065187a`.
+- PR de cierre más reciente: `#131`.
 - El Lote 2E-2 se implementó en `feat/lote-2e2-parser-matriz-excel`, commit
   previo al merge `f43a1a0`.
 - El PR `#107`, fusionado mediante `23fa6f3`, se conserva como cierre funcional
@@ -29,9 +32,8 @@
 - El Lote 2E-1 se implementó en `feat/lote-2e1-inspector-ooxml`, commit
   `17d0d25 feat: agregar inspector defensivo OOXML para matrices`.
 - PR del Lote 2E-1: `#105`, fusionado correctamente; merge commit `de7dc9d`.
-- La migración 001 está registrada en la base desplegada.
-- Las migraciones 002, 003, 004 y 005 están versionadas/mergeadas, pero **no se
-  ha confirmado que estén ejecutadas o aplicadas en PostgreSQL**.
+- La migración 001 estaba aplicada previamente. Las migraciones 002, 003, 004,
+  005, 006 y 007 están aplicadas y con VERIFY OK en `scmvp_q69o`.
 - El backend ya gestiona empresas, configuración PLD y clientes con aislamiento
   por empresa.
 - Los Lotes 2A, 2B, 2C y 2D están implementados y fusionados mediante los PR
@@ -39,19 +41,18 @@
 - Existe consulta reutilizable, indicador en los DTO, bloqueo en backend y
   frontend, inspector defensivo OOXML y parser funcional V1 de matrices PT/GR
   por empresa. Crear borrador ya está implementado; no existe todavía gestión
-  administrativa completa de matrices. La 005 sí cierra el contrato físico de
-  catálogos canónicos, no el runtime funcional.
+  administrativa de matrices mediante 2G-1, 2G-2 y 2G-3. La infraestructura
+  está cerrada; falta el recorrido funcional integral de backend y frontend.
 
 ### Objetivo
 
 El objetivo de los Lotes 2A–2D quedó cerrado: hacer exigible la condición de
 matriz utilizable antes del alta de clientes. El Lote 2E-1 también quedó
 completado, versionado y fusionado como frontera defensiva previa a ExcelJS. El
-Lote 2E-2 quedó cerrado y aprobado con el parser `PT_GR_EMPRESA_V1`. El
-siguiente sublote debe definirse sin declarar como existentes
-el motor PT/GR, la evaluación histórica ni un despliegue productivo dependiente
-de las migraciones 002–005. Las migraciones 003–005 y crear borrador están
-cerrados.
+Lote 2E-2 quedó cerrado y aprobado con el parser `PT_GR_EMPRESA_V1`. Las
+migraciones 002–007 y los bloques 2G-1/2/3 están cerrados. La siguiente etapa
+es probar el flujo funcional real; el motor PT/GR, la evaluación histórica y
+los resolvers GR no deben declararse implementados por este cierre.
 
 ### Regla aprobada
 
@@ -120,6 +121,30 @@ navegador.
   `matriz_archivo_fuente.contenido` conserva `BYTEA NOT NULL`.
 - Opciones y rangos exigen puntajes 1/2/3. Los resultados usan límites enteros
   positivos y referencias XLSX nullable; la cobertura N..3N queda para runtime.
+- La migración 006 agrega `usuarios.tipo_principal` y
+  `usuarios.codigo_principal`, con soporte diferenciado para principales
+  `HUMANO` y `SISTEMA`.
+- La migración 007 deja el principal técnico determinístico `PLD_SYSTEM` y
+  ocho criterios canónicos: PT `TIPO_PRODUCTO`, `NATURALEZA_PRODUCTO`,
+  `FRECUENCIA_PRODUCTO`, `DESTINO_RECURSOS_PT`; GR `ACTIVIDAD_ECONOMICA`,
+  `ZONA_GEOGRAFICA`, `DESTINO_RECURSOS_GR`, `PERFIL_TRANSACCIONAL`.
+- El principal técnico es `SISTEMA`, correo
+  `pld-system@internal.invalid`, password hash
+  `!SYSTEM_PRINCIPAL_NO_LOGIN!`, nombre `Principal técnico PLD VISSION`, sin
+  rol ni empresa y con `activo = false`. Siempre se resuelve por
+  `codigo_principal = 'PLD_SYSTEM'`, nunca por ID fijo.
+- Rutas administrativas implementadas:
+  `GET /api/admin/catalogos-criterios-matriz?ambito=PT|GR`,
+  `GET /api/admin/empresas/:empresaId/matrices/borrador`,
+  `PUT /api/admin/empresas/:empresaId/matrices/:matrizId/criterios`,
+  `PUT /api/admin/empresas/:empresaId/matrices/:matrizId/criterios/:criterioId/parametrizacion`,
+  `PUT /api/admin/empresas/:empresaId/matrices/:matrizId/resultados/:ambito`,
+  `POST /api/admin/empresas/:empresaId/matrices/:matrizId/validar`,
+  `POST /api/admin/empresas/:empresaId/matrices/:matrizId/reabrir`,
+  `POST /api/admin/empresas/:empresaId/matrices/:matrizId/publicar` y
+  `POST /api/admin/empresas/:empresaId/matrices/:matrizId/activar`. El GET de
+  borrador puede devolver una pendiente `BORRADOR` o `VALIDADA`, nunca
+  `PUBLICADA`.
 
 ### Lotes cerrados
 
@@ -137,8 +162,8 @@ navegador.
 - **Sublote posterior — PR #109:** migración
   `20260805_003_gestion_matrices_empresa`, implementada en `59e141b` y
   fusionada en `main` mediante `763811b9f2be2e8f339802256457bfd0907126a9`.
-  Revisión independiente estática final: `APROBABLE`. No hubo ejecución SQL
-  ni prueba real contra PostgreSQL.
+  Revisión independiente estática final: `APROBABLE`. Posteriormente quedó
+  aplicada y con VERIFY OK en el entorno equivalente.
 - **Crear borrador por empresa — PR #112:** endpoint
   `POST /api/admin/empresas/:empresaId/matrices`, implementado en `90850b5` y
   fusionado mediante `e87ba26dc365903189e96247373e2b3ae3a791e4`. Solo admin;
@@ -146,8 +171,19 @@ navegador.
   una sola pendiente, idempotencia, lock transaccional y auditoría.
 - **Migración 005 — PR #115:** implementada en `ce1fa7e` y fusionada mediante
   `62db132`. UP, VERIFY read-only y DOWN conservador definen el modelo canónico
-  PT/GR. Segunda revisión independiente: **APROBABLE**. No hubo SQL ni conexión
-  a PostgreSQL; su aplicación real no está confirmada.
+  PT/GR. Segunda revisión independiente: **APROBABLE**. Posteriormente quedó
+  aplicada y con VERIFY OK.
+- **2G-1:** composición/configuración de matriz por empresa, **MERGEADO**.
+- **2G-2:** parametrización, **MERGEADO**.
+- **2G-3:** validación, publicación y activación, **MERGEADO**.
+- **Cierre 002–007:** todas las migraciones están aplicadas y verificadas en el
+  entorno equivalente PostgreSQL 17.10. El VERIFY final de 007 confirmó las
+  claves `20260812_005_catalogos_canonicos_matriz`,
+  `20260813_006_principales_tecnicos_usuarios` y
+  `20260813_007_seed_principal_sistema_y_catalogos_matriz`, y terminó en
+  COMMIT. Las correcciones relevantes quedaron fusionadas mediante los PR
+  #121, #122, #123, #124, #126, #127, #128, #129, #130 y #131; `main` quedó
+  confirmado en `065187a`.
 
 ### Cierre técnico de la migración 005
 
@@ -279,8 +315,33 @@ Archivos versionados: `backend/package.json`, `backend/package-lock.json`,
 dependencia directa, `unzipper` 0.10.14 permanece fijada y sus tipos locales
 se ampliaron para los metadatos ZIP utilizados.
 
-El backend conserva la autoridad final. El riesgo TOCTOU se acepta
-temporalmente hasta que existan flujos coordinados de publicación y activación.
+### Lección operativa PostgreSQL 17
+
+Los incidentes al aplicar o verificar 003–006 estuvieron principalmente en
+preflights y verificadores demasiado dependientes de representaciones internas,
+no en el modelo de negocio ni en las tablas creadas. Se encontraron:
+
+- comparación literal de `schema_migrations.migration_key` contra
+  `character varying` cuando el contrato físico es `VARCHAR(150)`;
+- diferencias legítimas de paréntesis, casts, `ANY/ARRAY`, `COLLATE` e
+  intervalos en `pg_get_constraintdef` y `pg_get_expr`;
+- comparación textual frágil de predicados de índices parciales;
+- el alias problemático `collation` en `WITH ORDINALITY`;
+- una llamada inexistente en PG17 a
+  `unnest(int2vector, oidvector, oidvector, int2vector)`, sustituida por
+  expansión paralela válida con `ROWS FROM`;
+- el uso inválido de `pg_catalog.position('texto' IN expresion)`, porque
+  `POSITION(substring IN string)` es sintaxis SQL especial;
+- SQL dinámico de VERIFY 006 que dejó `bool_and(` sin cerrar antes de `FROM`.
+
+Regla permanente: toda migración que toque estructura, catálogos o
+`pg_catalog` exige revisión integral de UP + VERIFY + DOWN; validación
+estructural o semántica en vez de serialización textual frágil; comprobación de
+sintaxis y tipos reales de PostgreSQL 17; reconstrucción conceptual de todo SQL
+dinámico; y barrido del mismo patrón en migraciones subsecuentes. Un bloque no
+se considera cerrado hasta ejecutar UP y VERIFY en el entorno equivalente, ni
+se avanza a frontend con infraestructura parcial. Estos hallazgos no fueron un
+incidente de producción real.
 
 ### Validaciones realizadas
 
@@ -315,20 +376,18 @@ temporalmente hasta que existan flujos coordinados de publicación y activación
 
 ### Pendientes
 
-- ejecución/aplicación controlada de 002, 003, 004 y 005; están versionadas,
-  pero su aplicación no está confirmada;
 - identificación de roles efectivos de PostgreSQL y `GRANT`/`REVOKE` nominales;
-- definición del siguiente sublote de gestión directa en sistema;
-- publicación futura con mínimo 1 PT + 1 GR, cantidad variable sin máximo fijo
-  y tres bandas que cubran N..3N sin huecos ni solapes;
+- smoke funcional integral del flujo editorial y del bloqueo de clientes;
+- pruebas del frontend administrativo de matrices;
+- publicación con mínimo 1 PT + 1 GR, cantidad variable sin máximo fijo y
+  exactamente tres bandas PT y tres GR que cubran N..3N sin huecos ni
+  traslapes;
 - clonado futuro sin alterar históricos: criterios activos toman su versión
   vigente; retirados requieren sustitución/remoción antes de publicar;
 - contrato futuro `NO_EVALUABLE` para GR sin dato fuente, sin puntaje ni
   resultado final mientras subsista el dato faltante;
 - motor de evaluación final y evaluación histórica;
-- endpoints de gestión restantes que todavía no existen;
 - vinculación técnica definitiva de campos KYC;
-- migraciones no ejecutadas y frontend no implementado en el Lote 2E-2;
 - pruebas automatizadas completas;
 - pruebas controladas reales con empresa sin matriz y con matriz activa;
 - pruebas por rol, manipulación de `empresa_id` y regresión integral de PF,
@@ -336,9 +395,8 @@ temporalmente hasta que existan flujos coordinados de publicación y activación
 
 ### Fuera de alcance
 
-- Ejecución o aplicación de las migraciones 002–005.
-- Seeds, runtime, motor, frontend, endpoints, implementación de
-  `resolver_codigo`, publicación matemática y evaluación de clientes.
+- Motor de evaluación de clientes, evaluación histórica e implementación de
+  los resolvers GR. Los seeds 007 y endpoints 2G sí existen.
 - Importación XLSX operativa. Inspector y parser se conservan como legado.
 - Overrides específicos; `matriz_regla` se conserva para futuro.
 - Motor PT/GR, evaluaciones históricas y correo.
@@ -354,11 +412,11 @@ temporalmente hasta que existan flujos coordinados de publicación y activación
 | Confiar en el frontend | Validación implementada y obligatoria en backend. |
 | Usar empresa manipulada | Derivar tenant de `req.user` para consultor/cliente y validar selección admin. |
 | Bloqueo después de insertar | Comprobar matriz dentro del flujo transaccional y antes de mutaciones. |
-| Confundir SQL versionado con producción | Mantener explícito que 002–005 están mergeadas, pero su aplicación no está confirmada. |
+| Confundir entorno equivalente con producción real | Nombrar `scmvp_q69o` como supuesto de producción/base de referencia, no como producción real. |
 | Romper capturas existentes | Regresión de PF, PM, Fideicomiso, terceros y contratos actuales. |
 | Exponer auditoría manipulable | Tomar identificadores futuros de `req.user.id`, no del body. |
-| Ampliar el lote | Mantener fuera el motor final, endpoints, persistencia, frontend y publicación. |
-| Cambio concurrente de estado de matriz (TOCTOU) | Riesgo aceptado temporalmente hasta coordinar los flujos de publicación/activación. |
+| Ampliar el lote | Mantener fuera el motor final, resolvers GR y evaluación histórica. |
+| Cambio concurrente de estado de matriz (TOCTOU) | Probar que las transiciones 2G-3 no habiliten altas sin matriz publicada y activa. |
 | Respuesta del Worker | Endurecimiento opcional de longitud exacta de `sheetNames` y limpieza defensiva adicional en `onError`. |
 | Dependencia ZIP | Conservar fijado y vigilar el comportamiento de `unzipper` 0.10.14. |
 | Alcance de validación | El parser valida el contrato V1; no implementa el motor de evaluación final ni el flujo de gestión/publicación. |
@@ -367,38 +425,44 @@ temporalmente hasta que existan flujos coordinados de publicación y activación
 
 - Inspección de contratos existentes y aprobación previa de API, estados,
   permisos, auditoría y estrategia transaccional.
-- Migración 001 aplicada, ya confirmada.
-- Migraciones 002–005 probadas en restauración desechable y autorizadas antes
-  de que un backend dependiente de sus objetos pueda desplegarse.
+- Migraciones 001–007 aplicadas; VERIFY OK para 002–007 en el entorno
+  equivalente.
 - Preservación del aislamiento multiempresa y de los contratos actuales.
 
 ### Próximo bloque de trabajo
 
-La migración 005 está cerrada técnicamente. El cierre documental está en curso
-mediante esta actualización en la rama
-`docs/actualizar-contexto-migracion-005`, todavía sin commit, PR ni merge; una
-vez fusionada podrá considerarse cerrada documentalmente. El próximo sublote
-funcional aún debe definirse sin inventar contrato. El flujo primario objetivo es:
+El bloque 002–007 está cerrado. La próxima etapa es:
 
-```text
-crear borrador -> seleccionar criterios canónicos -> parametrizar -> validar
--> publicar -> activar
-```
+1. smoke funcional backend del flujo editorial real;
+2. confirmar el principal técnico y los ocho catálogos;
+3. crear u obtener una empresa;
+4. crear borrador;
+5. seleccionar PT/GR;
+6. parametrizar criterios;
+7. configurar bandas PT/GR;
+8. validar;
+9. reabrir y volver a validar si corresponde;
+10. publicar;
+11. activar;
+12. confirmar bloqueo o permiso de creación de clientes;
+13. probar el frontend administrativo de matrices;
+14. registrar bugs funcionales reales;
+15. sólo después definir el siguiente lote.
 
-XLSX queda como legado/importación futura. Una composición publicada permanece
-congelada; los cambios requieren nueva versión. No se ejecutarán ni declararán
-aplicadas las migraciones 002–005 sin autorización y evidencia separadas.
-Se conservan las reglas permanentes: un paso por vez, cambios con Codex,
-validación antes de avanzar, revisión independiente, pruebas antes de commit,
-staging selectivo, PR obligatorio y protección de archivos untracked.
+Una empresa puede crearse sin matriz, pero no crear clientes sin una matriz
+`PUBLICADA` y activa. `PUBLICADA` nunca se reabre; `VALIDADA` puede reabrirse
+explícitamente. Activar es separado de publicar y una activa existente produce
+`409 MATRIZ_ACTIVA_EXISTENTE`, sin reemplazo silencioso. La composición mínima
+es 1 PT + 1 GR, sin máximo fijo; para N criterios el score es N..3N, con
+exactamente tres bandas por ámbito, cobertura total sin huecos ni traslapes. La
+composición publicada queda congelada y los cambios exigen nueva versión. GR
+nunca es captura manual. XLSX permanece como legado/importación futura.
 
-### Estado de producción
+### Estado del entorno equivalente
 
-Las migraciones 002, 003, 004 y 005 están versionadas/mergeadas, pero **NO se
-ha confirmado que estén ejecutadas o aplicadas en PostgreSQL**. En consecuencia,
-el endpoint de crear borrador, la gestión de
-matrices y el bloqueo dependiente de esas tablas tampoco deben declararse
-desplegados. El
-inspector OOXML y el parser V1 fusionados no prueban que el flujo completo de
-gestión, carga, publicación o activación esté desplegado. No debe afirmarse que
-funcionalidades dependientes de migraciones estén desplegadas.
+En `scmvp_q69o`, PostgreSQL 17.10, la 001 estaba aplicada y 002–007 están
+aplicadas con VERIFY OK. El VERIFY 007 confirmó las claves 005, 006 y 007 y
+terminó en COMMIT. Este entorno es la base de referencia operativa ante la
+ausencia de un ambiente de pruebas separado; no debe describirse como
+producción real. El cierre estructural no acredita todavía el motor de
+evaluación, los resolvers GR ni el recorrido funcional integral.
