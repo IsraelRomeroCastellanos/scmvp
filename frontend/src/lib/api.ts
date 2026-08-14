@@ -114,6 +114,22 @@ export interface CriterioBorradorMatriz {
   tipo_resolucion: string;
   parametrizacion: string;
   unidad_canonica: string | null;
+  opciones: Array<{
+    id: number;
+    etiqueta: string;
+    orden: number;
+    puntaje: 1 | 2 | 3;
+  }>;
+  rangos: Array<{
+    id: number;
+    minimo: number | null;
+    maximo: number | null;
+    incluye_minimo: boolean;
+    incluye_maximo: boolean;
+    unidad: string;
+    orden: number;
+    puntaje: 1 | 2 | 3;
+  }>;
 }
 
 export interface BorradorMatrizEmpresa {
@@ -183,6 +199,26 @@ export async function guardarComposicionMatrizEmpresa(
   );
   if (!response.data?.data) {
     throw new Error("La respuesta del guardado de composición no es válida");
+  }
+  return response.data.data;
+}
+
+export async function guardarOpcionesCriterioMatriz(
+  empresaId: string | number,
+  matrizId: number,
+  criterioId: number,
+  revision: number,
+  etiquetas: string[],
+): Promise<BorradorMatrizEmpresa> {
+  const response = await api.put<{ data: BorradorMatrizEmpresa }>(
+    `/api/admin/empresas/${empresaId}/matrices/${matrizId}/criterios/${criterioId}/parametrizacion`,
+    {
+      revision,
+      opciones: etiquetas.map((etiqueta) => ({ etiqueta })),
+    },
+  );
+  if (!response.data?.data) {
+    throw new Error("La respuesta de parametrización no es válida");
   }
   return response.data.data;
 }
