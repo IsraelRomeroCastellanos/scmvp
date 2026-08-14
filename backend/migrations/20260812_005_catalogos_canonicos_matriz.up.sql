@@ -36,9 +36,12 @@ BEGIN
     FROM pg_catalog.pg_attribute a
     JOIN pg_catalog.pg_class t ON t.oid = a.attrelid AND t.relkind IN ('r', 'p')
     JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace
+    JOIN pg_catalog.pg_type tipo ON tipo.oid = a.atttypid
+    JOIN pg_catalog.pg_namespace tipo_n ON tipo_n.oid = tipo.typnamespace
     WHERE n.nspname = 'public' AND t.relname = 'schema_migrations'
       AND a.attname = 'migration_key' AND a.attnum > 0 AND NOT a.attisdropped
-      AND pg_catalog.format_type(a.atttypid, a.atttypmod) = 'character varying'
+      AND tipo_n.nspname = 'pg_catalog' AND tipo.typname = 'varchar'
+      AND a.atttypmod = 150 + 4
       AND a.attnotnull
   ) THEN
     RAISE EXCEPTION 'Preflight fallido: public.schema_migrations es incompatible';
