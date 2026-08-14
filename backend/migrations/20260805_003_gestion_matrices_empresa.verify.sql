@@ -13,6 +13,8 @@ DECLARE
   real RECORD;
   digest_schema TEXT;
   hashes_invalidos BOOLEAN;
+  resultado_predicado BOOLEAN[];
+  predicado_valido BOOLEAN;
 BEGIN
   IF pg_catalog.current_schema() IS DISTINCT FROM 'public' THEN
     RAISE EXCEPTION 'VERIFY fallido: se esperaba el esquema public';
@@ -236,21 +238,20 @@ BEGIN
     ('matriz_empresa_version','idx_matriz_empresa_version_publicada_por',ARRAY['publicada_por'],false,NULL),
     ('matriz_empresa_version','idx_matriz_empresa_version_validada_por',ARRAY['validada_por'],false,NULL),
     ('matriz_empresa_version','pk_matriz_empresa_version',ARRAY['id'],true,NULL),
-    ('matriz_empresa_version','uq_matriz_empresa_version_activa_empresa',ARRAY['empresa_id'],true,'(activa=true)'),
+    ('matriz_empresa_version','uq_matriz_empresa_version_activa_empresa',ARRAY['empresa_id'],true,'activa'),
     ('matriz_empresa_version','uq_matriz_empresa_version_empresa_numero',ARRAY['empresa_id','numero_version'],true,NULL),
     ('matriz_empresa_version','uq_matriz_empresa_version_id_empresa',ARRAY['id','empresa_id'],true,NULL),
-    ('matriz_empresa_version','uq_matriz_empresa_version_pendiente_empresa',ARRAY['empresa_id'],true,'((estado_editorial)::text=any((array[''BORRADOR''::charactervarying,''VALIDADA''::charactervarying])::text[]))'),
+    ('matriz_empresa_version','uq_matriz_empresa_version_pendiente_empresa',ARRAY['empresa_id'],true,'pendiente'),
     ('matriz_idempotencia','idx_matriz_idempotencia_expira_en',ARRAY['expira_en'],false,NULL),
     ('matriz_idempotencia','pk_matriz_idempotencia',ARRAY['id'],true,NULL),
     ('matriz_idempotencia','uq_matriz_idempotencia_ambito',ARRAY['empresa_id','actor_usuario_id','operacion','clave_sha256'],true,NULL)
-  ) AS x(tabla,nombre,columnas,unico,predicado_esperado) LOOP
+  ) AS x(tabla,nombre,columnas,unico,tipo_predicado) LOOP
     SELECT i.indisunique AS unico, i.indpred IS NOT NULL AS parcial,
       i.indisvalid AS valido, i.indisready AS listo, am.amname AS metodo,
       i.indnkeyatts AS cantidad_claves, i.indnatts AS cantidad_atributos,
       pg_catalog.array_agg(a.attname::TEXT ORDER BY k.ord) FILTER (WHERE k.ord<=i.indnkeyatts) AS columnas,
       pg_catalog.bool_or(k.attnum=0) FILTER (WHERE k.ord<=i.indnkeyatts) AS tiene_expresiones,
-      pg_catalog.lower(pg_catalog.regexp_replace(
-        pg_catalog.pg_get_expr(i.indpred,i.indrelid,false),'[[:space:]]+','','g')) AS predicado
+      pg_catalog.pg_get_expr(i.indpred,i.indrelid) AS predicado
       INTO real
       FROM pg_catalog.pg_namespace n JOIN pg_catalog.pg_class t ON t.relnamespace=n.oid
       JOIN pg_catalog.pg_index i ON i.indrelid=t.oid
@@ -262,13 +263,45 @@ BEGIN
      GROUP BY i.indisunique,i.indpred,i.indrelid,i.indisvalid,i.indisready,
        am.amname,i.indnkeyatts,i.indnatts;
     IF NOT FOUND OR real.unico IS DISTINCT FROM esperado.unico
-       OR real.parcial IS DISTINCT FROM (esperado.predicado_esperado IS NOT NULL)
+       OR real.parcial IS DISTINCT FROM (esperado.tipo_predicado IS NOT NULL)
        OR NOT real.valido OR NOT real.listo OR real.metodo IS DISTINCT FROM 'btree'
        OR real.cantidad_claves IS DISTINCT FROM pg_catalog.cardinality(esperado.columnas)
        OR real.cantidad_atributos IS DISTINCT FROM pg_catalog.cardinality(esperado.columnas)
-       OR real.tiene_expresiones OR real.columnas IS DISTINCT FROM esperado.columnas
-       OR real.predicado IS DISTINCT FROM esperado.predicado_esperado THEN
+       OR real.tiene_expresiones OR real.columnas IS DISTINCT FROM esperado.columnas THEN
       RAISE EXCEPTION 'VERIFY fallido: indice public.% incompatible', esperado.nombre;
+    END IF;
+
+    predicado_valido := esperado.tipo_predicado IS NULL;
+    IF esperado.tipo_predicado = 'activa' THEN
+      BEGIN
+        EXECUTE pg_catalog.format(
+          'SELECT pg_catalog.array_agg((%s) IS TRUE ORDER BY orden) '
+          'FROM (VALUES (1, true), (2, false), (3, NULL::boolean)) '
+          'AS matriz_empresa_version(orden, activa)',
+          real.predicado
+        ) INTO resultado_predicado;
+        predicado_valido := resultado_predicado = ARRAY[true,false,false];
+      EXCEPTION WHEN OTHERS THEN
+        predicado_valido := false;
+      END;
+    ELSIF esperado.tipo_predicado = 'pendiente' THEN
+      BEGIN
+        EXECUTE pg_catalog.format(
+          'SELECT pg_catalog.array_agg((%s) IS TRUE ORDER BY orden) '
+          'FROM (VALUES '
+          '(1, ''BORRADOR''::varchar(20)), (2, ''VALIDADA''::varchar(20)), '
+          '(3, ''PUBLICADA''::varchar(20)), (4, NULL::varchar(20)), '
+          '(5, ''__INVALIDO_VERIFY__''::varchar(20))) '
+          'AS matriz_empresa_version(orden, estado_editorial)',
+          real.predicado
+        ) INTO resultado_predicado;
+        predicado_valido := resultado_predicado = ARRAY[true,true,false,false,false];
+      EXCEPTION WHEN OTHERS THEN
+        predicado_valido := false;
+      END;
+    END IF;
+    IF NOT predicado_valido THEN
+      RAISE EXCEPTION 'VERIFY fallido: predicado semantico del indice public.% incompatible', esperado.nombre;
     END IF;
   END LOOP;
 

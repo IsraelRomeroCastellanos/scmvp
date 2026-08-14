@@ -10,6 +10,8 @@ DECLARE
   columna RECORD;
   esperado RECORD;
   real RECORD;
+  resultado_predicado BOOLEAN[];
+  predicado_valido BOOLEAN;
 BEGIN
   IF pg_catalog.current_schema() IS DISTINCT FROM 'public' THEN
     RAISE EXCEPTION 'Esquema invalido: se esperaba public y se obtuvo %', pg_catalog.current_schema();
@@ -91,20 +93,21 @@ BEGIN
   END LOOP;
 
   FOR esperado IN SELECT * FROM (VALUES
-    ('uq_matriz_empresa_version_activa_empresa',ARRAY['empresa_id'],true,'(activa=true)'),
+    ('uq_matriz_empresa_version_activa_empresa',ARRAY['empresa_id'],true,'activa'),
     ('idx_matriz_empresa_version_estado',ARRAY['empresa_id','estado_editorial'],false,NULL),
     ('idx_matriz_empresa_version_origen',ARRAY['version_origen_id'],false,NULL),
     ('idx_matriz_empresa_version_creada_por',ARRAY['creada_por'],false,NULL),
     ('idx_matriz_empresa_version_validada_por',ARRAY['validada_por'],false,NULL),
     ('idx_matriz_empresa_version_publicada_por',ARRAY['publicada_por'],false,NULL),
     ('idx_matriz_archivo_fuente_cargado_por',ARRAY['cargado_por'],false,NULL)
-  ) AS x(nombre,columnas,unico,predicado) LOOP
+  ) AS x(nombre,columnas,unico,tipo_predicado) LOOP
     SELECT i.indisunique AS unico, i.indisvalid AS valido, i.indisready AS listo,
+      i.indpred IS NOT NULL AS parcial,
       am.amname AS metodo, i.indnkeyatts AS cantidad_claves,
       i.indnatts AS cantidad_atributos,
       pg_catalog.array_agg(a.attname::TEXT ORDER BY k.ord) FILTER (WHERE k.ord<=i.indnkeyatts) AS columnas,
       pg_catalog.bool_or(k.attnum=0) FILTER (WHERE k.ord<=i.indnkeyatts) AS tiene_expresiones,
-      pg_catalog.lower(pg_catalog.regexp_replace(pg_catalog.pg_get_expr(i.indpred,i.indrelid,false),'[[:space:]]+','','g')) AS predicado
+      pg_catalog.pg_get_expr(i.indpred,i.indrelid) AS predicado
       INTO real
       FROM pg_catalog.pg_index i
       JOIN pg_catalog.pg_class x ON x.oid=i.indexrelid
@@ -114,7 +117,7 @@ BEGIN
       JOIN LATERAL pg_catalog.unnest(i.indkey) WITH ORDINALITY k(attnum,ord) ON true
       LEFT JOIN pg_catalog.pg_attribute a ON a.attrelid=t.oid AND a.attnum=k.attnum
      WHERE n.nspname='public' AND x.relname=esperado.nombre
-     GROUP BY i.indisunique,i.indisvalid,i.indisready,am.amname,
+     GROUP BY i.indisunique,i.indisvalid,i.indisready,i.indpred IS NOT NULL,am.amname,
        i.indnkeyatts,i.indnatts,i.indpred,i.indrelid;
     IF NOT FOUND OR real.unico IS DISTINCT FROM esperado.unico
        OR NOT real.valido OR NOT real.listo OR real.metodo IS DISTINCT FROM 'btree'
@@ -122,8 +125,26 @@ BEGIN
        OR real.cantidad_atributos IS DISTINCT FROM pg_catalog.cardinality(esperado.columnas)
        OR real.tiene_expresiones
        OR real.columnas IS DISTINCT FROM esperado.columnas
-       OR real.predicado IS DISTINCT FROM esperado.predicado THEN
+       OR real.parcial IS DISTINCT FROM (esperado.tipo_predicado IS NOT NULL) THEN
       RAISE EXCEPTION 'Preflight fallido: indice 002 public.% incompatible', esperado.nombre;
+    END IF;
+
+    IF esperado.tipo_predicado = 'activa' THEN
+      predicado_valido := false;
+      BEGIN
+        EXECUTE pg_catalog.format(
+          'SELECT pg_catalog.array_agg((%s) IS TRUE ORDER BY orden) '
+          'FROM (VALUES (1, true), (2, false), (3, NULL::boolean)) '
+          'AS matriz_empresa_version(orden, activa)',
+          real.predicado
+        ) INTO resultado_predicado;
+        predicado_valido := resultado_predicado = ARRAY[true,false,false];
+      EXCEPTION WHEN OTHERS THEN
+        predicado_valido := false;
+      END;
+      IF NOT predicado_valido THEN
+        RAISE EXCEPTION 'Preflight fallido: predicado semantico del indice 002 public.% incompatible', esperado.nombre;
+      END IF;
     END IF;
   END LOOP;
 
