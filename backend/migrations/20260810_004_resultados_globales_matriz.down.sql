@@ -169,7 +169,7 @@ BEGIN
       am.amname AS metodo,
       NOT COALESCE((pg_catalog.to_jsonb(i)->>'indnullsnotdistinct')::boolean,false) AS nulls_distinct,
       pg_catalog.bool_and(k.opcion=0) AS orden_normal,
-      pg_catalog.bool_and(k.collation=a.attcollation) AS collations_normales,
+      pg_catalog.bool_and(k.collation_oid=a.attcollation) AS collations_normales,
       pg_catalog.bool_and(opc.opcdefault AND opc.opcmethod=am.oid) AS opclasses_normales,
       pg_catalog.array_agg(a.attname::TEXT ORDER BY k.ord) FILTER (WHERE k.ord<=i.indnkeyatts) AS columnas,
       c.conname AS constraint_nombre
@@ -181,9 +181,9 @@ BEGIN
       JOIN pg_catalog.pg_am am ON am.oid=x.relam
       LEFT JOIN pg_catalog.pg_constraint c ON c.conindid=i.indexrelid AND c.conrelid=i.indrelid
       JOIN LATERAL pg_catalog.unnest(i.indkey,i.indcollation,i.indclass,i.indoption)
-        WITH ORDINALITY k(attnum,collation,opclass,opcion,ord) ON true
+        WITH ORDINALITY k(attnum,collation_oid,opclass_oid,opcion,ord) ON true
       LEFT JOIN pg_catalog.pg_attribute a ON a.attrelid=t.oid AND a.attnum=k.attnum
-      LEFT JOIN pg_catalog.pg_opclass opc ON opc.oid=k.opclass
+      LEFT JOIN pg_catalog.pg_opclass opc ON opc.oid=k.opclass_oid
      WHERE n.nspname='public' AND t.relname='matriz_resultado' AND x.relname=esperado.nombre
      GROUP BY i.indexrelid,i.indisunique,i.indisprimary,i.indisvalid,i.indisready,
        i.indpred,i.indexprs,i.indnatts,i.indnkeyatts,am.amname,c.conname;
