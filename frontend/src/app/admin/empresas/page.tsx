@@ -263,12 +263,20 @@ export default function EmpresasPage() {
                               Ver
                             </button>
                             {canManageEmpresas ? (
-                              <Link
-                                href={`/admin/editar-empresa/${empresa.id}`}
-                                className="inline-flex min-h-10 items-center rounded-control px-3 text-sm font-semibold text-brand-graphite hover:bg-surface-muted hover:text-brand-elevated focus-visible:ring-2 focus-visible:ring-brand-silver"
-                              >
-                                Editar
-                              </Link>
+                              <>
+                                <Link
+                                  href={`/admin/editar-empresa/${empresa.id}`}
+                                  className="inline-flex min-h-10 items-center rounded-control px-3 text-sm font-semibold text-brand-graphite hover:bg-surface-muted hover:text-brand-elevated focus-visible:ring-2 focus-visible:ring-brand-silver"
+                                >
+                                  Editar
+                                </Link>
+                                <Link
+                                  href={`/admin/empresas/${empresa.id}/matriz`}
+                                  className="inline-flex min-h-10 items-center rounded-control px-3 text-sm font-semibold text-blue-700 hover:bg-blue-50 focus-visible:ring-2 focus-visible:ring-blue-300"
+                                >
+                                  Configurar matriz
+                                </Link>
+                              </>
                             ) : null}
                           </div>
                         </td>
@@ -317,12 +325,20 @@ export default function EmpresasPage() {
                         Ver
                       </button>
                       {canManageEmpresas ? (
-                        <Link
-                          href={`/admin/editar-empresa/${empresa.id}`}
-                          className="inline-flex min-h-10 items-center rounded-control px-3 text-sm font-semibold text-brand-graphite hover:bg-surface-muted hover:text-brand-elevated focus-visible:ring-2 focus-visible:ring-brand-silver"
-                        >
-                          Editar
-                        </Link>
+                        <>
+                          <Link
+                            href={`/admin/editar-empresa/${empresa.id}`}
+                            className="inline-flex min-h-10 items-center rounded-control px-3 text-sm font-semibold text-brand-graphite hover:bg-surface-muted hover:text-brand-elevated focus-visible:ring-2 focus-visible:ring-brand-silver"
+                          >
+                            Editar
+                          </Link>
+                          <Link
+                            href={`/admin/empresas/${empresa.id}/matriz`}
+                            className="inline-flex min-h-10 items-center rounded-control px-3 text-sm font-semibold text-blue-700 hover:bg-blue-50 focus-visible:ring-2 focus-visible:ring-blue-300"
+                          >
+                            Configurar matriz
+                          </Link>
+                        </>
                       ) : null}
                     </div>
                   </article>
