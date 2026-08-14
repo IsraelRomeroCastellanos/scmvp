@@ -183,7 +183,15 @@ BEGIN
     JOIN pg_catalog.pg_class t ON t.oid = c.conrelid
     JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace
    WHERE n.nspname = 'public' AND t.relname = 'usuarios'
-     AND c.conname = 'ck_usuarios_tipo_principal' AND c.contype = 'c';
+     AND c.conname = 'ck_usuarios_tipo_principal' AND c.contype = 'c'
+     AND c.convalidated
+     AND ARRAY(
+       SELECT a.attname::TEXT
+       FROM pg_catalog.unnest(c.conkey) WITH ORDINALITY k(attnum, ord)
+       JOIN pg_catalog.pg_attribute a
+         ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+       ORDER BY k.ord
+     ) = ARRAY['tipo_principal']::TEXT[];
 
   IF expresion IS NULL THEN
     RAISE EXCEPTION 'VERIFY fallido: no puede inspeccionarse ck_usuarios_tipo_principal';
@@ -215,7 +223,15 @@ BEGIN
     JOIN pg_catalog.pg_class t ON t.oid = c.conrelid
     JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace
    WHERE n.nspname = 'public' AND t.relname = 'usuarios'
-     AND c.conname = 'ck_usuarios_codigo_principal_formato' AND c.contype = 'c';
+     AND c.conname = 'ck_usuarios_codigo_principal_formato' AND c.contype = 'c'
+     AND c.convalidated
+     AND ARRAY(
+       SELECT a.attname::TEXT
+       FROM pg_catalog.unnest(c.conkey) WITH ORDINALITY k(attnum, ord)
+       JOIN pg_catalog.pg_attribute a
+         ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+       ORDER BY k.ord
+     ) = ARRAY['codigo_principal']::TEXT[];
 
   IF expresion IS NULL THEN
     RAISE EXCEPTION 'VERIFY fallido: regex canonica de codigo_principal incompatible';
@@ -255,7 +271,15 @@ BEGIN
     JOIN pg_catalog.pg_class t ON t.oid = c.conrelid
     JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace
    WHERE n.nspname = 'public' AND t.relname = 'usuarios'
-     AND c.conname = 'ck_usuarios_principal_contrato' AND c.contype = 'c';
+     AND c.conname = 'ck_usuarios_principal_contrato' AND c.contype = 'c'
+     AND c.convalidated
+     AND ARRAY(
+       SELECT a.attname::TEXT
+       FROM pg_catalog.unnest(c.conkey) k(attnum)
+       JOIN pg_catalog.pg_attribute a
+         ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+       ORDER BY a.attname
+     ) = ARRAY['activo','codigo_principal','empresa_id','rol','tipo_principal']::TEXT[];
 
   IF expresion IS NULL THEN
     RAISE EXCEPTION 'VERIFY fallido: no puede inspeccionarse ck_usuarios_principal_contrato';
@@ -268,29 +292,49 @@ BEGIN
      'tipo_principalISNOTNULLANDtipo_principal=''HUMANO''ANDcodigo_principalISNULLANDrolISNOTNULLANDrol=ANYARRAY[''admin'',''consultor'',''cliente'']ANDactivoISNOTNULLANDrol=''admin''ANDempresa_idISNULLORrol=ANYARRAY[''consultor'',''cliente'']ANDempresa_idISNOTNULLANDempresa_id>0ORtipo_principal=''SISTEMA''ANDcodigo_principalISNOTNULLANDrolISNULLANDempresa_idISNULLANDactivoISFALSE' THEN
     RAISE EXCEPTION 'VERIFY fallido: definicion completa de ck_usuarios_principal_contrato incompatible';
   END IF;
-  EXECUTE pg_catalog.format(
-    'SELECT pg_catalog.bool_and('
-    || '(((%s) IS NOT FALSE) AND ((%s) IS NOT FALSE)) = '
-    || '((tipo_principal IS NOT NULL AND ('
-    || '(tipo_principal = ''HUMANO'' AND codigo_principal IS NULL '
-    || 'AND rol IS NOT NULL AND rol IN (''admin'',''consultor'',''cliente'') '
-    || 'AND activo IS NOT NULL AND ((rol = ''admin'' AND empresa_id IS NULL) '
-    || 'OR (rol IN (''consultor'',''cliente'') AND empresa_id IS NOT NULL AND empresa_id > 0))) '
-    || 'OR (tipo_principal = ''SISTEMA'' AND codigo_principal IS NOT NULL '
-    || 'AND rol IS NULL AND empresa_id IS NULL AND activo IS FALSE))) '
-    || 'AND (codigo_principal IS NULL OR codigo_principal COLLATE "C" '
-    || '~ ''^[A-Z][A-Z0-9_]{0,99}$'')) '
-    || 'FROM (VALUES (''HUMANO''::text),(''SISTEMA''),(''OTRO''),(NULL)) t(tipo_principal) '
-    || 'CROSS JOIN (VALUES (NULL::text),(''A''),(''SYSTEM''),(''1ABC''),'
-    || '(''ABC DEF''),(''ABC-DEF''),(''system''),(pg_catalog.repeat(''A'',100)),'
-    || '(pg_catalog.repeat(''A'',101))) c(codigo_principal) '
-    || 'CROSS JOIN (VALUES (''admin''::text),(''consultor''),(''cliente''),'
-    || '(''auditor''),(NULL)) r(rol) '
-    || 'CROSS JOIN (VALUES (NULL::int),(-1),(0),(1)) e(empresa_id) '
-    || 'CROSS JOIN (VALUES (NULL::boolean),(TRUE),(FALSE)) a(activo)',
-    expresion,
-    expresion_formato
-  ) INTO contrato_ok;
+  EXECUTE pg_catalog.format($sql$
+    SELECT pg_catalog.bool_and(
+      (
+        ((%1$s) IS NOT FALSE)
+        AND ((%2$s) IS NOT FALSE)
+      ) IS NOT DISTINCT FROM (
+        tipo_principal IS NOT NULL
+        AND (
+          (
+            tipo_principal = 'HUMANO'
+            AND codigo_principal IS NULL
+            AND rol IS NOT NULL
+            AND rol IN ('admin','consultor','cliente')
+            AND activo IS NOT NULL
+            AND (
+              (rol = 'admin' AND empresa_id IS NULL)
+              OR (rol IN ('consultor','cliente')
+                  AND empresa_id IS NOT NULL AND empresa_id > 0)
+            )
+          )
+          OR (
+            tipo_principal = 'SISTEMA'
+            AND codigo_principal IS NOT NULL
+            AND rol IS NULL
+            AND empresa_id IS NULL
+            AND activo IS FALSE
+          )
+        )
+        AND (
+          codigo_principal IS NULL
+          OR codigo_principal COLLATE "C" ~ '^[A-Z][A-Z0-9_]{0,99}$'
+        )
+      )
+    )
+    FROM (VALUES ('HUMANO'::text),('SISTEMA'),('OTRO'),(NULL)) t(tipo_principal)
+    CROSS JOIN (VALUES (NULL::text),('A'),('SYSTEM'),('1ABC'),
+      ('ABC DEF'),('ABC-DEF'),('system'),(pg_catalog.repeat('A',100)),
+      (pg_catalog.repeat('A',101))) c(codigo_principal)
+    CROSS JOIN (VALUES ('admin'::text),('consultor'),('cliente'),
+      ('auditor'),(NULL)) r(rol)
+    CROSS JOIN (VALUES (NULL::int),(-1),(0),(1)) e(empresa_id)
+    CROSS JOIN (VALUES (NULL::boolean),(TRUE),(FALSE)) a(activo)
+  $sql$, expresion, expresion_formato) INTO contrato_ok;
   IF contrato_ok IS DISTINCT FROM TRUE THEN
     RAISE EXCEPTION 'VERIFY fallido: ck_usuarios_principal_contrato no implementa el contrato';
   END IF;

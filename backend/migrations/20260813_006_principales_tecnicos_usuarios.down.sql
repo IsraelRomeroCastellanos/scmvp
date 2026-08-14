@@ -180,29 +180,49 @@ BEGIN
      'tipo_principalISNOTNULLANDtipo_principal=''HUMANO''ANDcodigo_principalISNULLANDrolISNOTNULLANDrol=ANYARRAY[''admin'',''consultor'',''cliente'']ANDactivoISNOTNULLANDrol=''admin''ANDempresa_idISNULLORrol=ANYARRAY[''consultor'',''cliente'']ANDempresa_idISNOTNULLANDempresa_id>0ORtipo_principal=''SISTEMA''ANDcodigo_principalISNOTNULLANDrolISNULLANDempresa_idISNULLANDactivoISFALSE' THEN
     RAISE EXCEPTION 'Rollback no aplicable: definicion completa de ck_usuarios_principal_contrato fue alterada';
   END IF;
-  EXECUTE pg_catalog.format(
-    'SELECT pg_catalog.bool_and('
-    || '(((%s) IS NOT FALSE) AND ((%s) IS NOT FALSE)) = '
-    || '((tipo_principal IS NOT NULL AND ('
-    || '(tipo_principal = ''HUMANO'' AND codigo_principal IS NULL '
-    || 'AND rol IS NOT NULL AND rol IN (''admin'',''consultor'',''cliente'') '
-    || 'AND activo IS NOT NULL AND ((rol = ''admin'' AND empresa_id IS NULL) '
-    || 'OR (rol IN (''consultor'',''cliente'') AND empresa_id IS NOT NULL AND empresa_id > 0))) '
-    || 'OR (tipo_principal = ''SISTEMA'' AND codigo_principal IS NOT NULL '
-    || 'AND rol IS NULL AND empresa_id IS NULL AND activo IS FALSE))) '
-    || 'AND (codigo_principal IS NULL OR codigo_principal COLLATE "C" '
-    || '~ ''^[A-Z][A-Z0-9_]{0,99}$'')) '
-    || 'FROM (VALUES (''HUMANO''::text),(''SISTEMA''),(''OTRO''),(NULL)) t(tipo_principal) '
-    || 'CROSS JOIN (VALUES (NULL::text),(''A''),(''SYSTEM''),(''1ABC''),'
-    || '(''ABC DEF''),(''ABC-DEF''),(''system''),(pg_catalog.repeat(''A'',100)),'
-    || '(pg_catalog.repeat(''A'',101))) c(codigo_principal) '
-    || 'CROSS JOIN (VALUES (''admin''::text),(''consultor''),(''cliente''),'
-    || '(''auditor''),(NULL)) r(rol) '
-    || 'CROSS JOIN (VALUES (NULL::int),(-1),(0),(1)) e(empresa_id) '
-    || 'CROSS JOIN (VALUES (NULL::boolean),(TRUE),(FALSE)) a(activo)',
-    expresion,
-    expresion_formato
-  ) INTO contrato_ok;
+  EXECUTE pg_catalog.format($sql$
+    SELECT pg_catalog.bool_and(
+      (
+        ((%1$s) IS NOT FALSE)
+        AND ((%2$s) IS NOT FALSE)
+      ) IS NOT DISTINCT FROM (
+        tipo_principal IS NOT NULL
+        AND (
+          (
+            tipo_principal = 'HUMANO'
+            AND codigo_principal IS NULL
+            AND rol IS NOT NULL
+            AND rol IN ('admin','consultor','cliente')
+            AND activo IS NOT NULL
+            AND (
+              (rol = 'admin' AND empresa_id IS NULL)
+              OR (rol IN ('consultor','cliente')
+                  AND empresa_id IS NOT NULL AND empresa_id > 0)
+            )
+          )
+          OR (
+            tipo_principal = 'SISTEMA'
+            AND codigo_principal IS NOT NULL
+            AND rol IS NULL
+            AND empresa_id IS NULL
+            AND activo IS FALSE
+          )
+        )
+        AND (
+          codigo_principal IS NULL
+          OR codigo_principal COLLATE "C" ~ '^[A-Z][A-Z0-9_]{0,99}$'
+        )
+      )
+    )
+    FROM (VALUES ('HUMANO'::text),('SISTEMA'),('OTRO'),(NULL)) t(tipo_principal)
+    CROSS JOIN (VALUES (NULL::text),('A'),('SYSTEM'),('1ABC'),
+      ('ABC DEF'),('ABC-DEF'),('system'),(pg_catalog.repeat('A',100)),
+      (pg_catalog.repeat('A',101))) c(codigo_principal)
+    CROSS JOIN (VALUES ('admin'::text),('consultor'),('cliente'),
+      ('auditor'),(NULL)) r(rol)
+    CROSS JOIN (VALUES (NULL::int),(-1),(0),(1)) e(empresa_id)
+    CROSS JOIN (VALUES (NULL::boolean),(TRUE),(FALSE)) a(activo)
+  $sql$, expresion, expresion_formato) INTO contrato_ok;
   IF contrato_ok IS DISTINCT FROM TRUE THEN
     RAISE EXCEPTION 'Rollback no aplicable: ck_usuarios_principal_contrato fue alterado';
   END IF;
