@@ -128,8 +128,7 @@ BEGIN
        ORDER BY k.ord
      ) = ARRAY['codigo_principal']::TEXT[];
 
-  IF expresion_formato IS NULL
-     OR pg_catalog.position('^[A-Z][A-Z0-9_]{0,99}$' IN expresion_formato) = 0 THEN
+  IF expresion_formato IS NULL THEN
     RAISE EXCEPTION 'Rollback no aplicable: ck_usuarios_codigo_principal_formato es incompatible';
   END IF;
   definicion_normalizada := pg_catalog.regexp_replace(

@@ -20,6 +20,7 @@ BEGIN
   END IF;
 
   FOREACH objeto IN ARRAY ARRAY[
+    'public.schema_migrations',
     'public.catalogo_criterio_pt',
     'public.catalogo_criterio_pt_version',
     'public.catalogo_criterio_gr',
@@ -29,6 +30,20 @@ BEGIN
       RAISE EXCEPTION 'VERIFY fallido: falta %', objeto;
     END IF;
   END LOOP;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_attribute a
+    JOIN pg_catalog.pg_class t ON t.oid=a.attrelid AND t.relkind IN ('r','p')
+    JOIN pg_catalog.pg_namespace n ON n.oid=t.relnamespace
+    JOIN pg_catalog.pg_type tipo ON tipo.oid=a.atttypid
+    JOIN pg_catalog.pg_namespace tipo_n ON tipo_n.oid=tipo.typnamespace
+    WHERE n.nspname='public' AND t.relname='schema_migrations'
+      AND a.attname='migration_key' AND a.attnum>0 AND NOT a.attisdropped
+      AND tipo_n.nspname='pg_catalog' AND tipo.typname='varchar'
+      AND a.atttypmod=150+4 AND a.attnotnull
+  ) THEN
+    RAISE EXCEPTION 'VERIFY fallido: public.schema_migrations es incompatible';
+  END IF;
 
   FOR esperado IN
     SELECT * FROM (VALUES
@@ -319,30 +334,6 @@ BEGIN
 
   FOR esperado IN
     SELECT * FROM (VALUES
-      ('catalogo_criterio_pt','ck_catalogo_criterio_pt_codigo'),
-      ('catalogo_criterio_gr','ck_catalogo_criterio_gr_codigo'),
-      ('catalogo_criterio_gr_version','ck_catalogo_criterio_gr_version_resolver'),
-      ('catalogo_criterio_pt_version','ck_catalogo_criterio_pt_version_parametrizacion'),
-      ('catalogo_criterio_gr_version','ck_catalogo_criterio_gr_version_parametrizacion')
-    ) AS c(tabla, nombre)
-  LOOP
-    IF NOT EXISTS (
-      SELECT 1 FROM pg_catalog.pg_constraint c
-      JOIN pg_catalog.pg_class t ON t.oid=c.conrelid
-      JOIN pg_catalog.pg_namespace n ON n.oid=t.relnamespace
-      WHERE n.nspname='public' AND t.relname=esperado.tabla
-        AND c.conname=esperado.nombre AND c.contype='c' AND c.convalidated
-        AND pg_catalog.position(
-          '^[A-Z][A-Z0-9_]{0,99}$' IN pg_catalog.pg_get_constraintdef(c.oid,true)
-        ) > 0
-    ) THEN
-      RAISE EXCEPTION 'VERIFY fallido: regex canonica de public.%.% incompatible',
-        esperado.tabla, esperado.nombre;
-    END IF;
-  END LOOP;
-
-  FOR esperado IN
-    SELECT * FROM (VALUES
       ('catalogo_criterio_pt','estado','''ACTIVO''::character varying'),
       ('catalogo_criterio_pt','creado_en','now()'),
       ('catalogo_criterio_pt_version','creado_en','now()'),
@@ -483,28 +474,26 @@ BEGIN
 
   FOR esperado IN
     SELECT * FROM (VALUES
-      ('matriz_resultado','ck_matriz_resultado_ambito','PT'),
-      ('matriz_resultado','ck_matriz_resultado_ambito','GR'),
-      ('matriz_resultado','ck_matriz_resultado_orden','1'),
-      ('matriz_resultado','ck_matriz_resultado_orden','3'),
-      ('matriz_resultado','ck_matriz_resultado_limites','minimo'),
-      ('matriz_resultado','ck_matriz_resultado_limites','maximo'),
-      ('matriz_resultado','ck_matriz_resultado_minimo_incluido','minimo_incluido'),
-      ('matriz_resultado','ck_matriz_resultado_minimo_incluido','true'),
-      ('matriz_resultado','ck_matriz_resultado_maximo_incluido','maximo_incluido'),
-      ('matriz_resultado','ck_matriz_resultado_maximo_incluido','true')
-    ) AS c(tabla,nombre,fragmento)
+      ('matriz_resultado','ck_matriz_resultado_ambito',
+       'CHECK (ambito::text = ANY (ARRAY[''PT''::character varying, ''GR''::character varying]::text[]))'),
+      ('matriz_resultado','ck_matriz_resultado_orden','CHECK (orden >= 1 AND orden <= 3)'),
+      ('matriz_resultado','ck_matriz_resultado_limites','CHECK (minimo <= maximo)'),
+      ('matriz_resultado','ck_matriz_resultado_minimo_incluido','CHECK (minimo_incluido = true)'),
+      ('matriz_resultado','ck_matriz_resultado_maximo_incluido','CHECK (maximo_incluido = true)')
+    ) AS c(tabla,nombre,definicion)
   LOOP
-    IF NOT EXISTS (
-      SELECT 1 FROM pg_catalog.pg_constraint c
+    SELECT pg_catalog.lower(pg_catalog.regexp_replace(
+             pg_catalog.pg_get_constraintdef(c.oid,true),'[[:space:]]+','','g')) AS definicion
+      INTO real
+      FROM pg_catalog.pg_constraint c
       JOIN pg_catalog.pg_class t ON t.oid=c.conrelid
       JOIN pg_catalog.pg_namespace n ON n.oid=t.relnamespace
       WHERE n.nspname='public' AND t.relname=esperado.tabla
-        AND c.conname=esperado.nombre AND c.contype='c' AND c.convalidated
-        AND pg_catalog.position(esperado.fragmento IN pg_catalog.pg_get_constraintdef(c.oid, true)) > 0
-    ) THEN
-      RAISE EXCEPTION 'VERIFY fallido: CHECK public.%.% no contiene %',
-        esperado.tabla, esperado.nombre, esperado.fragmento;
+        AND c.conname=esperado.nombre AND c.contype='c' AND c.convalidated;
+    IF NOT FOUND OR real.definicion IS DISTINCT FROM pg_catalog.lower(
+       pg_catalog.regexp_replace(esperado.definicion,'[[:space:]]+','','g')) THEN
+      RAISE EXCEPTION 'VERIFY fallido: CHECK public.%.% incompatible',
+        esperado.tabla, esperado.nombre;
     END IF;
   END LOOP;
 

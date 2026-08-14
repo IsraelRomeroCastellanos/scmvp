@@ -217,8 +217,7 @@ BEGIN
    WHERE n.nspname = 'public' AND t.relname = 'usuarios'
      AND c.conname = 'ck_usuarios_codigo_principal_formato' AND c.contype = 'c';
 
-  IF expresion IS NULL
-     OR pg_catalog.position('^[A-Z][A-Z0-9_]{0,99}$' IN expresion) = 0 THEN
+  IF expresion IS NULL THEN
     RAISE EXCEPTION 'VERIFY fallido: regex canonica de codigo_principal incompatible';
   END IF;
   definicion_normalizada := pg_catalog.regexp_replace(
