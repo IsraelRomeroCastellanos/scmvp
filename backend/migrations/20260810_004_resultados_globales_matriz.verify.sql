@@ -193,8 +193,12 @@ BEGIN
       JOIN pg_catalog.pg_class x ON x.oid=i.indexrelid AND x.relnamespace=n.oid
       JOIN pg_catalog.pg_am am ON am.oid=x.relam
       LEFT JOIN pg_catalog.pg_constraint c ON c.conindid=i.indexrelid AND c.conrelid=i.indrelid
-      JOIN LATERAL pg_catalog.unnest(i.indkey,i.indcollation,i.indclass,i.indoption)
-        WITH ORDINALITY k(attnum,collation_oid,opclass_oid,opcion,ord) ON true
+      JOIN LATERAL ROWS FROM (
+        pg_catalog.unnest(i.indkey),
+        pg_catalog.unnest(i.indcollation),
+        pg_catalog.unnest(i.indclass),
+        pg_catalog.unnest(i.indoption)
+      ) WITH ORDINALITY AS k(attnum,collation_oid,opclass_oid,opcion,ord) ON true
       LEFT JOIN pg_catalog.pg_attribute a ON a.attrelid=t.oid AND a.attnum=k.attnum
       LEFT JOIN pg_catalog.pg_opclass opc ON opc.oid=k.opclass_oid
      WHERE n.nspname='public' AND t.relname='matriz_resultado' AND x.relname=esperado.nombre
