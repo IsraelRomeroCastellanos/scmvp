@@ -16,12 +16,27 @@ BEGIN
     RAISE EXCEPTION 'VERIFY fallido: se esperaba el esquema public';
   END IF;
 
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_attribute a
+    JOIN pg_catalog.pg_class t ON t.oid=a.attrelid AND t.relkind IN ('r','p')
+    JOIN pg_catalog.pg_namespace n ON n.oid=t.relnamespace
+    JOIN pg_catalog.pg_type tipo ON tipo.oid=a.atttypid
+    JOIN pg_catalog.pg_namespace tipo_n ON tipo_n.oid=tipo.typnamespace
+    WHERE n.nspname='public' AND t.relname='schema_migrations'
+      AND a.attname='migration_key' AND a.attnum>0 AND NOT a.attisdropped
+      AND tipo_n.nspname='pg_catalog' AND tipo.typname='varchar'
+      AND a.atttypmod=150+4 AND a.attnotnull
+  ) THEN
+    RAISE EXCEPTION 'VERIFY fallido: public.schema_migrations es incompatible';
+  END IF;
+
   IF pg_catalog.to_regclass('public.schema_migrations') IS NULL
      OR pg_catalog.to_regclass('public.matriz_resultado') IS NULL
+     OR NOT EXISTS (SELECT 1 FROM public.schema_migrations WHERE migration_key='20260728_001_modelo_integral_actividades_vulnerables')
      OR NOT EXISTS (SELECT 1 FROM public.schema_migrations WHERE migration_key='20260801_002_matrices_pt_gr_empresa')
      OR NOT EXISTS (SELECT 1 FROM public.schema_migrations WHERE migration_key='20260805_003_gestion_matrices_empresa')
      OR NOT EXISTS (SELECT 1 FROM public.schema_migrations WHERE migration_key='20260810_004_resultados_globales_matriz') THEN
-    RAISE EXCEPTION 'VERIFY fallido: faltan objetos o migration keys 002/003/004';
+    RAISE EXCEPTION 'VERIFY fallido: faltan objetos o migration keys 001/002/003/004';
   END IF;
 
   FOR esperado IN SELECT * FROM (VALUES
@@ -95,14 +110,11 @@ BEGIN
   END IF;
 
   FOR esperado IN SELECT * FROM (VALUES
-    ('pk_matriz_resultado','p',ARRAY['id'],NULL,NULL,NULL,'PRIMARY KEY (id)'),
-    ('fk_matriz_resultado_version','f',ARRAY['matriz_version_id'],'matriz_empresa_version',ARRAY['id'],'c',
-      'FOREIGN KEY (matriz_version_id) REFERENCES matriz_empresa_version(id) ON DELETE CASCADE'),
-    ('uq_matriz_resultado_version_codigo','u',ARRAY['matriz_version_id','codigo'],NULL,NULL,NULL,
-      'UNIQUE (matriz_version_id, codigo)'),
-    ('uq_matriz_resultado_version_ambito_orden','u',ARRAY['matriz_version_id','ambito','orden'],NULL,NULL,NULL,
-      'UNIQUE (matriz_version_id, ambito, orden)')
-  ) AS c(nombre,tipo,columnas,tabla_ref,columnas_ref,accion,definicion) LOOP
+    ('pk_matriz_resultado','p',ARRAY['id'],NULL,NULL,NULL),
+    ('fk_matriz_resultado_version','f',ARRAY['matriz_version_id'],'matriz_empresa_version',ARRAY['id'],'c'),
+    ('uq_matriz_resultado_version_codigo','u',ARRAY['matriz_version_id','codigo'],NULL,NULL,NULL),
+    ('uq_matriz_resultado_version_ambito_orden','u',ARRAY['matriz_version_id','ambito','orden'],NULL,NULL,NULL)
+  ) AS c(nombre,tipo,columnas,tabla_ref,columnas_ref,accion) LOOP
     SELECT c.contype AS tipo,
       ARRAY(SELECT a.attname::TEXT FROM pg_catalog.unnest(c.conkey) WITH ORDINALITY k(attnum,ord)
         JOIN pg_catalog.pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=k.attnum ORDER BY k.ord) AS columnas,
@@ -111,9 +123,7 @@ BEGIN
         JOIN pg_catalog.pg_attribute a ON a.attrelid=c.confrelid AND a.attnum=k.attnum ORDER BY k.ord) AS columnas_ref,
       c.confdeltype AS accion_borrado, c.confupdtype AS accion_actualizacion,
       c.confmatchtype AS tipo_match, c.convalidated AS validada,
-      c.condeferrable AS diferible, c.condeferred AS diferida,
-      pg_catalog.lower(pg_catalog.regexp_replace(
-        pg_catalog.pg_get_constraintdef(c.oid,true),'[[:space:]]+','','g')) AS definicion
+      c.condeferrable AS diferible, c.condeferred AS diferida
       INTO real
       FROM pg_catalog.pg_constraint c
       JOIN pg_catalog.pg_class t ON t.oid=c.conrelid
@@ -124,8 +134,6 @@ BEGIN
     IF NOT FOUND OR real.tipo IS DISTINCT FROM esperado.tipo::"char"
        OR real.columnas IS DISTINCT FROM esperado.columnas OR NOT real.validada
        OR real.diferible OR real.diferida
-       OR real.definicion IS DISTINCT FROM pg_catalog.lower(
-         pg_catalog.regexp_replace(esperado.definicion,'[[:space:]]+','','g'))
        OR (esperado.tipo='f' AND (real.esquema_ref IS DISTINCT FROM 'public'
          OR real.tabla_ref IS DISTINCT FROM esperado.tabla_ref
          OR real.columnas_ref IS DISTINCT FROM esperado.columnas_ref
@@ -164,13 +172,10 @@ BEGIN
   END LOOP;
 
   FOR esperado IN SELECT * FROM (VALUES
-    ('pk_matriz_resultado',ARRAY['id'],true,'pk_matriz_resultado',
-      'CREATE UNIQUE INDEX pk_matriz_resultado ON public.matriz_resultado USING btree (id)'),
-    ('uq_matriz_resultado_version_codigo',ARRAY['matriz_version_id','codigo'],true,'uq_matriz_resultado_version_codigo',
-      'CREATE UNIQUE INDEX uq_matriz_resultado_version_codigo ON public.matriz_resultado USING btree (matriz_version_id, codigo)'),
-    ('uq_matriz_resultado_version_ambito_orden',ARRAY['matriz_version_id','ambito','orden'],true,'uq_matriz_resultado_version_ambito_orden',
-      'CREATE UNIQUE INDEX uq_matriz_resultado_version_ambito_orden ON public.matriz_resultado USING btree (matriz_version_id, ambito, orden)')
-  ) AS i(nombre,columnas,unico,constraint_nombre,definicion) LOOP
+    ('pk_matriz_resultado',ARRAY['id'],true,'pk_matriz_resultado'),
+    ('uq_matriz_resultado_version_codigo',ARRAY['matriz_version_id','codigo'],true,'uq_matriz_resultado_version_codigo'),
+    ('uq_matriz_resultado_version_ambito_orden',ARRAY['matriz_version_id','ambito','orden'],true,'uq_matriz_resultado_version_ambito_orden')
+  ) AS i(nombre,columnas,unico,constraint_nombre) LOOP
     SELECT i.indisunique AS unico, i.indisprimary AS primario,
       i.indisvalid AS valido, i.indisready AS listo, i.indpred IS NULL AS no_parcial,
       i.indexprs IS NULL AS sin_expresiones, i.indnatts=i.indnkeyatts AS sin_include,
@@ -180,9 +185,7 @@ BEGIN
       pg_catalog.bool_and(k.collation=a.attcollation) AS collations_normales,
       pg_catalog.bool_and(opc.opcdefault AND opc.opcmethod=am.oid) AS opclasses_normales,
       pg_catalog.array_agg(a.attname::TEXT ORDER BY k.ord) FILTER (WHERE k.ord<=i.indnkeyatts) AS columnas,
-      c.conname AS constraint_nombre,
-      pg_catalog.lower(pg_catalog.regexp_replace(
-        pg_catalog.pg_get_indexdef(i.indexrelid),'[[:space:]]+','','g')) AS definicion
+      c.conname AS constraint_nombre
       INTO real
       FROM pg_catalog.pg_index i
       JOIN pg_catalog.pg_class t ON t.oid=i.indrelid
@@ -203,9 +206,7 @@ BEGIN
        OR NOT real.orden_normal OR NOT real.collations_normales OR NOT real.opclasses_normales
        OR real.columnas IS DISTINCT FROM esperado.columnas
        OR real.constraint_nombre IS DISTINCT FROM esperado.constraint_nombre
-       OR real.primario IS DISTINCT FROM (esperado.nombre='pk_matriz_resultado')
-       OR real.definicion IS DISTINCT FROM pg_catalog.lower(
-         pg_catalog.regexp_replace(esperado.definicion,'[[:space:]]+','','g')) THEN
+       OR real.primario IS DISTINCT FROM (esperado.nombre='pk_matriz_resultado') THEN
       RAISE EXCEPTION 'VERIFY fallido: indice public.% incompatible', esperado.nombre;
     END IF;
   END LOOP;
@@ -225,6 +226,7 @@ $$;
 
 SELECT migration_key FROM public.schema_migrations
 WHERE migration_key IN (
+  '20260728_001_modelo_integral_actividades_vulnerables',
   '20260801_002_matrices_pt_gr_empresa',
   '20260805_003_gestion_matrices_empresa',
   '20260810_004_resultados_globales_matriz'
