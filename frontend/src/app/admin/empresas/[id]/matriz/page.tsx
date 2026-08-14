@@ -9,6 +9,7 @@ import {
   crearBorradorMatrizEmpresa,
   getApiErrorMessage,
   guardarComposicionMatrizEmpresa,
+  guardarOpcionesCriterioMatriz,
   isApiRequestCanceled,
   obtenerBorradorMatrizEmpresa,
   obtenerCatalogoCriteriosMatriz,
@@ -23,15 +24,21 @@ type EmpresaResumen = { id: number; nombre_legal: string };
 
 type CriterioEditable = {
   versionId: number;
+  matrizCriterioId?: number;
   codigo: string;
   texto: string;
+  tipoResolucion: string;
+  opciones: string[];
 };
 
 function toEditable(items: CriterioBorradorMatriz[]): CriterioEditable[] {
   return items.map((item) => ({
     versionId: item.catalogo_criterio_version_id,
+    matrizCriterioId: item.matriz_criterio_id,
     codigo: item.codigo,
     texto: item.texto,
+    tipoResolucion: item.tipo_resolucion,
+    opciones: [0, 1, 2].map((index) => item.opciones[index]?.etiqueta ?? ''),
   }));
 }
 
@@ -40,13 +47,17 @@ function MatrixSection({
   catalogo,
   selected,
   disabled,
+  savingParameterId,
   onChange,
+  onSaveOptions,
 }: {
   ambito: AmbitoMatriz;
   catalogo: CriterioCatalogoMatriz[];
   selected: CriterioEditable[];
   disabled: boolean;
+  savingParameterId: number | null;
   onChange: (items: CriterioEditable[]) => void;
+  onSaveOptions: (item: CriterioEditable) => void;
 }) {
   const selectedIds = new Set(selected.map((item) => item.versionId));
   const available = catalogo.filter((item) => !selectedIds.has(item.version_vigente_id));
@@ -58,6 +69,8 @@ function MatrixSection({
         versionId: item.version_vigente_id,
         codigo: item.codigo,
         texto: item.nombre_visible_global,
+        tipoResolucion: item.tipo_resolucion,
+        opciones: ['', '', ''],
       },
     ]);
   };
@@ -136,6 +149,66 @@ function MatrixSection({
                 </Button>
               </div>
             </div>
+            {ambito === 'PT' && item.tipoResolucion === 'CAPTURA_OPCIONES' ? (
+              <div className="mt-4 border-t border-border-light pt-4">
+                <h3 className="text-sm font-semibold text-text-primary">Configurar respuestas</h3>
+                <p className="mt-1 text-xs text-text-secondary">
+                  Los puntajes 1, 2 y 3 son fijos y no son editables.
+                </p>
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                  {['riesgo bajo', 'riesgo medio', 'riesgo alto'].map((label, optionIndex) => (
+                    <div key={label}>
+                      <label className="block text-xs font-medium text-text-secondary">
+                        Opción de {label} · Puntaje {optionIndex + 1}
+                      </label>
+                      <Input
+                        className="mt-1"
+                        value={item.opciones[optionIndex] ?? ''}
+                        disabled={disabled}
+                        onChange={(event) => {
+                          const next = [...selected];
+                          const options = [...item.opciones];
+                          options[optionIndex] = event.target.value;
+                          next[index] = { ...item, opciones: options };
+                          onChange(next);
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+                {item.matrizCriterioId ? (
+                  <Button
+                    className="mt-3"
+                    size="sm"
+                    disabled={
+                      disabled ||
+                      savingParameterId === item.matrizCriterioId ||
+                      item.opciones.some((option) => !option.trim())
+                    }
+                    onClick={() => onSaveOptions(item)}
+                  >
+                    {savingParameterId === item.matrizCriterioId
+                      ? 'Guardando respuestas…'
+                      : 'Guardar respuestas'}
+                  </Button>
+                ) : (
+                  <p className="mt-3 text-xs text-semantic-warning">
+                    Guarda primero la composición para parametrizar este criterio.
+                  </p>
+                )}
+              </div>
+            ) : null}
+            {item.tipoResolucion === 'CAPTURA_RANGO_NUMERICO' || item.tipoResolucion === 'KYC_RANGO' ? (
+              <p className="mt-4 border-t border-border-light pt-4 text-sm text-text-secondary">
+                Este criterio usa tres rangos numéricos. La API valida su unidad canónica;
+                la captura visual de rangos se incorporará cuando exista un criterio activo de este tipo.
+              </p>
+            ) : null}
+            {ambito === 'GR' && ['CATALOGO_GLOBAL', 'DERIVADO', 'ESTRUCTURADO'].includes(item.tipoResolucion) ? (
+              <p className="mt-4 border-t border-border-light pt-4 text-sm text-text-secondary">
+                Se calcula automáticamente con datos del cliente y/o perfil transaccional.
+              </p>
+            ) : null}
           </div>
         ))}
       </div>
@@ -176,6 +249,7 @@ export default function ConfigurarMatrizEmpresaPage() {
   const [criteriosGr, setCriteriosGr] = useState<CriterioEditable[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingParameterId, setSavingParameterId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
   const [notFoundDraft, setNotFoundDraft] = useState(false);
   const [error, setError] = useState('');
@@ -281,6 +355,58 @@ export default function ConfigurarMatrizEmpresaPage() {
     }
   };
 
+  const saveOptions = async (item: CriterioEditable) => {
+    if (!draft || !item.matrizCriterioId) return;
+    setSavingParameterId(item.matrizCriterioId);
+    setError('');
+    setSuccess('');
+    try {
+      const saved = await guardarOpcionesCriterioMatriz(
+        empresaId,
+        draft.id,
+        item.matrizCriterioId,
+        draft.revision,
+        item.opciones.map((option) => option.trim()),
+      );
+      setDraft(saved);
+      const savedPtByVersion = new Map(
+        saved.criterios_pt.map((criterion) => [
+          criterion.catalogo_criterio_version_id,
+          criterion,
+        ]),
+      );
+      const savedGrByVersion = new Map(
+        saved.criterios_gr.map((criterion) => [
+          criterion.catalogo_criterio_version_id,
+          criterion,
+        ]),
+      );
+      const refreshParameters = (
+        criteria: CriterioEditable[],
+        savedByVersion: Map<number, CriterioBorradorMatriz>,
+      ) => criteria.map((criterion) => {
+        const persisted = savedByVersion.get(criterion.versionId);
+        return persisted
+          ? {
+              ...criterion,
+              matrizCriterioId: persisted.matriz_criterio_id,
+              opciones: [0, 1, 2].map((index) => persisted.opciones[index]?.etiqueta ?? ''),
+            }
+          : criterion;
+      });
+      setCriteriosPt((current) => refreshParameters(current, savedPtByVersion));
+      setCriteriosGr((current) => refreshParameters(current, savedGrByVersion));
+      setSuccess('Respuestas del criterio guardadas correctamente.');
+    } catch (requestError) {
+      setError(getApiErrorMessage(
+        requestError,
+        'No fue posible guardar las respuestas. Si la matriz cambió, recarga la página.',
+      ));
+    } finally {
+      setSavingParameterId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -321,15 +447,19 @@ export default function ConfigurarMatrizEmpresaPage() {
             ambito="PT"
             catalogo={catalogoPt}
             selected={criteriosPt}
-            disabled={saving}
+            disabled={saving || savingParameterId !== null}
+            savingParameterId={savingParameterId}
             onChange={setCriteriosPt}
+            onSaveOptions={saveOptions}
           />
           <MatrixSection
             ambito="GR"
             catalogo={catalogoGr}
             selected={criteriosGr}
-            disabled={saving}
+            disabled={saving || savingParameterId !== null}
+            savingParameterId={savingParameterId}
             onChange={setCriteriosGr}
+            onSaveOptions={saveOptions}
           />
 
           {invalidLabels ? (
@@ -337,7 +467,7 @@ export default function ConfigurarMatrizEmpresaPage() {
           ) : null}
 
           <div className="flex justify-end">
-            <Button disabled={saving || invalidLabels} onClick={save}>
+            <Button disabled={saving || savingParameterId !== null || invalidLabels} onClick={save}>
               {saving ? 'Guardando…' : 'Guardar composición'}
             </Button>
           </div>

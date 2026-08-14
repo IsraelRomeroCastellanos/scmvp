@@ -24,7 +24,9 @@ import {
   getEditableCompanyMatrixDraft,
   listSelectableMatrixCriteria,
   replaceCompanyMatrixDraftComposition,
+  saveCompanyMatrixCriterionParameters,
   type CriterioComposicionInput,
+  type ParametrizacionInput,
 } from '../services/configuracion-matriz.service';
 
 const router = Router();
@@ -64,6 +66,90 @@ function parseCompositionItems(value: unknown): CriterioComposicionInput[] | nul
   }
 
   return parsed;
+}
+
+function parseParameterizationBody(body: unknown): ParametrizacionInput | null {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+  const raw = body as Record<string, unknown>;
+  const revision = parsePositiveInteger(raw.revision);
+  if (revision === null) return null;
+
+  if (Array.isArray(raw.opciones)) {
+    if (
+      Object.keys(raw).some((key) => !['revision', 'opciones'].includes(key)) ||
+      raw.opciones.length !== 3
+    ) {
+      return null;
+    }
+    const labels: string[] = [];
+    for (const value of raw.opciones) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+      const option = value as Record<string, unknown>;
+      if (Object.keys(option).some((key) => key !== 'etiqueta')) return null;
+      const label = typeof option.etiqueta === 'string' ? option.etiqueta.trim() : '';
+      if (!label || labels.includes(label)) return null;
+      labels.push(label);
+    }
+    return { revision, tipo: 'OPCIONES', opciones: labels.map((etiqueta) => ({ etiqueta })) };
+  }
+
+  if (Array.isArray(raw.rangos)) {
+    if (
+      Object.keys(raw).some((key) => !['revision', 'rangos'].includes(key)) ||
+      raw.rangos.length !== 3
+    ) {
+      return null;
+    }
+    const ranges: Extract<ParametrizacionInput, { tipo: 'RANGOS' }>['rangos'] = [];
+    for (const [index, value] of raw.rangos.entries()) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+      const range = value as Record<string, unknown>;
+      if (
+        Object.keys(range).some(
+          (key) => !['minimo', 'maximo', 'incluye_minimo', 'incluye_maximo'].includes(key),
+        ) ||
+        (range.minimo !== null && (typeof range.minimo !== 'number' || !Number.isFinite(range.minimo))) ||
+        (range.maximo !== null && (typeof range.maximo !== 'number' || !Number.isFinite(range.maximo))) ||
+        typeof range.incluye_minimo !== 'boolean' ||
+        typeof range.incluye_maximo !== 'boolean'
+      ) {
+        return null;
+      }
+      const minimum = range.minimo as number | null;
+      const maximum = range.maximo as number | null;
+      if (
+        (minimum === null && index !== 0) ||
+        (maximum === null && index !== 2) ||
+        (minimum === null && maximum === null) ||
+        (minimum !== null && maximum !== null && minimum > maximum) ||
+        (minimum !== null && maximum !== null && minimum === maximum &&
+          (!range.incluye_minimo || !range.incluye_maximo))
+      ) {
+        return null;
+      }
+      ranges.push({
+        minimo: minimum,
+        maximo: maximum,
+        incluye_minimo: range.incluye_minimo,
+        incluye_maximo: range.incluye_maximo,
+      });
+    }
+    for (let index = 1; index < ranges.length; index += 1) {
+      const previous = ranges[index - 1];
+      const current = ranges[index];
+      if (
+        previous.maximo === null || current.minimo === null ||
+        previous.maximo > current.minimo ||
+        (previous.maximo === current.minimo &&
+          previous.incluye_maximo && current.incluye_minimo)
+      ) {
+        return null;
+      }
+    }
+    return { revision, tipo: 'RANGOS', rangos: ranges };
+  }
+
+  return null;
 }
 
 // ==========================================
@@ -179,6 +265,57 @@ router.put(
         500,
         'COMPOSICION_GUARDAR_ERROR',
         'No fue posible guardar la composicion de matriz',
+      );
+    }
+  },
+);
+
+// ==========================================
+// PARAMETRIZAR CRITERIO DE BORRADOR (ADMIN)
+// ==========================================
+router.put(
+  '/empresas/:empresaId/matrices/:matrizId/criterios/:criterioId/parametrizacion',
+  authenticate,
+  authorizeRoles('admin'),
+  async (req, res) => {
+    const empresaId = Number(req.params.empresaId);
+    const matrizId = Number(req.params.matrizId);
+    const criterioId = Number(req.params.criterioId);
+    const actorUsuarioId = req.user?.id;
+    if (
+      !Number.isSafeInteger(empresaId) || empresaId <= 0 ||
+      !Number.isSafeInteger(matrizId) || matrizId <= 0 ||
+      !Number.isSafeInteger(criterioId) || criterioId <= 0 ||
+      !Number.isSafeInteger(actorUsuarioId) || (actorUsuarioId ?? 0) <= 0
+    ) {
+      return matrizError(res, 404, 'CRITERIO_NO_ENCONTRADO', 'Criterio de matriz no encontrado');
+    }
+
+    const input = parseParameterizationBody(req.body);
+    if (input === null) {
+      return matrizError(res, 400, 'PARAMETRIZACION_INVALIDA', 'Parametrizacion invalida');
+    }
+
+    try {
+      const data = await saveCompanyMatrixCriterionParameters(
+        pool,
+        empresaId,
+        matrizId,
+        criterioId,
+        actorUsuarioId!,
+        input,
+      );
+      return res.json({ data });
+    } catch (error) {
+      if (error instanceof ConfiguracionMatrizError) {
+        return matrizError(res, error.status, error.code, error.message);
+      }
+      console.error('Error al guardar parametrizacion de criterio:', error);
+      return matrizError(
+        res,
+        500,
+        'PARAMETRIZACION_GUARDAR_ERROR',
+        'No fue posible guardar la parametrizacion',
       );
     }
   },
