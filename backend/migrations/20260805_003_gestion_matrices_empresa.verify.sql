@@ -224,7 +224,7 @@ BEGIN
   END LOOP;
 
   FOR esperado IN SELECT * FROM (VALUES
-    ('matriz_empresa_version','uq_matriz_empresa_version_activa_empresa',ARRAY['empresa_id'],true,'activa'),
+    ('matriz_empresa_version','uq_matriz_empresa_version_activa_empresa',ARRAY['empresa_id'],true,'activa=true'),
     ('matriz_empresa_version','uq_matriz_empresa_version_pendiente_empresa',ARRAY['empresa_id'],true,'estado_editorial::text=any(array[''BORRADOR''::charactervarying,''VALIDADA''::charactervarying]::text[])'),
     ('matriz_auditoria_evento','idx_matriz_auditoria_evento_empresa_fecha',ARRAY['empresa_id','creado_en'],false,NULL),
     ('matriz_auditoria_evento','idx_matriz_auditoria_evento_version_fecha',ARRAY['matriz_version_id','creado_en'],false,NULL),
