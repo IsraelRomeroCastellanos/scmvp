@@ -91,6 +91,102 @@ export async function actualizarEmpresa<T>(
   return response.data;
 }
 
+export type AmbitoMatriz = "PT" | "GR";
+
+export interface CriterioCatalogoMatriz {
+  id: number;
+  codigo: string;
+  nombre_visible_global: string;
+  ambito: AmbitoMatriz;
+  version_vigente_id: number;
+  version_contrato: number;
+  tipo_resolucion: string;
+  parametrizacion: string;
+  unidad_canonica: string | null;
+}
+
+export interface CriterioBorradorMatriz {
+  matriz_criterio_id: number;
+  catalogo_criterio_version_id: number;
+  codigo: string;
+  texto: string;
+  orden: number;
+  tipo_resolucion: string;
+  parametrizacion: string;
+  unidad_canonica: string | null;
+}
+
+export interface BorradorMatrizEmpresa {
+  id: number;
+  empresa_id: number;
+  numero_version: number;
+  estado_editorial: "BORRADOR";
+  activa: false;
+  revision: number;
+  procedencia: "CREADA_EN_SISTEMA" | "IMPORTADA_XLSX" | null;
+  criterios_pt: CriterioBorradorMatriz[];
+  criterios_gr: CriterioBorradorMatriz[];
+}
+
+export async function obtenerCatalogoCriteriosMatriz(
+  ambito: AmbitoMatriz,
+  signal?: AbortSignal,
+): Promise<CriterioCatalogoMatriz[]> {
+  const response = await api.get<{ criterios: CriterioCatalogoMatriz[] }>(
+    "/api/admin/catalogos-criterios-matriz",
+    { params: { ambito }, signal },
+  );
+  if (!Array.isArray(response.data?.criterios)) {
+    throw new Error("La respuesta del catálogo de criterios no es válida");
+  }
+  return response.data.criterios;
+}
+
+export async function obtenerBorradorMatrizEmpresa(
+  empresaId: string | number,
+  signal?: AbortSignal,
+): Promise<BorradorMatrizEmpresa> {
+  const response = await api.get<{ data: BorradorMatrizEmpresa }>(
+    `/api/admin/empresas/${empresaId}/matrices/borrador`,
+    { signal },
+  );
+  if (!response.data?.data) {
+    throw new Error("La respuesta del borrador de matriz no es válida");
+  }
+  return response.data.data;
+}
+
+export async function crearBorradorMatrizEmpresa(
+  empresaId: string | number,
+): Promise<unknown> {
+  const idempotencyKey = `matriz-${crypto.randomUUID()}`;
+  const response = await api.post(
+    `/api/admin/empresas/${empresaId}/matrices`,
+    {},
+    { headers: { "Idempotency-Key": idempotencyKey } },
+  );
+  return response.data;
+}
+
+export async function guardarComposicionMatrizEmpresa(
+  empresaId: string | number,
+  matrizId: number,
+  payload: {
+    revision: number;
+    criterios_pt: Array<{ catalogo_criterio_version_id: number; texto: string }>;
+    criterios_gr: Array<{ catalogo_criterio_version_id: number; texto: string }>;
+  },
+): Promise<BorradorMatrizEmpresa> {
+  const response = await api.put<{ data: BorradorMatrizEmpresa }>(
+    `/api/admin/empresas/${empresaId}/matrices/${matrizId}/criterios`,
+    payload,
+  );
+  if (!response.data?.data) {
+    throw new Error("La respuesta del guardado de composición no es válida");
+  }
+  return response.data.data;
+}
+
 export async function obtenerMiEmpresa<T>(signal?: AbortSignal): Promise<T> {
   const response = await api.get<{ empresa: T }>("/api/cliente/mi-empresa", { signal });
   if (!response.data?.empresa) {

@@ -19,6 +19,13 @@ import {
   getPublishedActiveMatrixStatusByCompanyIds,
   hasPublishedActiveCompanyMatrix,
 } from '../services/matrices-empresa.service';
+import {
+  ConfiguracionMatrizError,
+  getEditableCompanyMatrixDraft,
+  listSelectableMatrixCriteria,
+  replaceCompanyMatrixDraftComposition,
+  type CriterioComposicionInput,
+} from '../services/configuracion-matriz.service';
 
 const router = Router();
 
@@ -27,6 +34,155 @@ function matrizError(res: any, status: number, codigo: string, mensaje: string) 
     error: { codigo, mensaje, detalles: [] },
   });
 }
+
+function parsePositiveInteger(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? value
+    : null;
+}
+
+function parseCompositionItems(value: unknown): CriterioComposicionInput[] | null {
+  if (!Array.isArray(value)) return null;
+  const ids = new Set<number>();
+  const parsed: CriterioComposicionInput[] = [];
+
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const item = raw as Record<string, unknown>;
+    if (
+      Object.keys(item).some(
+        (key) => !['catalogo_criterio_version_id', 'texto'].includes(key),
+      )
+    ) {
+      return null;
+    }
+    const id = parsePositiveInteger(item.catalogo_criterio_version_id);
+    const texto = typeof item.texto === 'string' ? item.texto.trim() : '';
+    if (id === null || !texto || ids.has(id)) return null;
+    ids.add(id);
+    parsed.push({ catalogo_criterio_version_id: id, texto });
+  }
+
+  return parsed;
+}
+
+// ==========================================
+// CATALOGO CANONICO SELECCIONABLE (ADMIN)
+// ==========================================
+router.get(
+  '/catalogos-criterios-matriz',
+  authenticate,
+  authorizeRoles('admin'),
+  async (req, res) => {
+    const ambito = req.query.ambito;
+    if (ambito !== 'PT' && ambito !== 'GR') {
+      return matrizError(res, 400, 'AMBITO_INVALIDO', 'Ambito de matriz invalido');
+    }
+
+    try {
+      const criterios = await listSelectableMatrixCriteria(pool, ambito);
+      return res.json({ criterios });
+    } catch (error) {
+      console.error('Error al listar criterios de matriz:', error);
+      return matrizError(
+        res,
+        500,
+        'CATALOGO_CRITERIOS_ERROR',
+        'No fue posible consultar el catalogo de criterios',
+      );
+    }
+  },
+);
+
+// ==========================================
+// CONSULTAR BORRADOR CONFIGURABLE (ADMIN)
+// ==========================================
+router.get(
+  '/empresas/:empresaId/matrices/borrador',
+  authenticate,
+  authorizeRoles('admin'),
+  async (req, res) => {
+    const empresaId = Number(req.params.empresaId);
+    if (!Number.isSafeInteger(empresaId) || empresaId <= 0) {
+      return matrizError(res, 404, 'EMPRESA_NO_ENCONTRADA', 'Empresa no encontrada');
+    }
+
+    try {
+      const data = await getEditableCompanyMatrixDraft(pool, empresaId);
+      return res.json({ data });
+    } catch (error) {
+      if (error instanceof ConfiguracionMatrizError) {
+        return matrizError(res, error.status, error.code, error.message);
+      }
+      console.error('Error al consultar borrador de matriz:', error);
+      return matrizError(
+        res,
+        500,
+        'BORRADOR_CONSULTA_ERROR',
+        'No fue posible consultar el borrador de matriz',
+      );
+    }
+  },
+);
+
+// ==========================================
+// REEMPLAZAR COMPOSICION DE BORRADOR (ADMIN)
+// ==========================================
+router.put(
+  '/empresas/:empresaId/matrices/:matrizId/criterios',
+  authenticate,
+  authorizeRoles('admin'),
+  async (req, res) => {
+    const empresaId = Number(req.params.empresaId);
+    const matrizId = Number(req.params.matrizId);
+    const actorUsuarioId = req.user?.id;
+    const body = req.body as Record<string, unknown> | null;
+    if (
+      !Number.isSafeInteger(empresaId) || empresaId <= 0 ||
+      !Number.isSafeInteger(matrizId) || matrizId <= 0 ||
+      !Number.isSafeInteger(actorUsuarioId) || (actorUsuarioId ?? 0) <= 0
+    ) {
+      return matrizError(res, 404, 'BORRADOR_NO_ENCONTRADO', 'Borrador de matriz no encontrado');
+    }
+    if (
+      !body || Array.isArray(body) ||
+      Object.keys(body).some(
+        (key) => !['revision', 'criterios_pt', 'criterios_gr'].includes(key),
+      )
+    ) {
+      return matrizError(res, 400, 'COMPOSICION_INVALIDA', 'Body de composicion invalido');
+    }
+
+    const revision = parsePositiveInteger(body.revision);
+    const criteriosPt = parseCompositionItems(body.criterios_pt);
+    const criteriosGr = parseCompositionItems(body.criterios_gr);
+    if (revision === null || criteriosPt === null || criteriosGr === null) {
+      return matrizError(res, 400, 'COMPOSICION_INVALIDA', 'Composicion de matriz invalida');
+    }
+
+    try {
+      const data = await replaceCompanyMatrixDraftComposition(
+        pool,
+        empresaId,
+        matrizId,
+        actorUsuarioId!,
+        { revision, criterios_pt: criteriosPt, criterios_gr: criteriosGr },
+      );
+      return res.json({ data });
+    } catch (error) {
+      if (error instanceof ConfiguracionMatrizError) {
+        return matrizError(res, error.status, error.code, error.message);
+      }
+      console.error('Error al guardar composicion de matriz:', error);
+      return matrizError(
+        res,
+        500,
+        'COMPOSICION_GUARDAR_ERROR',
+        'No fue posible guardar la composicion de matriz',
+      );
+    }
+  },
+);
 
 // ===============================
 // CREAR BORRADOR DE MATRIZ (ADMIN)

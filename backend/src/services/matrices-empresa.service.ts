@@ -229,8 +229,8 @@ export async function createEmptyCompanyMatrixDraft(
 
     const inserted = await client.query<BorradorMatrizDataFromDb>(
       `INSERT INTO public.matriz_empresa_version (
-         empresa_id, numero_version, creada_por
-       ) VALUES ($1, $2, $3)
+         empresa_id, numero_version, creada_por, procedencia
+       ) VALUES ($1, $2, $3, 'CREADA_EN_SISTEMA')
        RETURNING id, empresa_id, numero_version, estado_editorial, activa,
          revision, version_origen_id, creada_en`,
       [empresaId, nextVersion.rows[0].numero_version, actorUsuarioId],
