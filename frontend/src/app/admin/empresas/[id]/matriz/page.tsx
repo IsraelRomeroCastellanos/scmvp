@@ -8,6 +8,7 @@ import { getCurrentUser, isAdmin } from '@/lib/auth';
 import {
   activarMatrizEmpresa,
   crearBorradorMatrizEmpresa,
+  crearVersionMatrizDesdeHistorica,
   getApiErrorMessage,
   guardarComposicionMatrizEmpresa,
   guardarOpcionesCriterioMatriz,
@@ -24,9 +25,14 @@ import {
   type CriterioBorradorMatriz,
   type CriterioCatalogoMatriz,
   type ResultadoMatrizEmpresa,
+  type MatrizPublicadaFuente,
 } from '@/lib/api';
 
-type EmpresaResumen = { id: number; nombre_legal: string };
+type EmpresaResumen = {
+  id: number;
+  nombre_legal: string;
+  matriz_publicada_fuente: MatrizPublicadaFuente | null;
+};
 
 type CriterioEditable = {
   versionId: number;
@@ -353,6 +359,7 @@ export default function ConfigurarMatrizEmpresaPage() {
   const [ptBandsDirty, setPtBandsDirty] = useState(false);
   const [grBandsDirty, setGrBandsDirty] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [cloneReason, setCloneReason] = useState('');
   const [notFoundDraft, setNotFoundDraft] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -435,6 +442,25 @@ export default function ConfigurarMatrizEmpresaPage() {
       await load();
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, 'No fue posible crear el borrador'));
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const createFromHistory = async () => {
+    const source = empresa?.matriz_publicada_fuente;
+    const motivo = cloneReason.trim();
+    if (!source || !motivo || Array.from(motivo).length > 500) return;
+    setCreating(true);
+    setError('');
+    setSuccess('');
+    try {
+      await crearVersionMatrizDesdeHistorica(empresaId, source, motivo);
+      setCloneReason('');
+      setSuccess(`Nueva versión creada desde la versión ${source.numero_version}.`);
+      await load();
+    } catch (requestError) {
+      setError(getApiErrorMessage(requestError, 'No fue posible crear la nueva versión'));
     } finally {
       setCreating(false);
     }
@@ -613,12 +639,39 @@ export default function ConfigurarMatrizEmpresaPage() {
       {!loading && notFoundDraft ? (
         <Card className="p-6">
           <h2 className="text-lg font-semibold text-text-primary">La empresa no tiene un borrador editable</h2>
-          <p className="mt-2 text-sm text-text-secondary">
-            Crear el borrador no publica ni activa la matriz.
-          </p>
-          <Button className="mt-5" disabled={creating} onClick={createDraft}>
-            {creating ? 'Creando…' : 'Crear borrador'}
-          </Button>
+          {empresa?.matriz_publicada_fuente ? (
+            <>
+              <p className="mt-2 text-sm text-text-secondary">
+                Se copiará la versión {empresa.matriz_publicada_fuente.numero_version}
+                {empresa.matriz_publicada_fuente.activa ? ' activa' : ''} como un nuevo borrador.
+              </p>
+              <Input
+                className="mt-4"
+                value={cloneReason}
+                maxLength={500}
+                placeholder="Motivo de la nueva versión"
+                aria-label="Motivo de la nueva versión"
+                disabled={creating}
+                onChange={(event) => setCloneReason(event.target.value)}
+              />
+              <Button
+                className="mt-5"
+                disabled={creating || !cloneReason.trim()}
+                onClick={createFromHistory}
+              >
+                {creating ? 'Creando…' : 'Crear nueva versión'}
+              </Button>
+            </>
+          ) : (
+            <>
+              <p className="mt-2 text-sm text-text-secondary">
+                Crear el borrador no publica ni activa la matriz.
+              </p>
+              <Button className="mt-5" disabled={creating} onClick={createDraft}>
+                {creating ? 'Creando…' : 'Crear borrador'}
+              </Button>
+            </>
+          )}
         </Card>
       ) : null}
 
@@ -628,6 +681,9 @@ export default function ConfigurarMatrizEmpresaPage() {
             <Badge variant="warning">{draft.estado_editorial}</Badge>
             <span>Versión {draft.numero_version}</span>
             <span>Revisión {draft.revision}</span>
+            {draft.version_origen_id ? (
+              <span>Origen histórico #{draft.version_origen_id}</span>
+            ) : null}
           </div>
 
           <MatrixSection

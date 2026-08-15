@@ -53,6 +53,7 @@ export type BorradorConfigurable = {
   activa: boolean;
   revision: number;
   procedencia: string | null;
+  version_origen_id?: number | null;
   criterios_pt: CriterioBorrador[];
   criterios_gr: CriterioBorrador[];
   resultados_pt: ResultadoMatriz[];
@@ -450,7 +451,7 @@ export async function getEditableCompanyMatrixDraft(
 
     const result = await client.query(
       `SELECT id, empresa_id, numero_version, estado_editorial, activa,
-              revision, procedencia
+              revision, procedencia, version_origen_id
        FROM public.matriz_empresa_version
        WHERE empresa_id = $1
          AND estado_editorial IN ('BORRADOR', 'VALIDADA')

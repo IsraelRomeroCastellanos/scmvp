@@ -39,6 +39,12 @@ export function getApiErrorMessage(
       if (typeof message === "string" && message.trim()) return message;
       const detail = (data as { error?: unknown }).error;
       if (typeof detail === "string" && detail.trim()) return detail;
+      if (detail && typeof detail === "object") {
+        const nestedMessage = (detail as { mensaje?: unknown }).mensaje;
+        if (typeof nestedMessage === "string" && nestedMessage.trim()) {
+          return nestedMessage;
+        }
+      }
     }
     if (typeof error.message === "string" && error.message.trim()) {
       return error.message;
@@ -140,10 +146,29 @@ export interface BorradorMatrizEmpresa {
   activa: boolean;
   revision: number;
   procedencia: "CREADA_EN_SISTEMA" | "IMPORTADA_XLSX" | null;
+  version_origen_id?: number | null;
   criterios_pt: CriterioBorradorMatriz[];
   criterios_gr: CriterioBorradorMatriz[];
   resultados_pt: ResultadoMatrizEmpresa[];
   resultados_gr: ResultadoMatrizEmpresa[];
+}
+
+export interface MatrizCreadaEmpresa {
+  id: number;
+  empresa_id: number;
+  numero_version: number;
+  estado_editorial: "BORRADOR";
+  activa: false;
+  revision: number;
+  version_origen_id: number | null;
+  creada_en: string;
+}
+
+export interface MatrizPublicadaFuente {
+  id: number;
+  numero_version: number;
+  revision: number;
+  activa: boolean;
 }
 
 export interface ResultadoMatrizEmpresa {
@@ -184,14 +209,39 @@ export async function obtenerBorradorMatrizEmpresa(
 
 export async function crearBorradorMatrizEmpresa(
   empresaId: string | number,
-): Promise<unknown> {
+): Promise<MatrizCreadaEmpresa> {
   const idempotencyKey = `matriz-${crypto.randomUUID()}`;
-  const response = await api.post(
+  const response = await api.post<{ data: MatrizCreadaEmpresa }>(
     `/api/admin/empresas/${empresaId}/matrices`,
     {},
     { headers: { "Idempotency-Key": idempotencyKey } },
   );
-  return response.data;
+  if (!response.data?.data) {
+    throw new Error("La respuesta de creación del borrador no es válida");
+  }
+  return response.data.data;
+}
+
+export async function crearVersionMatrizDesdeHistorica(
+  empresaId: string | number,
+  fuente: MatrizPublicadaFuente,
+  motivo: string,
+): Promise<MatrizCreadaEmpresa> {
+  const idempotencyKey = `matriz-historica-${crypto.randomUUID()}`;
+  const response = await api.post<{ data: MatrizCreadaEmpresa }>(
+    `/api/admin/empresas/${empresaId}/matrices/${fuente.id}/nueva-version`,
+    { motivo },
+    {
+      headers: {
+        "If-Match": `"mve-${fuente.id}-r${fuente.revision}"`,
+        "Idempotency-Key": idempotencyKey,
+      },
+    },
+  );
+  if (!response.data?.data) {
+    throw new Error("La respuesta de la nueva versión no es válida");
+  }
+  return response.data.data;
 }
 
 export async function guardarComposicionMatrizEmpresa(

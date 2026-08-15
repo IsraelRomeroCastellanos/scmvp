@@ -15,7 +15,10 @@ import {
 } from '../services/actividades-vulnerables.service';
 import {
   CrearBorradorMatrizError,
+  NuevaVersionHistoricaError,
+  createCompanyMatrixVersionFromHistory,
   createEmptyCompanyMatrixDraft,
+  getLatestPublishedCompanyMatrix,
   getPublishedActiveMatrixStatusByCompanyIds,
   hasPublishedActiveCompanyMatrix,
 } from '../services/matrices-empresa.service';
@@ -184,6 +187,16 @@ function parseRevisionBody(body: unknown): number | null {
   const raw = body as Record<string, unknown>;
   if (Object.keys(raw).some((key) => key !== 'revision')) return null;
   return parsePositiveInteger(raw.revision);
+}
+
+function parseHistoricalVersionBody(body: unknown): { motivo: string } | null {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+  const raw = body as Record<string, unknown>;
+  if (Object.keys(raw).length !== 1 || Object.keys(raw)[0] !== 'motivo') return null;
+  if (typeof raw.motivo !== 'string') return null;
+  const motivo = raw.motivo.trim();
+  if (!motivo || [...motivo].length > 500) return null;
+  return { motivo };
 }
 
 // ==========================================
@@ -491,6 +504,108 @@ router.post(
         500,
         'MATRIZ_CREAR_BORRADOR_ERROR',
         'No fue posible crear el borrador de matriz',
+      );
+    }
+  },
+);
+
+// ==================================================
+// CREAR NUEVA VERSION DESDE UNA HISTORICA (ADMIN)
+// ==================================================
+router.post(
+  '/empresas/:empresaId/matrices/:versionId/nueva-version',
+  authenticate,
+  authorizeRoles('admin'),
+  async (req, res) => {
+    const empresaId = Number(req.params.empresaId);
+    const versionId = Number(req.params.versionId);
+    const actorUsuarioId = req.user?.id;
+    if (
+      !Number.isSafeInteger(empresaId) || empresaId <= 0 ||
+      !Number.isSafeInteger(actorUsuarioId) || (actorUsuarioId ?? 0) <= 0
+    ) {
+      return matrizError(res, 404, 'MATRIZ_EMPRESA_NO_ENCONTRADA', 'Empresa no encontrada');
+    }
+    if (!Number.isSafeInteger(versionId) || versionId <= 0) {
+      return matrizError(res, 404, 'MATRIZ_ORIGEN_NO_ENCONTRADA', 'Matriz de origen no encontrada');
+    }
+
+    const ifMatch = req.get('If-Match');
+    if (ifMatch === undefined) {
+      return matrizError(
+        res,
+        428,
+        'MATRIZ_PRECONDICION_REQUERIDA',
+        'If-Match es obligatorio',
+      );
+    }
+    const etagMatch = /^"mve-([1-9]\d*)-r([1-9]\d*)"$/.exec(ifMatch);
+    const etagVersionId = etagMatch ? Number(etagMatch[1]) : null;
+    const revisionOrigen = etagMatch ? Number(etagMatch[2]) : null;
+    if (
+      etagVersionId !== versionId ||
+      !Number.isSafeInteger(revisionOrigen) || (revisionOrigen ?? 0) <= 0
+    ) {
+      return matrizError(
+        res,
+        412,
+        'MATRIZ_PRECONDICION_FALLIDA',
+        'La revision de la matriz de origen no coincide',
+      );
+    }
+
+    const idempotencyKey = req.get('Idempotency-Key');
+    if (idempotencyKey === undefined) {
+      return matrizError(
+        res,
+        400,
+        'MATRIZ_IDEMPOTENCY_KEY_REQUERIDA',
+        'Idempotency-Key es obligatorio',
+      );
+    }
+    if (!/^[\x21-\x7e]{16,128}$/.test(idempotencyKey)) {
+      return matrizError(
+        res,
+        400,
+        'MATRIZ_IDEMPOTENCY_KEY_INVALIDA',
+        'Idempotency-Key debe tener entre 16 y 128 caracteres ASCII visibles',
+      );
+    }
+
+    const body = parseHistoricalVersionBody(req.body);
+    if (body === null) {
+      return matrizError(
+        res,
+        400,
+        'MATRIZ_MOTIVO_INVALIDO',
+        'Motivo obligatorio de hasta 500 caracteres',
+      );
+    }
+
+    try {
+      const response = await createCompanyMatrixVersionFromHistory(
+        pool,
+        empresaId,
+        versionId,
+        actorUsuarioId!,
+        revisionOrigen!,
+        body.motivo,
+        idempotencyKey,
+      );
+      return res.status(201).json(response);
+    } catch (error) {
+      if (error instanceof NuevaVersionHistoricaError) {
+        if (error.status === 500) {
+          console.error('Error al crear version desde historica:', error);
+        }
+        return matrizError(res, error.status, error.code, error.message);
+      }
+      console.error('Error inesperado al crear version desde historica:', error);
+      return matrizError(
+        res,
+        500,
+        'MATRIZ_NUEVA_DESDE_HISTORICA_ERROR',
+        'No fue posible crear la nueva version desde la matriz historica',
       );
     }
   },
@@ -1016,9 +1131,10 @@ router.get(
         return res.status(404).json({ error: 'Empresa no encontrada' });
       }
 
-      const [activities, tieneMatrizPublicadaActiva] = await Promise.all([
+      const [activities, tieneMatrizPublicadaActiva, matrizPublicadaFuente] = await Promise.all([
         getActiveCompanyActivities(pool, id),
         hasPublishedActiveCompanyMatrix(pool, id),
+        getLatestPublishedCompanyMatrix(pool, id),
       ]);
       return res.json({
         empresa: {
@@ -1031,6 +1147,7 @@ router.get(
           })),
           configuracion_pld_pendiente: activities.length === 0,
           tiene_matriz_publicada_activa: tieneMatrizPublicadaActiva,
+          matriz_publicada_fuente: matrizPublicadaFuente,
         },
       });
     } catch (error) {
