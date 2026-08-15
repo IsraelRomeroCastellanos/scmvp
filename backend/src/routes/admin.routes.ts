@@ -189,6 +189,20 @@ function parseRevisionBody(body: unknown): number | null {
   return parsePositiveInteger(raw.revision);
 }
 
+function parseDiscardMatrixBody(body: unknown): { revision: number; motivo: string } | null {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+  const raw = body as Record<string, unknown>;
+  if (
+    Object.keys(raw).length !== 2 ||
+    Object.keys(raw).some((key) => !['revision', 'motivo'].includes(key))
+  ) return null;
+  const revision = parsePositiveInteger(raw.revision);
+  if (revision === null || typeof raw.motivo !== 'string') return null;
+  const motivo = raw.motivo.trim();
+  if (!motivo || [...motivo].length > 500) return null;
+  return { revision, motivo };
+}
+
 function parseHistoricalVersionBody(body: unknown): { motivo: string } | null {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
   const raw = body as Record<string, unknown>;
@@ -405,6 +419,7 @@ for (const [path, transition] of [
   ['validar', 'VALIDAR'],
   ['publicar', 'PUBLICAR'],
   ['reabrir', 'REABRIR'],
+  ['descartar', 'DESCARTAR'],
   ['activar', 'ACTIVAR'],
 ] as const) {
   router.post(
@@ -415,18 +430,27 @@ for (const [path, transition] of [
       const empresaId = Number(req.params.empresaId);
       const matrizId = Number(req.params.matrizId);
       const actorUsuarioId = req.user?.id;
-      const revision = parseRevisionBody(req.body);
+      const discardBody = transition === 'DESCARTAR' ? parseDiscardMatrixBody(req.body) : null;
+      const revision = transition === 'DESCARTAR' ? discardBody?.revision ?? null : parseRevisionBody(req.body);
       if (
         !Number.isSafeInteger(empresaId) || empresaId <= 0 ||
         !Number.isSafeInteger(matrizId) || matrizId <= 0 ||
         !Number.isSafeInteger(actorUsuarioId) || (actorUsuarioId ?? 0) <= 0
       ) return matrizError(res, 404, 'BORRADOR_NO_ENCONTRADO', 'Matriz no encontrada');
       if (revision === null) {
-        return matrizError(res, 400, 'REVISION_INVALIDA', 'Revision invalida');
+        return transition === 'DESCARTAR'
+          ? matrizError(
+            res,
+            400,
+            'MOTIVO_DESCARTE_INVALIDO',
+            'Body invalido: revision positiva y motivo obligatorio de hasta 500 caracteres',
+          )
+          : matrizError(res, 400, 'REVISION_INVALIDA', 'Revision invalida');
       }
       try {
         const data = await transitionCompanyMatrix(
           pool, empresaId, matrizId, actorUsuarioId!, revision, transition,
+          discardBody?.motivo,
         );
         return res.json({ data });
       } catch (error) {
