@@ -844,8 +844,8 @@ export async function saveCompanyMatrixCriterionParameters(
         await client.query(
           `INSERT INTO public.matriz_opcion (
              criterio_id, codigo, etiqueta, puntaje, orden, referencia_origen
-           ) VALUES ($1, $2, $3, $4, $4, NULL)`,
-          [criterioId, `OP_${index + 1}`, option.etiqueta, index + 1],
+           ) VALUES ($1, $2, $3, $4, $5, NULL)`,
+          [criterioId, `OP_${index + 1}`, option.etiqueta, index + 1, index + 1],
         );
       }
     } else {
@@ -860,7 +860,7 @@ export async function saveCompanyMatrixCriterionParameters(
              criterio_id, codigo, unidad, minimo, maximo,
              minimo_incluido, maximo_incluido, puntaje,
              resultado_codigo, orden, referencia_origen
-           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, $8, NULL)`,
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, $9, NULL)`,
           [
             criterioId,
             `RANGO_${index + 1}`,
@@ -869,6 +869,7 @@ export async function saveCompanyMatrixCriterionParameters(
             range.maximo,
             range.incluye_minimo,
             range.incluye_maximo,
+            index + 1,
             index + 1,
           ],
         );
