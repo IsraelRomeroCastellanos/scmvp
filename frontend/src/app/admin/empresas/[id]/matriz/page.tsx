@@ -9,6 +9,7 @@ import {
   activarMatrizEmpresa,
   crearBorradorMatrizEmpresa,
   crearVersionMatrizDesdeHistorica,
+  descartarBorradorMatrizEmpresa,
   getApiErrorMessage,
   guardarComposicionMatrizEmpresa,
   guardarOpcionesCriterioMatriz,
@@ -360,6 +361,8 @@ export default function ConfigurarMatrizEmpresaPage() {
   const [grBandsDirty, setGrBandsDirty] = useState(false);
   const [creating, setCreating] = useState(false);
   const [cloneReason, setCloneReason] = useState('');
+  const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
+  const [discardReason, setDiscardReason] = useState('');
   const [notFoundDraft, setNotFoundDraft] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -620,6 +623,35 @@ export default function ConfigurarMatrizEmpresaPage() {
     }
   };
 
+  const discardDraft = async () => {
+    if (!draft) return;
+    const motivo = discardReason.trim();
+    if (!motivo || Array.from(motivo).length > 500) return;
+    const discardedVersion = draft.numero_version;
+    setTransitioning(true);
+    setError('');
+    setSuccess('');
+    try {
+      await descartarBorradorMatrizEmpresa(empresaId, draft.id, draft.revision, motivo);
+      setDiscardDialogOpen(false);
+      setDiscardReason('');
+      setDraft(null);
+      setCriteriosPt([]);
+      setCriteriosGr([]);
+      setBandasPt(toBands([]));
+      setBandasGr(toBands([]));
+      setCompositionDirty(false);
+      setPtBandsDirty(false);
+      setGrBandsDirty(false);
+      await load();
+      setSuccess(`Borrador V${discardedVersion} descartado.`);
+    } catch (requestError) {
+      setError(getApiErrorMessage(requestError, 'No fue posible descartar el borrador.'));
+    } finally {
+      setTransitioning(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -764,16 +796,28 @@ export default function ConfigurarMatrizEmpresaPage() {
               La matriz fue validada. Puedes publicarla o reabrirla para hacer cambios.
             </Alert>
           ) : null}
-          <div className="flex flex-wrap justify-end gap-3">
-            {draft.estado_editorial === 'BORRADOR' ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              {draft.estado_editorial === 'BORRADOR' ? (
+                <Button
+                  variant="danger"
+                  disabled={transitioning || saving || savingBands !== null || savingParameterId !== null}
+                  onClick={() => setDiscardDialogOpen(true)}
+                >
+                  Descartar borrador
+                </Button>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap justify-end gap-3">
+              {draft.estado_editorial === 'BORRADOR' ? (
               <Button
                 disabled={transitioning || saving || savingBands !== null || hasPendingChanges}
                 onClick={() => void changeState('VALIDAR')}
               >
                 {transitioning ? 'Validando…' : 'Validar matriz'}
               </Button>
-            ) : null}
-            {draft.estado_editorial === 'VALIDADA' ? (
+              ) : null}
+              {draft.estado_editorial === 'VALIDADA' ? (
               <>
                 <Button
                   variant="secondary"
@@ -789,18 +833,83 @@ export default function ConfigurarMatrizEmpresaPage() {
                   {transitioning ? 'Publicando…' : 'Publicar matriz'}
                 </Button>
               </>
-            ) : null}
-            {draft.estado_editorial === 'PUBLICADA' && !draft.activa ? (
+              ) : null}
+              {draft.estado_editorial === 'PUBLICADA' && !draft.activa ? (
               <Button
                 disabled={transitioning || hasPendingChanges}
                 onClick={() => void changeState('ACTIVAR')}
               >
                 {transitioning ? 'Activando…' : 'Activar matriz'}
               </Button>
-            ) : null}
-            {draft.activa ? <Badge variant="success">Matriz activa</Badge> : null}
+              ) : null}
+              {draft.activa ? <Badge variant="success">Matriz activa</Badge> : null}
+            </div>
           </div>
         </>
+      ) : null}
+
+      {discardDialogOpen && draft ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !transitioning) {
+              setDiscardDialogOpen(false);
+              setDiscardReason('');
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="discard-matrix-title"
+            className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-panel bg-white p-6 shadow-xl"
+          >
+            <h2 id="discard-matrix-title" className="text-xl font-semibold text-text-primary">
+              Descartar borrador
+            </h2>
+            <div className="mt-4 space-y-3 text-sm leading-6 text-text-secondary">
+              <p>
+                Empresa: <span className="font-semibold text-text-primary">{empresa?.nombre_legal}</span>
+                {' · '}Versión {draft.numero_version}
+              </p>
+              <Alert variant="warning">
+                El descarte es irreversible. No borra el contenido ni la auditoría, pero esta versión dejará de ser editable. Después podrás crear una nueva versión.
+              </Alert>
+              <label className="block font-medium text-text-primary" htmlFor="discard-matrix-reason">
+                Motivo del descarte
+              </label>
+              <textarea
+                id="discard-matrix-reason"
+                className="min-h-28 w-full rounded-control border border-border-light bg-white px-3 py-2 text-base text-text-primary shadow-inner-soft outline-none placeholder:text-neutral-400 focus:border-brand-graphite focus:ring-2 focus:ring-brand-silver disabled:bg-neutral-100"
+                value={discardReason}
+                maxLength={500}
+                disabled={transitioning}
+                placeholder="Explica por qué se descarta este borrador"
+                onChange={(event) => setDiscardReason(event.target.value)}
+              />
+              <p className="text-right text-xs">{Array.from(discardReason).length}/500</p>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <Button
+                variant="secondary"
+                disabled={transitioning}
+                onClick={() => {
+                  setDiscardDialogOpen(false);
+                  setDiscardReason('');
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="danger"
+                disabled={transitioning || !discardReason.trim() || Array.from(discardReason.trim()).length > 500}
+                onClick={() => void discardDraft()}
+              >
+                {transitioning ? 'Descartando…' : 'Descartar borrador'}
+              </Button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );

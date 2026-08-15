@@ -142,7 +142,7 @@ export interface BorradorMatrizEmpresa {
   id: number;
   empresa_id: number;
   numero_version: number;
-  estado_editorial: "BORRADOR" | "VALIDADA" | "PUBLICADA";
+  estado_editorial: "BORRADOR" | "VALIDADA" | "PUBLICADA" | "DESCARTADA";
   activa: boolean;
   revision: number;
   procedencia: "CREADA_EN_SISTEMA" | "IMPORTADA_XLSX" | null;
@@ -321,6 +321,19 @@ export const publicarMatrizEmpresa = (
 export const reabrirMatrizEmpresa = (
   empresaId: string | number, matrizId: number, revision: number,
 ) => cambiarEstadoMatrizEmpresa(empresaId, matrizId, "reabrir", revision);
+
+export async function descartarBorradorMatrizEmpresa(
+  empresaId: string | number,
+  matrizId: number,
+  revision: number,
+  motivo: string,
+): Promise<BorradorMatrizEmpresa> {
+  const response = await api.post<{ data: BorradorMatrizEmpresa }>(
+    `/api/admin/empresas/${empresaId}/matrices/${matrizId}/descartar`,
+    { revision, motivo: motivo.trim() },
+  );
+  return response.data.data;
+}
 
 export const activarMatrizEmpresa = (
   empresaId: string | number, matrizId: number, revision: number,

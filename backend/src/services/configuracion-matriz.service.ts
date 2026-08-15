@@ -49,7 +49,7 @@ export type BorradorConfigurable = {
   id: number;
   empresa_id: number;
   numero_version: number;
-  estado_editorial: 'BORRADOR' | 'VALIDADA' | 'PUBLICADA';
+  estado_editorial: 'BORRADOR' | 'VALIDADA' | 'PUBLICADA' | 'DESCARTADA';
   activa: boolean;
   revision: number;
   procedencia: string | null;
@@ -112,6 +112,7 @@ export type ConfiguracionMatrizErrorCode =
   | 'MATRIZ_NO_PUBLICABLE'
   | 'MATRIZ_ACTIVA_EXISTENTE'
   | 'MATRIZ_YA_ACTIVA'
+  | 'MOTIVO_DESCARTE_INVALIDO'
   | 'CONFIGURACION_INCONSISTENTE';
 
 const ERROR_STATUS: Record<ConfiguracionMatrizErrorCode, number> = {
@@ -129,6 +130,7 @@ const ERROR_STATUS: Record<ConfiguracionMatrizErrorCode, number> = {
   MATRIZ_NO_PUBLICABLE: 400,
   MATRIZ_ACTIVA_EXISTENTE: 409,
   MATRIZ_YA_ACTIVA: 409,
+  MOTIVO_DESCARTE_INVALIDO: 400,
   CONFIGURACION_INCONSISTENTE: 409,
 };
 
@@ -147,6 +149,7 @@ const ERROR_MESSAGE: Record<ConfiguracionMatrizErrorCode, string> = {
   MATRIZ_NO_PUBLICABLE: 'La matriz no cumple los requisitos para publicarse',
   MATRIZ_ACTIVA_EXISTENTE: 'La empresa ya tiene otra matriz activa',
   MATRIZ_YA_ACTIVA: 'La matriz ya se encuentra activa',
+  MOTIVO_DESCARTE_INVALIDO: 'Motivo de descarte obligatorio de hasta 500 caracteres',
   CONFIGURACION_INCONSISTENTE: 'La composicion almacenada no es valida',
 };
 
@@ -1185,7 +1188,7 @@ export async function saveCompanyMatrixResults(
   }
 }
 
-type MatrixTransition = 'VALIDAR' | 'PUBLICAR' | 'REABRIR' | 'ACTIVAR';
+type MatrixTransition = 'VALIDAR' | 'PUBLICAR' | 'REABRIR' | 'DESCARTAR' | 'ACTIVAR';
 
 export async function transitionCompanyMatrix(
   db: Pool,
@@ -1194,6 +1197,7 @@ export async function transitionCompanyMatrix(
   actorUsuarioId: number,
   revision: number,
   transition: MatrixTransition,
+  motivo?: string,
 ): Promise<BorradorConfigurable> {
   const client = await db.connect();
   try {
@@ -1287,7 +1291,33 @@ export async function transitionCompanyMatrix(
           transicion: 'VALIDADA_A_BORRADOR',
         })],
       );
-    } else {
+    } else if (transition === 'DESCARTAR') {
+      const motivoNormalizado = typeof motivo === 'string' ? motivo.trim() : '';
+      if (!motivoNormalizado || [...motivoNormalizado].length > 500) {
+        throw new ConfiguracionMatrizError('MOTIVO_DESCARTE_INVALIDO');
+      }
+      if (matrix.estado_editorial !== 'BORRADOR' || matrix.activa !== false) {
+        throw new ConfiguracionMatrizError('MATRIZ_NO_EDITABLE');
+      }
+      updated = await client.query(
+        `UPDATE public.matriz_empresa_version
+         SET estado_editorial='DESCARTADA', activa=FALSE, revision=revision+1
+         WHERE id=$1 RETURNING id, empresa_id, numero_version, estado_editorial,
+         activa, revision, procedencia`,
+        [matrizId],
+      );
+      await client.query(
+        `INSERT INTO public.matriz_auditoria_evento (
+           empresa_id,matriz_version_id,actor_usuario_id,accion,operacion,
+           estado_anterior,estado_nuevo,activa_anterior,activa_nueva,motivo,resumen
+         ) VALUES ($1,$2,$3,'MATRIZ_DESCARTADA','DESCARTAR_MATRIZ',
+                   'BORRADOR','DESCARTADA',FALSE,FALSE,$4,$5::jsonb)`,
+        [empresaId, matrizId, actorUsuarioId, motivoNormalizado, JSON.stringify({
+          revision_anterior: revision,
+          revision_nueva: normalizePositiveInteger(matrix.revision) + 1,
+        })],
+      );
+    } else if (transition === 'ACTIVAR') {
       if (matrix.estado_editorial !== 'PUBLICADA') {
         throw new ConfiguracionMatrizError('MATRIZ_NO_EDITABLE');
       }
@@ -1318,6 +1348,8 @@ export async function transitionCompanyMatrix(
           revision_nueva: normalizePositiveInteger(matrix.revision) + 1,
         })],
       );
+    } else {
+      throw new ConfiguracionMatrizError('CONFIGURACION_INCONSISTENTE');
     }
     const response = await loadMatrixConfiguration(client, updated.rows[0]);
     await client.query('COMMIT');
