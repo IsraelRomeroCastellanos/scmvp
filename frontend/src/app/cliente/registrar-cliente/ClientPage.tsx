@@ -6135,7 +6135,7 @@ persona: {
         busyLabel="Generar Perfil Transaccional"
         onCancel={() => {
           if (pfSuccessClientId) {
-            router.push(`/cliente/clientes/${pfSuccessClientId}`);
+            router.push("/cliente/clientes");
           }
         }}
         onConfirm={() => {
