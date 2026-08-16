@@ -3,7 +3,7 @@ SET TRANSACTION READ ONLY;
 
 SELECT pg_catalog.current_database() AS current_database,
        pg_catalog.current_schema() AS current_schema,
-       pg_catalog.current_user AS current_user,
+       current_user AS current_user,
        pg_catalog.current_setting('server_version') AS server_version;
 
 DO $$
