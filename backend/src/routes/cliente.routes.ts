@@ -15,6 +15,12 @@ import {
   normalizeKeyProperty,
 } from '../services/actividades-vulnerables.service';
 import { hasPublishedActiveCompanyMatrix } from '../services/matrices-empresa.service';
+import {
+  createPerfilTransaccionalV1Evaluation,
+  getPerfilTransaccionalV1Context,
+  parsePerfilTransaccionalV1Body,
+  PerfilTransaccionalV1Error,
+} from '../services/perfil-transaccional-v1.service';
 
 const router = Router();
 
@@ -1972,6 +1978,100 @@ router.post('/registrar-cliente', authenticate, authorizeRoles('admin', 'consult
     client?.release();
   }
 });
+
+function perfilTransaccionalV1Error(
+  res: Response,
+  status: number,
+  codigo: string,
+  mensaje: string,
+) {
+  return res.status(status).json({ error: { codigo, mensaje } });
+}
+
+router.get(
+  '/clientes/:id/perfil-transaccional-v1',
+  authenticate,
+  authorizeRoles('admin', 'cliente'),
+  authorizeClienteEmpresaRecurso,
+  async (req: Request, res: Response) => {
+    const id = parsePositiveInt(req.params.id);
+    if (!id) {
+      return perfilTransaccionalV1Error(
+        res,
+        400,
+        'PT_SOLICITUD_INVALIDA',
+        'El identificador del cliente no es valido',
+      );
+    }
+    try {
+      const response = await getPerfilTransaccionalV1Context(pool, id);
+      return res.status(200).json(response);
+    } catch (error) {
+      if (error instanceof PerfilTransaccionalV1Error) {
+        return perfilTransaccionalV1Error(res, error.status, error.code, error.message);
+      }
+      console.error('Error al consultar Perfil Transaccional V1:', error);
+      return perfilTransaccionalV1Error(
+        res,
+        500,
+        'PT_CONSULTA_ERROR',
+        'No fue posible consultar el Perfil Transaccional',
+      );
+    }
+  },
+);
+
+router.post(
+  '/clientes/:id/perfil-transaccional-v1',
+  authenticate,
+  authorizeRoles('admin', 'cliente'),
+  authorizeClienteEmpresaRecurso,
+  async (req: Request, res: Response) => {
+    const id = parsePositiveInt(req.params.id);
+    if (!id) {
+      return perfilTransaccionalV1Error(
+        res,
+        400,
+        'PT_SOLICITUD_INVALIDA',
+        'El identificador del cliente no es valido',
+      );
+    }
+    const actorUsuarioId = req.user?.id;
+    if (
+      typeof actorUsuarioId !== 'number'
+      || !Number.isSafeInteger(actorUsuarioId)
+      || actorUsuarioId <= 0
+    ) {
+      return perfilTransaccionalV1Error(
+        res,
+        403,
+        'PT_USUARIO_INVALIDO',
+        'No fue posible identificar al usuario autenticado',
+      );
+    }
+    try {
+      const respuestas = parsePerfilTransaccionalV1Body(req.body);
+      const response = await createPerfilTransaccionalV1Evaluation(
+        pool,
+        id,
+        actorUsuarioId,
+        respuestas,
+      );
+      return res.status(201).json(response);
+    } catch (error) {
+      if (error instanceof PerfilTransaccionalV1Error) {
+        return perfilTransaccionalV1Error(res, error.status, error.code, error.message);
+      }
+      console.error('Error al crear Perfil Transaccional V1:', error);
+      return perfilTransaccionalV1Error(
+        res,
+        500,
+        'PT_CREACION_ERROR',
+        'No fue posible crear el Perfil Transaccional',
+      );
+    }
+  },
+);
 
 router.post(
   '/clientes/:id/perfil-transaccional',
