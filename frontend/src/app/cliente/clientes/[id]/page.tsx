@@ -310,11 +310,34 @@ export default function ClienteDetallePage() {
 
   const persona = datos?.persona ?? null;
   const empresa = datos?.empresa ?? null;
-  const representante = datos?.representante ?? null;
+  const representante = cliente?.tipo_cliente === 'persona_moral'
+    ? empresa?.representante ??
+      datos?.representante ??
+      datos?.representante_legal ??
+      datos?.representanteLegal ??
+      null
+    : datos?.representante ?? null;
 
   const fidei = datos?.fideicomiso ?? null;
 
-  const repNombreCompleto = useMemo(() => fullNameFrom(representante), [representante]);
+  const repNombreCompleto = useMemo(() => {
+    if (cliente?.tipo_cliente !== 'persona_moral') {
+      return fullNameFrom(representante);
+    }
+
+    const nombres = String(representante?.nombres ?? '').trim();
+    const apellidoPaterno = String(
+      representante?.apellido_paterno ?? '',
+    ).trim();
+    const apellidoMaterno = String(
+      representante?.apellido_materno ?? '',
+    ).trim();
+    const nombreCompuesto = [nombres, apellidoPaterno, apellidoMaterno]
+      .filter(Boolean)
+      .join(' ');
+
+    return nombreCompuesto || fullNameFrom(representante);
+  }, [cliente?.tipo_cliente, representante]);
 
   const actividadPF =
     persona?.actividad_economica ??
