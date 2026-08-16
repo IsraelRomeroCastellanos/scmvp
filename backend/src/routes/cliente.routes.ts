@@ -1523,10 +1523,57 @@ function validateDatosCompletosOr400(
       isNonEmptyString(giro);
     if (!giroOk) return (badRequest(res, 'empresa.giro_mercantil es obligatorio'), false);
 
-    const rep = datos_completos?.representante ?? {};
-    if (!isNonEmptyString(rep?.nombre_completo) && !isNonEmptyString(rep?.nombres)) {
-      if (tipo === 'fideicomiso') return (badRequest(res, 'representante.nombre_completo es obligatorio'), false);
-    }
+    const rep = empresa?.representante ?? {};
+    if (!isNonEmptyString(rep?.nombres))
+      return (badRequest(res, 'empresa.representante.nombres es obligatorio'), false);
+    if (!isNonEmptyString(rep?.apellido_paterno))
+      return (badRequest(res, 'empresa.representante.apellido_paterno es obligatorio'), false);
+    if (!isNonEmptyString(rep?.apellido_materno))
+      return (badRequest(res, 'empresa.representante.apellido_materno es obligatorio'), false);
+    if (!isYYYYMMDD(rep?.fecha_nacimiento))
+      return (badRequest(res, 'empresa.representante.fecha_nacimiento inválida (AAAAMMDD)'), false);
+    if (!isNonEmptyString(rep?.nacionalidad))
+      return (badRequest(res, 'empresa.representante.nacionalidad es obligatoria'), false);
+    if (!isNonEmptyString(rep?.rfc))
+      return (badRequest(res, 'empresa.representante.rfc es obligatorio'), false);
+    if (!isRFC(rep?.rfc))
+      return (badRequest(res, 'empresa.representante.rfc inválido'), false);
+    if (!isNonEmptyString(rep?.curp))
+      return (badRequest(res, 'empresa.representante.curp es obligatoria'), false);
+    if (!isCURP(rep?.curp))
+      return (badRequest(res, 'empresa.representante.curp inválida'), false);
+
+    const identificacion = rep?.identificacion ?? {};
+    if (!isNonEmptyString(identificacion?.tipo))
+      return (badRequest(res, 'empresa.representante.identificacion.tipo es obligatorio'), false);
+    if (!isNonEmptyString(identificacion?.autoridad))
+      return (badRequest(res, 'empresa.representante.identificacion.autoridad es obligatoria'), false);
+    if (!isNonEmptyString(identificacion?.numero))
+      return (badRequest(res, 'empresa.representante.identificacion.numero es obligatorio'), false);
+    if (!isYYYYMMDD(identificacion?.fecha_expedicion))
+      return (badRequest(res, 'empresa.representante.identificacion.fecha_expedicion inválida (AAAAMMDD)'), false);
+    if (!isYYYYMMDD(identificacion?.fecha_expiracion))
+      return (badRequest(res, 'empresa.representante.identificacion.fecha_expiracion inválida (AAAAMMDD)'), false);
+
+    const repDom = rep?.domicilio ?? {};
+    if (!isNonEmptyString(repDom?.calle))
+      return (badRequest(res, 'empresa.representante.domicilio.calle es obligatoria'), false);
+    if (!isNonEmptyString(repDom?.numero))
+      return (badRequest(res, 'empresa.representante.domicilio.numero es obligatorio'), false);
+    if (!isNonEmptyString(repDom?.colonia))
+      return (badRequest(res, 'empresa.representante.domicilio.colonia es obligatoria'), false);
+    if (!isNonEmptyString(repDom?.municipio))
+      return (badRequest(res, 'empresa.representante.domicilio.municipio es obligatorio'), false);
+    if (!isNonEmptyString(repDom?.ciudad_delegacion))
+      return (badRequest(res, 'empresa.representante.domicilio.ciudad_delegacion es obligatoria'), false);
+    if (!isNonEmptyString(repDom?.codigo_postal))
+      return (badRequest(res, 'empresa.representante.domicilio.codigo_postal es obligatorio'), false);
+    if (isMexicoValue(repDom?.pais) && !/^\d{5}$/.test(repDom.codigo_postal.trim()))
+      return (badRequest(res, 'empresa.representante.domicilio.codigo_postal inválido'), false);
+    if (!isNonEmptyString(repDom?.estado))
+      return (badRequest(res, 'empresa.representante.domicilio.estado es obligatorio'), false);
+    if (!isNonEmptyString(repDom?.pais))
+      return (badRequest(res, 'empresa.representante.domicilio.pais es obligatorio'), false);
   }
 
   if (tipo === 'fideicomiso') {
