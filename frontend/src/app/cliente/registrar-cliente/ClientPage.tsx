@@ -350,7 +350,10 @@ function valueToCatalogKey(v: string) {
   const [fatal, setFatal] = useState<string | null>(null);
   const [errors, setErrors] = useState<Errors>({});
   const [pfConfirmationOpen, setPfConfirmationOpen] = useState(false);
-  const [pfSuccessClientId, setPfSuccessClientId] = useState<number | null>(null);
+  const [successClient, setSuccessClient] = useState<{
+    id: number;
+    tipo: "persona_fisica" | "persona_moral";
+  } | null>(null);
   const registrationLockRef = useRef(false);
 
   const [tipo, setTipo] = useState<TipoCliente>("persona_fisica");
@@ -3690,7 +3693,9 @@ persona: {
 
       if (tipo === "persona_fisica") {
         setPfConfirmationOpen(false);
-        setPfSuccessClientId(id);
+        setSuccessClient({ id, tipo: "persona_fisica" });
+      } else if (tipo === "persona_moral") {
+        setSuccessClient({ id, tipo: "persona_moral" });
       } else {
         router.push(`/cliente/clientes/${id}`);
       }
@@ -3709,7 +3714,7 @@ persona: {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (loading || pfConfirmationOpen || pfSuccessClientId) return;
+    if (loading || pfConfirmationOpen || successClient) return;
     if (tieneMatrizPublicadaActiva === false) {
       setFatal("No es posible registrar clientes para esta empresa porque aún no cuenta con una matriz PT/GR publicada y activa.");
       return;
@@ -6229,7 +6234,7 @@ persona: {
             disabled={
               loading ||
               pfConfirmationOpen ||
-              pfSuccessClientId !== null ||
+              successClient !== null ||
               empresaLoading ||
               Boolean(empresaError) ||
               !sessionRole ||
@@ -6276,29 +6281,36 @@ persona: {
         </dl>
       </EmpresaConfirmationModal>
       <EmpresaConfirmationModal
-        open={pfSuccessClientId !== null}
-        title="Persona Física registrada correctamente"
+        open={successClient !== null}
+        title={
+          successClient?.tipo === "persona_moral"
+            ? "Persona Moral registrada correctamente"
+            : "Persona Física registrada correctamente"
+        }
         busy={false}
         cancelLabel="Dejarlo pendiente"
         confirmLabel="Generar Perfil Transaccional"
         busyLabel="Generar Perfil Transaccional"
         onCancel={() => {
-          if (pfSuccessClientId) {
+          if (successClient) {
             router.push("/cliente/clientes");
           }
         }}
         onConfirm={() => {
-          if (pfSuccessClientId) {
+          if (successClient) {
             router.push(
-              `/cliente/clientes/${pfSuccessClientId}#perfil-transaccional`,
+              `/cliente/clientes/${successClient.id}#perfil-transaccional`,
             );
           }
         }}
       >
         <p className="text-sm text-gray-700">
-          El expediente de la Persona Física fue creado correctamente. Puedes
-          continuar con el Perfil Transaccional o dejarlo pendiente para
-          completarlo después.
+          El expediente de la{" "}
+          {successClient?.tipo === "persona_moral"
+            ? "Persona Moral"
+            : "Persona Física"}{" "}
+          fue creado correctamente. Puedes continuar con el Perfil
+          Transaccional o dejarlo pendiente para completarlo después.
         </p>
       </EmpresaConfirmationModal>
     </div>
