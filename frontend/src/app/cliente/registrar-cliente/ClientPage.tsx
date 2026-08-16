@@ -664,7 +664,115 @@ function valueToCatalogKey(v: string) {
   const [pmRepDomCiudadDelegacion, setPmRepDomCiudadDelegacion] = useState("");
   const [pmRepDomCP, setPmRepDomCP] = useState("");
   const [pmRepDomEstado, setPmRepDomEstado] = useState("");
-  const [pmRepDomPais, setPmRepDomPais] = useState("");
+  const [pmRepDomPais] = useState("MEX");
+  const [pmRepDomColoniasOpciones, setPmRepDomColoniasOpciones] = useState<string[]>([]);
+  const [pmRepDomCpAviso, setPmRepDomCpAviso] = useState("");
+  const [pmRepDomCpLoading, setPmRepDomCpLoading] = useState(false);
+  const [pmRepDomCatalogoTerritorial, setPmRepDomCatalogoTerritorial] = useState({
+    municipio: false,
+    ciudad_delegacion: false,
+    estado: false,
+  });
+  const pmRepDomCpRequestRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    pmRepDomCpRequestRef.current?.abort();
+    setPmRepDomCatalogoTerritorial({
+      municipio: false,
+      ciudad_delegacion: false,
+      estado: false,
+    });
+
+    const cp = normalizeCodigoPostalMx(pmRepDomCP);
+
+    if (cp.length !== 5) {
+      setPmRepDomColoniasOpciones([]);
+      setPmRepDomCpAviso("");
+      setPmRepDomCpLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    pmRepDomCpRequestRef.current = controller;
+    setPmRepDomCpLoading(true);
+    setPmRepDomCpAviso("Consultando código postal…");
+
+    api
+      .get("/api/catalogos/codigos-postales", {
+        params: { cp },
+        signal: controller.signal,
+      })
+      .then((response) => {
+        const resultados = Array.isArray(response.data?.resultados)
+          ? response.data.resultados
+          : [];
+        if (resultados.length === 0) {
+          setPmRepDomColonia("");
+          setPmRepDomMunicipio("");
+          setPmRepDomCiudadDelegacion("");
+          setPmRepDomEstado("");
+          setPmRepDomColoniasOpciones([]);
+          setPmRepDomCpAviso("Código postal no encontrado; captura manual habilitada.");
+          return;
+        }
+
+        const first = resultados[0];
+        const estado = String(first.estado ?? "").trim();
+        const municipio = String(first.municipio ?? "").trim();
+        const ciudadDelegacion = String(
+          first.ciudad ?? first.ciudad_delegacion ?? "",
+        ).trim();
+        setPmRepDomEstado(estado);
+        setPmRepDomMunicipio(municipio);
+        setPmRepDomCiudadDelegacion(ciudadDelegacion);
+        setPmRepDomCatalogoTerritorial({
+          municipio: Boolean(municipio),
+          ciudad_delegacion: Boolean(ciudadDelegacion),
+          estado: Boolean(estado),
+        });
+        const colonias = Array.from(
+          new Set(
+            resultados
+              .map((item: any) => String(item.colonia ?? "").trim())
+              .filter(Boolean),
+          ),
+        ) as string[];
+        setPmRepDomColoniasOpciones(colonias);
+        setPmRepDomColonia((previous) =>
+          colonias.length === 1
+            ? colonias[0]
+            : colonias.includes(previous)
+              ? previous
+              : "",
+        );
+        setPmRepDomCpAviso("");
+      })
+      .catch((error) => {
+        if (error?.code === "ERR_CANCELED") return;
+        const status = error?.response?.status;
+        const messages: Record<number, string> = {
+          400: "El código postal debe tener exactamente 5 dígitos.",
+          401: "La sesión expiró; inicia sesión para consultar el código postal.",
+          404: "Código postal no encontrado; captura manual habilitada.",
+          500: "El catálogo de códigos postales no está disponible.",
+        };
+        setPmRepDomColonia("");
+        setPmRepDomMunicipio("");
+        setPmRepDomCiudadDelegacion("");
+        setPmRepDomEstado("");
+        setPmRepDomColoniasOpciones([]);
+        setPmRepDomCpAviso(
+          error?.response?.data?.error ||
+            messages[status] ||
+            "No se pudo consultar el código postal.",
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setPmRepDomCpLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [pmRepDomCP]);
 
   // PM Beneficiario Controlador (CFF 32-B Ter)
   const [pmBcNombres, setPmBcNombres] = useState("");
@@ -3445,6 +3553,17 @@ persona: {
               nacionalidad: valueToCatalogKey(pmRepNacionalidad),
               curp: pmRepCurp.trim().toUpperCase(),
               rfc: pmRepRfc.trim().toUpperCase(),
+              domicilio: {
+                calle: pmRepDomCalle.trim(),
+                numero: pmRepDomNumero.trim(),
+                interior: pmRepDomInterior.trim() || null,
+                colonia: pmRepDomColonia.trim(),
+                municipio: pmRepDomMunicipio.trim(),
+                ciudad_delegacion: pmRepDomCiudadDelegacion.trim(),
+                codigo_postal: pmRepDomCP.trim(),
+                estado: pmRepDomEstado.trim(),
+                pais: "MEX",
+              },
               identificacion: {
                 tipo: pmRepIdTipo.trim(),
                 autoridad: pmRepIdAutoridad.trim(),
@@ -4858,30 +4977,26 @@ persona: {
                       </div>
                       <div className="space-y-1">
                         <label className="text-sm font-medium">
-                          Fecha constitución (AAAAMMDD) *
+                          Fecha constitución *
                         </label>
                         <input
+                          type="date"
                           className={`w-full rounded border px-3 py-2 text-sm ${
                             errors["empresa.fecha_constitucion"]
                               ? "border-red-500"
                               : "border-gray-300"
                           }`}
-                          value={pmFechaConst}
+                          value={toDateInputValue(pmFechaConst)}
                           onChange={(e) => setPmFechaConst(e.target.value)}
                           onBlur={() =>
                             validator.validateField("empresa.fecha_constitucion")
                           }
-                          placeholder="20010131 (o 2001-01-31)"
                         />
                         {errors["empresa.fecha_constitucion"] ? (
                           <p className="text-xs text-red-600">
                             {errors["empresa.fecha_constitucion"]}
                           </p>
-                        ) : (
-                          <p className="text-xs text-gray-500">
-                            Acepta AAAAMMDD o YYYY-MM-DD (se convierte a AAAAMMDD).
-                          </p>
-                        )}
+                        ) : null}
                       </div>
 
                       <SearchableSelect
@@ -4957,16 +5072,16 @@ persona: {
 
                       <div className="space-y-1">
                         <label className="text-sm font-medium">
-                          Fecha nacimiento (AAAAMMDD) *
+                          Fecha nacimiento *
                         </label>
                         <input
+                          type="date"
                           className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.fecha_nacimiento.pm"] ? "border-red-500" : "border-gray-300"}`}
-                          value={pmRepFechaNac}
+                          value={toDateInputValue(pmRepFechaNac)}
                           onChange={(e) => setPmRepFechaNac(e.target.value)}
                           onBlur={() =>
                             validator.validateField("representante.fecha_nacimiento.pm")
                           }
-                          placeholder="19900101 (o 1990-01-01)"
                         />
                         {errors["representante.fecha_nacimiento.pm"] ? (
                           <p className="text-xs text-red-600">
@@ -5114,16 +5229,36 @@ persona: {
 
                         <div className="space-y-1">
                           <label className="text-sm font-medium">Colonia *</label>
-                          <input
-                            className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.colonia.pm"] ? "border-red-500" : "border-gray-300"}`}
-                            value={pmRepDomColonia}
-                            onChange={(e) => setPmRepDomColonia(e.target.value)}
-                            onBlur={() =>
-                              validator.validateField(
-                                "representante.domicilio.colonia.pm",
-                              )
-                            }
-                          />
+                          {pmRepDomColoniasOpciones.length > 1 ? (
+                            <select
+                              className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.colonia.pm"] ? "border-red-500" : "border-gray-300"}`}
+                              value={pmRepDomColonia}
+                              onChange={(e) => setPmRepDomColonia(e.target.value)}
+                              onBlur={() =>
+                                validator.validateField(
+                                  "representante.domicilio.colonia.pm",
+                                )
+                              }
+                            >
+                              <option value="">Selecciona colonia</option>
+                              {pmRepDomColoniasOpciones.map((colonia) => (
+                                <option key={colonia} value={colonia}>
+                                  {colonia}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.colonia.pm"] ? "border-red-500" : "border-gray-300"}`}
+                              value={pmRepDomColonia}
+                              onChange={(e) => setPmRepDomColonia(e.target.value)}
+                              onBlur={() =>
+                                validator.validateField(
+                                  "representante.domicilio.colonia.pm",
+                                )
+                              }
+                            />
+                          )}
                           {errors["representante.domicilio.colonia.pm"] ? (
                             <p className="text-xs text-red-600">
                               {errors["representante.domicilio.colonia.pm"]}
@@ -5137,6 +5272,7 @@ persona: {
                             className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.municipio.pm"] ? "border-red-500" : "border-gray-300"}`}
                             value={pmRepDomMunicipio}
                             onChange={(e) => setPmRepDomMunicipio(e.target.value)}
+                            readOnly={pmRepDomCatalogoTerritorial.municipio}
                             onBlur={() =>
                               validator.validateField(
                                 "representante.domicilio.municipio.pm",
@@ -5160,6 +5296,7 @@ persona: {
                             onChange={(e) =>
                               setPmRepDomCiudadDelegacion(e.target.value)
                             }
+                            readOnly={pmRepDomCatalogoTerritorial.ciudad_delegacion}
                             onBlur={() =>
                               validator.validateField(
                                 "representante.domicilio.ciudad_delegacion.pm",
@@ -5178,7 +5315,11 @@ persona: {
                           <input
                             className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.codigo_postal.pm"] ? "border-red-500" : "border-gray-300"}`}
                             value={pmRepDomCP}
-                            onChange={(e) => setPmRepDomCP(e.target.value)}
+                            inputMode="numeric"
+                            maxLength={5}
+                            onChange={(e) =>
+                              setPmRepDomCP(normalizeCodigoPostalMx(e.target.value))
+                            }
                             onBlur={() =>
                               validator.validateField(
                                 "representante.domicilio.codigo_postal.pm",
@@ -5186,6 +5327,14 @@ persona: {
                             }
                             placeholder="44100"
                           />
+                          {pmRepDomCpLoading ? (
+                            <p className="text-xs text-blue-700" role="status">
+                              Consultando código postal…
+                            </p>
+                          ) : null}
+                          {!pmRepDomCpLoading && pmRepDomCpAviso ? (
+                            <p className="text-xs text-amber-700">{pmRepDomCpAviso}</p>
+                          ) : null}
                           {errors["representante.domicilio.codigo_postal.pm"] ? (
                             <p className="text-xs text-red-600">
                               {errors["representante.domicilio.codigo_postal.pm"]}
@@ -5199,6 +5348,7 @@ persona: {
                             className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.estado.pm"] ? "border-red-500" : "border-gray-300"}`}
                             value={pmRepDomEstado}
                             onChange={(e) => setPmRepDomEstado(e.target.value)}
+                            readOnly={pmRepDomCatalogoTerritorial.estado}
                             onBlur={() =>
                               validator.validateField(
                                 "representante.domicilio.estado.pm",
@@ -5216,12 +5366,11 @@ persona: {
                           <label className="text-sm font-medium">País *</label>
                           <input
                             className={`w-full rounded border px-3 py-2 text-sm ${errors["representante.domicilio.pais.pm"] ? "border-red-500" : "border-gray-300"}`}
-                            value={pmRepDomPais}
-                            onChange={(e) => setPmRepDomPais(e.target.value)}
+                            value="México"
+                            readOnly
                             onBlur={() =>
                               validator.validateField("representante.domicilio.pais.pm")
                             }
-                            placeholder="México"
                           />
                           {errors["representante.domicilio.pais.pm"] ? (
                             <p className="text-xs text-red-600">
@@ -5388,22 +5537,22 @@ persona: {
 
                       <div className="space-y-1">
                         <label className="text-sm font-medium">
-                          Fecha de expedición (AAAAMMDD) *
+                          Fecha de expedición *
                         </label>
                         <input
+                          type="date"
                           className={`w-full rounded border px-3 py-2 text-sm ${
                             errors["representante.identificacion.expedicion.pm"]
                               ? "border-red-500"
                               : "border-gray-300"
                           }`}
-                          value={pmRepIdExpedicion}
+                          value={toDateInputValue(pmRepIdExpedicion)}
                           onChange={(e) => setPmRepIdExpedicion(e.target.value)}
                           onBlur={() =>
                             validator.validateField(
                               "representante.identificacion.expedicion.pm",
                             )
                           }
-                          placeholder="20240131 (o 2024-01-31)"
                         />
                         {errors["representante.identificacion.expedicion.pm"] ? (
                           <p className="text-xs text-red-600">
@@ -5414,22 +5563,22 @@ persona: {
 
                       <div className="space-y-1">
                         <label className="text-sm font-medium">
-                          Fecha de expiración (AAAAMMDD) *
+                          Fecha de expiración *
                         </label>
                         <input
+                          type="date"
                           className={`w-full rounded border px-3 py-2 text-sm ${
                             errors["representante.identificacion.expiracion.pm"]
                               ? "border-red-500"
                               : "border-gray-300"
                           }`}
-                          value={pmRepIdExpiracion}
+                          value={toDateInputValue(pmRepIdExpiracion)}
                           onChange={(e) => setPmRepIdExpiracion(e.target.value)}
                           onBlur={() =>
                             validator.validateField(
                               "representante.identificacion.expiracion.pm",
                             )
                           }
-                          placeholder="20290131 (o 2029-01-31)"
                         />
                         {errors["representante.identificacion.expiracion.pm"] ? (
                           <p className="text-xs text-red-600">
