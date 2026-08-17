@@ -4,7 +4,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  crearPerfilTransaccional,
   getApiErrorMessage,
   isApiRequestCanceled,
   obtenerDetalleCliente,
@@ -18,7 +17,6 @@ import type {
   ConfiguracionPldCliente,
   ContextoPldPerfil,
   PerfilTransaccionalConContexto,
-  PerfilTransaccionalPayload,
 } from '@/types/actividades-vulnerables';
 
 type Cliente = {
@@ -186,18 +184,6 @@ export default function ClienteDetallePage() {
   const [configuracionPld, setConfiguracionPld] = useState<ConfiguracionPldCliente | null>(null);
   const [matrizRiesgo, setMatrizRiesgo] = useState<MatrizRiesgo | null>(null);
   const [showRaw, setShowRaw] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [perfilSaving, setPerfilSaving] = useState(false);
-  const [perfilError, setPerfilError] = useState('');
-  const [perfilSuccess, setPerfilSuccess] = useState('');
-  const [perfilForm, setPerfilForm] = useState({
-    tipo_servicio: '',
-    actividad_esperada: '',
-    monto_mensual_estimado: '',
-    frecuencia_operacion: '',
-    origen_recursos: '',
-    destino_recursos: '',
-  });
   const [role, setRole] = useState<NormalizedRole | null>(null);
 
   useEffect(() => {
@@ -255,55 +241,7 @@ export default function ClienteDetallePage() {
       active = false;
       controller.abort();
     };
-  }, [id, refreshKey, router]);
-
-  const submitPerfilTransaccional = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!id || perfilSaving || configuracionPld?.estado !== 'completa') return;
-
-    const montoRaw = perfilForm.monto_mensual_estimado.trim();
-    const monto = montoRaw === '' ? null : Number(montoRaw);
-    if (monto !== null && (!Number.isFinite(monto) || monto < 0)) {
-      setPerfilError('El monto mensual estimado debe ser un número mayor o igual a cero.');
-      return;
-    }
-
-    const payload: PerfilTransaccionalPayload = {
-      tipo_servicio: perfilForm.tipo_servicio.trim() || null,
-      actividad_esperada: perfilForm.actividad_esperada.trim() || null,
-      monto_mensual_estimado: monto,
-      frecuencia_operacion: perfilForm.frecuencia_operacion.trim() || null,
-      origen_recursos: perfilForm.origen_recursos.trim() || null,
-      destino_recursos: perfilForm.destino_recursos.trim() || null,
-    };
-
-    try {
-      setPerfilSaving(true);
-      setPerfilError('');
-      setPerfilSuccess('');
-      await crearPerfilTransaccional(id, payload);
-      setPerfilForm({
-        tipo_servicio: '',
-        actividad_esperada: '',
-        monto_mensual_estimado: '',
-        frecuencia_operacion: '',
-        origen_recursos: '',
-        destino_recursos: '',
-      });
-      setPerfilSuccess('Perfil Transaccional guardado correctamente.');
-      if (role === 'admin') {
-        setRefreshKey((value) => value + 1);
-      }
-    } catch (error) {
-      if (!isApiRequestCanceled(error)) {
-        setPerfilError(
-          getApiErrorMessage(error, 'No se pudo crear el Perfil Transaccional.'),
-        );
-      }
-    } finally {
-      setPerfilSaving(false);
-    }
-  };
+  }, [id, router]);
 
   const datos = cliente?.datos_completos ?? {};
   const contacto = datos?.contacto ?? null;
@@ -561,71 +499,22 @@ export default function ClienteDetallePage() {
             </div>
           ) : (
             <div className="rounded border border-dashed bg-gray-50 p-4 text-sm text-gray-600">
-              No hay perfil transaccional registrado para este cliente.
+              Este cliente aún no tiene un Perfil Transaccional registrado en el flujo actual.
             </div>
           )
-        ) : null}
+        ) : (
+          <div className="rounded border border-dashed bg-gray-50 p-4 text-sm text-gray-600">
+            Este cliente aún no tiene un Perfil Transaccional registrado en el flujo actual.
+          </div>
+        )}
 
-        {role && role !== 'consultor' ? (
-          configuracionPld?.estado === 'completa' ? (
-            <form onSubmit={submitPerfilTransaccional} className="mt-5 space-y-4 border-t pt-4">
-              <h3 className="font-medium">Crear nueva versión</h3>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                {([
-                  ['tipo_servicio', 'Tipo de servicio'],
-                  ['actividad_esperada', 'Actividad esperada'],
-                  ['frecuencia_operacion', 'Frecuencia de operación'],
-                  ['origen_recursos', 'Origen de recursos'],
-                  ['destino_recursos', 'Destino de recursos'],
-                ] as const).map(([field, label]) => (
-                  <div key={field}>
-                    <label htmlFor={`perfil-${field}`} className="mb-1 block text-sm font-medium">{label}</label>
-                    <input
-                      id={`perfil-${field}`}
-                      className="w-full rounded border px-3 py-2 text-sm"
-                      value={perfilForm[field]}
-                      onChange={(event) => setPerfilForm((current) => ({
-                        ...current,
-                        [field]: event.target.value,
-                      }))}
-                    />
-                  </div>
-                ))}
-                <div>
-                  <label htmlFor="perfil-monto" className="mb-1 block text-sm font-medium">Monto mensual estimado</label>
-                  <input
-                    id="perfil-monto"
-                    type="number"
-                    min="0"
-                    step="any"
-                    className="w-full rounded border px-3 py-2 text-sm"
-                    value={perfilForm.monto_mensual_estimado}
-                    onChange={(event) => setPerfilForm((current) => ({
-                      ...current,
-                      monto_mensual_estimado: event.target.value,
-                    }))}
-                  />
-                </div>
-              </div>
-              {perfilError ? (
-                <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{perfilError}</div>
-              ) : null}
-              {perfilSuccess ? (
-                <div className="rounded border border-green-200 bg-green-50 p-3 text-sm text-green-700">{perfilSuccess}</div>
-              ) : null}
-              <button
-                type="submit"
-                disabled={perfilSaving}
-                className="rounded bg-black px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-              >
-                {perfilSaving ? 'Guardando…' : 'Crear Perfil Transaccional'}
-              </button>
-            </form>
-          ) : (
-            <div className="mt-4 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-              Primero debe configurarse la actividad y operación PLD del expediente.
-            </div>
-          )
+        {role === 'admin' || role === 'cliente' ? (
+          <button
+            className="mt-4 rounded bg-black px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+            onClick={() => router.push(`/cliente/clientes/${cliente.id}/perfil-transaccional`)}
+          >
+            {perfilTransaccional ? 'Nuevo Perfil Transaccional' : 'Generar Perfil Transaccional'}
+          </button>
         ) : null}
       </Card>
       </div>

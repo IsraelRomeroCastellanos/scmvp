@@ -6299,7 +6299,7 @@ persona: {
         onConfirm={() => {
           if (successClient) {
             router.push(
-              `/cliente/clientes/${successClient.id}#perfil-transaccional`,
+              `/cliente/clientes/${successClient.id}/perfil-transaccional`,
             );
           }
         }}
