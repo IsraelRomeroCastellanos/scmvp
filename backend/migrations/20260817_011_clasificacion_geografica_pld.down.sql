@@ -46,7 +46,7 @@ BEGIN
       ('clasificacion_geografica_pld_version','creado_por','pg_catalog.int4'::pg_catalog.regtype,-1,true,''),
       ('clasificacion_geografica_pld_jurisdiccion','id','pg_catalog.int8'::pg_catalog.regtype,-1,true,'d'),
       ('clasificacion_geografica_pld_jurisdiccion','version_id','pg_catalog.int8'::pg_catalog.regtype,-1,true,''),
-      ('clasificacion_geografica_pld_jurisdiccion','pais_id','pg_catalog.int4'::pg_catalog.regtype,-1,false,''),
+      ('clasificacion_geografica_pld_jurisdiccion','pais_id','pg_catalog.int8'::pg_catalog.regtype,-1,false,''),
       ('clasificacion_geografica_pld_jurisdiccion','jurisdiccion_codigo','pg_catalog.varchar'::pg_catalog.regtype,104,true,''),
       ('clasificacion_geografica_pld_jurisdiccion','nombre_fuente','pg_catalog.varchar'::pg_catalog.regtype,259,true,''),
       ('clasificacion_geografica_pld_jurisdiccion','nombre_normalizado','pg_catalog.varchar'::pg_catalog.regtype,259,true,''),
@@ -158,7 +158,7 @@ BEGIN
       ('clasificacion_geografica_pld_jurisdiccion','ck_clasificacion_geografica_pld_jurisdiccion_tipo',
        'SELECT pg_catalog.array_agg((%s) IS NOT FALSE ORDER BY n) FROM (VALUES (1,''PAIS''::varchar(20)),(2,''TERRITORIO''::varchar(20)),(3,''ZONA''::varchar(20)),(4,''OTRO''::varchar(20))) v(n,tipo_entidad_geografica)',ARRAY[true,true,true,false]::BOOLEAN[]),
       ('clasificacion_geografica_pld_jurisdiccion','ck_clasificacion_geografica_pld_jurisdiccion_pais_requerido',
-       'SELECT pg_catalog.array_agg((%s) IS NOT FALSE ORDER BY n) FROM (VALUES (1,''PAIS''::varchar(20),1),(2,''PAIS''::varchar(20),NULL::integer),(3,''TERRITORIO''::varchar(20),NULL::integer),(4,''ZONA''::varchar(20),NULL::integer)) v(n,tipo_entidad_geografica,pais_id)',ARRAY[true,false,true,true]::BOOLEAN[]),
+       'SELECT pg_catalog.array_agg((%s) IS NOT FALSE ORDER BY n) FROM (VALUES (1,''PAIS''::varchar(20),1::bigint),(2,''PAIS''::varchar(20),NULL::bigint),(3,''TERRITORIO''::varchar(20),NULL::bigint),(4,''ZONA''::varchar(20),NULL::bigint)) v(n,tipo_entidad_geografica,pais_id)',ARRAY[true,false,true,true]::BOOLEAN[]),
       ('clasificacion_geografica_pld_jurisdiccion','ck_clasificacion_geografica_pld_jurisdiccion_observacion',
        'SELECT pg_catalog.array_agg((%s) IS NOT FALSE ORDER BY n) FROM (VALUES (1,NULL::text),(2,''Nota''::text),(3,'' ''::text)) v(n,observacion)',ARRAY[true,true,false]::BOOLEAN[])
     ) AS x(tabla,nombre,consulta,esperado)
@@ -217,9 +217,9 @@ BEGIN
       ('uq_clasificacion_geografica_pld_version_tipo_activa',
        'SELECT pg_catalog.array_agg((%s) IS NOT FALSE ORDER BY n) FROM (VALUES (1,true),(2,false)) v(n,activa)',ARRAY[true,false]::BOOLEAN[]),
       ('uq_clasificacion_geografica_pld_jurisdiccion_version_pais',
-       'SELECT pg_catalog.array_agg((%s) IS NOT FALSE ORDER BY n) FROM (VALUES (1,1),(2,NULL::integer)) v(n,pais_id)',ARRAY[true,false]::BOOLEAN[]),
+       'SELECT pg_catalog.array_agg((%s) IS NOT FALSE ORDER BY n) FROM (VALUES (1,1::bigint),(2,NULL::bigint)) v(n,pais_id)',ARRAY[true,false]::BOOLEAN[]),
       ('idx_clasificacion_geografica_pld_jurisdiccion_pais',
-       'SELECT pg_catalog.array_agg((%s) IS NOT FALSE ORDER BY n) FROM (VALUES (1,1),(2,NULL::integer)) v(n,pais_id)',ARRAY[true,false]::BOOLEAN[])
+       'SELECT pg_catalog.array_agg((%s) IS NOT FALSE ORDER BY n) FROM (VALUES (1,1::bigint),(2,NULL::bigint)) v(n,pais_id)',ARRAY[true,false]::BOOLEAN[])
     ) AS x(nombre,consulta,esperado)
   LOOP
     SELECT pg_catalog.pg_get_expr(i.indpred,i.indrelid) INTO expression_sql
