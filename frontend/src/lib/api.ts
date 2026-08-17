@@ -412,3 +412,105 @@ export async function crearPerfilTransaccional(
   );
   return response.data;
 }
+
+export interface PerfilTransaccionalV1Opcion {
+  id: number;
+  etiqueta: string;
+  orden: number;
+}
+
+export interface PerfilTransaccionalV1Criterio {
+  id: number;
+  codigo: string;
+  texto: string;
+  orden: number;
+  opciones: PerfilTransaccionalV1Opcion[];
+}
+
+export interface PerfilTransaccionalV1UltimaEvaluacion {
+  id: number;
+  numero_version: number;
+  puntaje_total: number;
+  resultado: {
+    id: number;
+    nombre: string;
+  };
+  creada_en: string;
+}
+
+export interface PerfilTransaccionalV1Context {
+  cliente: {
+    id: number;
+    empresa_id: number;
+    nombre: string;
+  };
+  matriz: {
+    id: number;
+    numero_version: number;
+    revision: number;
+  };
+  criterios: PerfilTransaccionalV1Criterio[];
+  resultados: Array<{
+    id: number;
+    nombre: string;
+    minimo: number;
+    maximo: number;
+    orden: number;
+  }>;
+  ultima_evaluacion: PerfilTransaccionalV1UltimaEvaluacion | null;
+}
+
+export interface PerfilTransaccionalV1RespuestaInput {
+  criterio_id: number;
+  opcion_id: number;
+}
+
+export interface PerfilTransaccionalV1Evaluacion {
+  id: number;
+  cliente_id: number;
+  empresa_id: number;
+  numero_version: number;
+  puntaje_total: number;
+  matriz: {
+    id: number;
+    numero_version: number;
+  };
+  resultado: {
+    id: number;
+    nombre: string;
+    minimo: number;
+    maximo: number;
+  };
+  respuestas: Array<{
+    criterio_id: number;
+    criterio_codigo: string;
+    criterio_texto: string;
+    orden: number;
+    opcion_id: number;
+    opcion_etiqueta: string;
+    puntaje: number;
+  }>;
+  creada_en: string;
+}
+
+export async function obtenerPerfilTransaccionalV1(
+  clienteId: number,
+  signal?: AbortSignal,
+): Promise<PerfilTransaccionalV1Context> {
+  const response = await api.get<{ data: PerfilTransaccionalV1Context }>(
+    `/api/cliente/clientes/${clienteId}/perfil-transaccional-v1`,
+    { signal },
+  );
+  return response.data.data;
+}
+
+export async function crearPerfilTransaccionalV1(
+  clienteId: number,
+  payload: { respuestas: PerfilTransaccionalV1RespuestaInput[] },
+): Promise<PerfilTransaccionalV1Evaluacion> {
+  const response = await api.post<{ data: { evaluacion: PerfilTransaccionalV1Evaluacion } }>(
+    `/api/cliente/clientes/${clienteId}/perfil-transaccional-v1`,
+    payload,
+  );
+  return response.data.data.evaluacion;
+}
