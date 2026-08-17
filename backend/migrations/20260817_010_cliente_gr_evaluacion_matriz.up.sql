@@ -1,0 +1,215 @@
+BEGIN;
+
+SELECT pg_catalog.pg_advisory_xact_lock(
+  pg_catalog.hashtext('20260817_010_cliente_gr_evaluacion_matriz')
+);
+
+DO $$
+DECLARE
+  required_key TEXT;
+  required_table TEXT;
+  expected RECORD;
+  actual_columns TEXT[];
+BEGIN
+  IF pg_catalog.current_schema() IS DISTINCT FROM 'public' THEN
+    RAISE EXCEPTION 'Esquema invalido: se esperaba public';
+  END IF;
+
+  FOREACH required_table IN ARRAY ARRAY[
+    'public.schema_migrations',
+    'public.clientes',
+    'public.usuarios',
+    'public.matriz_empresa_version',
+    'public.matriz_criterio',
+    'public.matriz_resultado',
+    'public.cliente_pt_evaluacion'
+  ] LOOP
+    IF pg_catalog.to_regclass(required_table) IS NULL THEN
+      RAISE EXCEPTION 'Preflight fallido: falta %', required_table;
+    END IF;
+  END LOOP;
+
+  FOREACH required_key IN ARRAY ARRAY[
+    '20260728_001_modelo_integral_actividades_vulnerables',
+    '20260801_002_matrices_pt_gr_empresa',
+    '20260805_003_gestion_matrices_empresa',
+    '20260810_004_resultados_globales_matriz',
+    '20260812_005_catalogos_canonicos_matriz',
+    '20260813_006_principales_tecnicos_usuarios',
+    '20260813_007_seed_principal_sistema_y_catalogos_matriz',
+    '20260815_008_descartar_borrador_matriz',
+    '20260815_009_cliente_pt_evaluacion_matriz'
+  ] LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM public.schema_migrations sm WHERE sm.migration_key = required_key
+    ) THEN
+      RAISE EXCEPTION 'Dependencia faltante: %', required_key;
+    END IF;
+  END LOOP;
+
+  IF EXISTS (
+    SELECT 1 FROM public.schema_migrations
+     WHERE migration_key = '20260817_010_cliente_gr_evaluacion_matriz'
+  ) THEN
+    RAISE EXCEPTION 'La migracion 010 ya esta registrada';
+  END IF;
+
+  IF pg_catalog.to_regclass('public.cliente_gr_evaluacion') IS NOT NULL
+     OR pg_catalog.to_regclass('public.cliente_gr_criterio_resultado') IS NOT NULL
+     OR pg_catalog.to_regclass('public.cliente_gr_evaluacion_id_seq') IS NOT NULL
+     OR pg_catalog.to_regclass('public.cliente_gr_criterio_resultado_id_seq') IS NOT NULL THEN
+    RAISE EXCEPTION 'Estado parcial: ya existe un objeto de tabla introducido por 010';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM pg_catalog.pg_constraint c
+     WHERE c.conname = 'uq_cliente_pt_evaluacion_id_cliente_empresa_matriz_gr'
+  ) THEN
+    RAISE EXCEPTION 'Estado parcial: ya existe el auxiliar introducido por 010';
+  END IF;
+
+  FOR expected IN
+    SELECT * FROM (VALUES
+      ('clientes','uq_clientes_id_empresa_pt',ARRAY['id','empresa_id']::TEXT[]),
+      ('matriz_empresa_version',NULL::TEXT,ARRAY['id','empresa_id']::TEXT[]),
+      ('matriz_criterio','uq_matriz_criterio_id_version_ambito_orden_pt',ARRAY['id','matriz_version_id','ambito','orden']::TEXT[]),
+      ('matriz_resultado','uq_matriz_resultado_id_version_ambito_pt',ARRAY['id','matriz_version_id','ambito']::TEXT[])
+    ) AS x(tabla,nombre,columnas)
+  LOOP
+    SELECT ARRAY(
+      SELECT a.attname::TEXT
+        FROM pg_catalog.unnest(c.conkey) WITH ORDINALITY k(attnum,ord)
+        JOIN pg_catalog.pg_attribute a
+          ON a.attrelid=c.conrelid AND a.attnum=k.attnum
+       ORDER BY k.ord
+    ) INTO actual_columns
+      FROM pg_catalog.pg_constraint c
+     WHERE c.conrelid=pg_catalog.to_regclass('public.' || expected.tabla)
+       AND c.contype IN ('p','u')
+       AND c.convalidated
+       AND (expected.nombre IS NULL OR c.conname=expected.nombre)
+       AND c.conkey = ARRAY(
+         SELECT a.attnum
+           FROM pg_catalog.unnest(expected.columnas) WITH ORDINALITY n(nombre,ord)
+           JOIN pg_catalog.pg_attribute a
+             ON a.attrelid=c.conrelid AND a.attname=n.nombre
+          ORDER BY n.ord
+       )::SMALLINT[];
+    IF actual_columns IS DISTINCT FROM expected.columnas THEN
+      RAISE EXCEPTION 'Preflight fallido: falta UNIQUE requerido en % (%)', expected.tabla, expected.columnas;
+    END IF;
+  END LOOP;
+
+  FOR expected IN
+    SELECT * FROM (VALUES
+      ('cliente_pt_evaluacion','id','pg_catalog.int8'::pg_catalog.regtype),
+      ('cliente_pt_evaluacion','cliente_id','pg_catalog.int4'::pg_catalog.regtype),
+      ('cliente_pt_evaluacion','empresa_id','pg_catalog.int4'::pg_catalog.regtype),
+      ('cliente_pt_evaluacion','matriz_version_id','pg_catalog.int4'::pg_catalog.regtype)
+    ) AS x(tabla,columna,tipo_oid)
+  LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_catalog.pg_attribute a
+       WHERE a.attrelid=pg_catalog.to_regclass('public.' || expected.tabla)
+         AND a.attname=expected.columna AND a.attnum>0 AND NOT a.attisdropped
+         AND a.atttypid=expected.tipo_oid AND a.attnotnull
+    ) THEN
+      RAISE EXCEPTION 'Preflight fallido: %.% incompatible', expected.tabla, expected.columna;
+    END IF;
+  END LOOP;
+END
+$$;
+
+ALTER TABLE public.cliente_pt_evaluacion
+  ADD CONSTRAINT uq_cliente_pt_evaluacion_id_cliente_empresa_matriz_gr
+    UNIQUE (id, cliente_id, empresa_id, matriz_version_id);
+
+CREATE TABLE public.cliente_gr_evaluacion (
+  id BIGINT GENERATED BY DEFAULT AS IDENTITY,
+  cliente_id INTEGER NOT NULL,
+  empresa_id INTEGER NOT NULL,
+  matriz_version_id INTEGER NOT NULL,
+  pt_evaluacion_id BIGINT NOT NULL,
+  ambito VARCHAR(2) NOT NULL DEFAULT 'GR',
+  numero_version INTEGER NOT NULL,
+  puntaje_total INTEGER NOT NULL,
+  matriz_resultado_id INTEGER NOT NULL,
+  estado VARCHAR(20) NOT NULL DEFAULT 'COMPLETADA',
+  creada_por INTEGER NOT NULL,
+  creada_en TIMESTAMPTZ NOT NULL DEFAULT pg_catalog.now(),
+  CONSTRAINT pk_cliente_gr_evaluacion PRIMARY KEY (id),
+  CONSTRAINT uq_cliente_gr_evaluacion_cliente_version
+    UNIQUE (cliente_id, numero_version),
+  CONSTRAINT uq_cliente_gr_evaluacion_id_matriz
+    UNIQUE (id, matriz_version_id),
+  CONSTRAINT fk_cliente_gr_evaluacion_cliente_empresa
+    FOREIGN KEY (cliente_id, empresa_id)
+    REFERENCES public.clientes (id, empresa_id) ON DELETE RESTRICT,
+  CONSTRAINT fk_cliente_gr_evaluacion_matriz_empresa
+    FOREIGN KEY (matriz_version_id, empresa_id)
+    REFERENCES public.matriz_empresa_version (id, empresa_id) ON DELETE RESTRICT,
+  CONSTRAINT fk_cliente_gr_evaluacion_pt_cliente_empresa_matriz
+    FOREIGN KEY (pt_evaluacion_id, cliente_id, empresa_id, matriz_version_id)
+    REFERENCES public.cliente_pt_evaluacion (id, cliente_id, empresa_id, matriz_version_id)
+    ON DELETE RESTRICT,
+  CONSTRAINT fk_cliente_gr_evaluacion_resultado_matriz_ambito
+    FOREIGN KEY (matriz_resultado_id, matriz_version_id, ambito)
+    REFERENCES public.matriz_resultado (id, matriz_version_id, ambito)
+    ON DELETE RESTRICT,
+  CONSTRAINT fk_cliente_gr_evaluacion_creada_por
+    FOREIGN KEY (creada_por) REFERENCES public.usuarios (id) ON DELETE RESTRICT,
+  CONSTRAINT ck_cliente_gr_evaluacion_ambito CHECK (ambito = 'GR'),
+  CONSTRAINT ck_cliente_gr_evaluacion_numero_version CHECK (numero_version > 0),
+  CONSTRAINT ck_cliente_gr_evaluacion_puntaje_total CHECK (puntaje_total BETWEEN 4 AND 12),
+  CONSTRAINT ck_cliente_gr_evaluacion_estado CHECK (estado = 'COMPLETADA')
+);
+
+CREATE INDEX idx_cliente_gr_evaluacion_empresa
+  ON public.cliente_gr_evaluacion (empresa_id);
+CREATE INDEX idx_cliente_gr_evaluacion_matriz
+  ON public.cliente_gr_evaluacion (matriz_version_id);
+CREATE INDEX idx_cliente_gr_evaluacion_pt
+  ON public.cliente_gr_evaluacion (pt_evaluacion_id);
+CREATE INDEX idx_cliente_gr_evaluacion_resultado
+  ON public.cliente_gr_evaluacion (matriz_resultado_id);
+CREATE INDEX idx_cliente_gr_evaluacion_creada_por
+  ON public.cliente_gr_evaluacion (creada_por);
+
+CREATE TABLE public.cliente_gr_criterio_resultado (
+  id BIGINT GENERATED BY DEFAULT AS IDENTITY,
+  evaluacion_id BIGINT NOT NULL,
+  matriz_version_id INTEGER NOT NULL,
+  ambito VARCHAR(2) NOT NULL DEFAULT 'GR',
+  matriz_criterio_id INTEGER NOT NULL,
+  resolver_codigo VARCHAR(100) NOT NULL,
+  puntaje INTEGER NOT NULL,
+  orden INTEGER NOT NULL,
+  evidencia JSONB NOT NULL,
+  creada_en TIMESTAMPTZ NOT NULL DEFAULT pg_catalog.now(),
+  CONSTRAINT pk_cliente_gr_criterio_resultado PRIMARY KEY (id),
+  CONSTRAINT uq_cliente_gr_criterio_resultado_evaluacion_criterio
+    UNIQUE (evaluacion_id, matriz_criterio_id),
+  CONSTRAINT fk_cliente_gr_criterio_resultado_evaluacion_matriz
+    FOREIGN KEY (evaluacion_id, matriz_version_id)
+    REFERENCES public.cliente_gr_evaluacion (id, matriz_version_id)
+    ON DELETE RESTRICT,
+  CONSTRAINT fk_cliente_gr_criterio_resultado_criterio_matriz_ambito_orden
+    FOREIGN KEY (matriz_criterio_id, matriz_version_id, ambito, orden)
+    REFERENCES public.matriz_criterio (id, matriz_version_id, ambito, orden)
+    ON DELETE RESTRICT,
+  CONSTRAINT ck_cliente_gr_criterio_resultado_ambito CHECK (ambito = 'GR'),
+  CONSTRAINT ck_cliente_gr_criterio_resultado_puntaje CHECK (puntaje IN (1, 2, 3)),
+  CONSTRAINT ck_cliente_gr_criterio_resultado_orden CHECK (orden BETWEEN 1 AND 4),
+  CONSTRAINT ck_cliente_gr_criterio_resultado_resolver_codigo
+    CHECK (resolver_codigo ~ '^[A-Z][A-Z0-9_]{0,99}$'),
+  CONSTRAINT ck_cliente_gr_criterio_resultado_evidencia_objeto
+    CHECK (pg_catalog.jsonb_typeof(evidencia) = 'object')
+);
+
+CREATE INDEX idx_cliente_gr_criterio_resultado_criterio
+  ON public.cliente_gr_criterio_resultado (matriz_criterio_id);
+
+INSERT INTO public.schema_migrations (migration_key)
+VALUES ('20260817_010_cliente_gr_evaluacion_matriz');
+
+COMMIT;
