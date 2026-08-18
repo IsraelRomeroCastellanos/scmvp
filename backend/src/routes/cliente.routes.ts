@@ -1619,6 +1619,243 @@ function validateDatosCompletosOr400(
   return validateChildListsOr400(res, tipo, datos_completos);
 }
 
+function validateDatosCompletosPatchOr400(
+  res: Response,
+  tipo: string,
+  patch: any,
+  merged: any,
+): boolean {
+  if (!isPlainObject(patch)) {
+    return (badRequest(res, 'datos_completos debe ser un objeto'), false);
+  }
+
+  if (hasOwn(patch, 'contacto')) {
+    if (!isPlainObject(patch.contacto)) {
+      return (badRequest(res, 'contacto debe ser un objeto'), false);
+    }
+    const contactoPatch = patch.contacto;
+    const contacto = merged?.contacto ?? {};
+    if (hasOwn(contactoPatch, 'pais') && !isNonEmptyString(contacto.pais))
+      return (badRequest(res, 'contacto.pais es obligatorio'), false);
+    if (hasOwn(contactoPatch, 'email')) {
+      if (!isNonEmptyString(contacto.email))
+        return (badRequest(res, 'contacto.email es obligatorio'), false);
+      if (!isEmail(contacto.email)) return (badRequest(res, 'contacto.email inválido'), false);
+    }
+    if (hasOwn(contactoPatch, 'telefono') && !isNonEmptyString(contacto.telefono))
+      return (badRequest(res, 'contacto.telefono es obligatorio'), false);
+    if (hasOwn(contactoPatch, 'telefono_detalle')) {
+      if (!isPlainObject(contactoPatch.telefono_detalle))
+        return (badRequest(res, 'contacto.telefono_detalle debe ser un objeto'), false);
+      const telefonoDetalle = contacto.telefono_detalle ?? {};
+      if (!isNonEmptyString(telefonoDetalle.codigo_pais)
+        || !/^\+\d{1,4}$/.test(telefonoDetalle.codigo_pais.trim()))
+        return (badRequest(res, 'contacto.telefono_detalle.codigo_pais inválido'), false);
+      if (!isNonEmptyString(telefonoDetalle.numero)
+        || !/^\d{7,15}$/.test(telefonoDetalle.numero.trim()))
+        return (badRequest(res, 'contacto.telefono_detalle.numero inválido'), false);
+      if (isNonEmptyString(telefonoDetalle.ext) && !/^\d{1,6}$/.test(telefonoDetalle.ext.trim()))
+        return (badRequest(res, 'contacto.telefono_detalle.ext inválida'), false);
+    }
+
+    const domicilioKey = hasOwn(contactoPatch, 'domicilio_mexico')
+      ? 'domicilio_mexico'
+      : hasOwn(contactoPatch, 'domicilio')
+        ? 'domicilio'
+        : null;
+    if (domicilioKey !== null) {
+      if (!isPlainObject(contactoPatch[domicilioKey]))
+        return (badRequest(res, `contacto.${domicilioKey} debe ser un objeto`), false);
+      const dom = contacto?.[domicilioKey] ?? {};
+      if (!isNonEmptyString(dom.calle)) return (badRequest(res, 'contacto.domicilio.calle es obligatoria'), false);
+      if (!isNonEmptyString(dom.numero)) return (badRequest(res, 'contacto.domicilio.numero es obligatorio'), false);
+      if (!isNonEmptyString(dom.colonia)) return (badRequest(res, 'contacto.domicilio.colonia es obligatoria'), false);
+      if (!isNonEmptyString(dom.municipio)) return (badRequest(res, 'contacto.domicilio.municipio es obligatorio'), false);
+      if (tipo !== 'persona_fisica' && !isNonEmptyString(dom.ciudad_delegacion))
+        return (badRequest(res, 'contacto.domicilio.ciudad_delegacion es obligatoria'), false);
+      if (!isNonEmptyString(dom.codigo_postal))
+        return (badRequest(res, 'contacto.domicilio.codigo_postal es obligatorio'), false);
+      if (isMexicoValue(dom.pais) && !/^\d{5}$/.test(String(dom.codigo_postal).trim()))
+        return (badRequest(res, 'contacto.domicilio.codigo_postal inválido'), false);
+      if (!isNonEmptyString(dom.estado)) return (badRequest(res, 'contacto.domicilio.estado es obligatorio'), false);
+      if (!isNonEmptyString(dom.pais)) return (badRequest(res, 'contacto.domicilio.pais es obligatorio'), false);
+    }
+  }
+
+  if (tipo === 'persona_fisica' && hasOwn(patch, 'persona')) {
+    if (!isPlainObject(patch.persona)) return (badRequest(res, 'persona debe ser un objeto'), false);
+    const personaPatch = patch.persona;
+    const persona = merged?.persona ?? {};
+    for (const field of ['nombres', 'apellido_paterno', 'fecha_nacimiento', 'residencia']) {
+      if (hasOwn(personaPatch, field) && !isNonEmptyString(persona[field]))
+        return (badRequest(res, `persona.${field} es obligatorio`), false);
+    }
+    if (hasOwn(personaPatch, 'fecha_nacimiento') && !isYYYYMMDD(persona.fecha_nacimiento))
+      return (badRequest(res, 'persona.fecha_nacimiento inválida (AAAAMMDD)'), false);
+    if (hasOwn(personaPatch, 'rfc')) {
+      if (!isNonEmptyString(persona.rfc)) return (badRequest(res, 'persona.rfc es obligatorio'), false);
+      if (!isRFC(persona.rfc)) return (badRequest(res, 'persona.rfc inválido'), false);
+    }
+    if (hasOwn(personaPatch, 'curp')) {
+      if (!isNonEmptyString(persona.curp)) return (badRequest(res, 'persona.curp es obligatoria'), false);
+      if (!isCURP(persona.curp)) return (badRequest(res, 'persona.curp inválida'), false);
+    }
+    if (hasOwn(personaPatch, 'tipo_nacionalidad') || hasOwn(personaPatch, 'nacional_extranjero')) {
+      const tipoNacionalidad = String(
+        persona.tipo_nacionalidad ?? persona.nacional_extranjero ?? '',
+      ).trim().toLowerCase();
+      if (!['nacional', 'extranjero'].includes(tipoNacionalidad))
+        return (badRequest(res, 'persona.tipo_nacionalidad debe ser nacional o extranjero'), false);
+    }
+    const tipoNacionalidad = String(
+      persona.tipo_nacionalidad ?? persona.nacional_extranjero ?? '',
+    ).trim().toLowerCase();
+    if (hasOwn(personaPatch, 'apellido_materno')
+      && tipoNacionalidad === 'nacional'
+      && !isNonEmptyString(persona.apellido_materno))
+      return (badRequest(res, 'persona.apellido_materno es obligatorio para nacional'), false);
+    if (hasOwn(personaPatch, 'actividad_economica')) {
+      const actividad = persona.actividad_economica;
+      if (!isPlainObject(actividad)
+        || !isNonEmptyString(actividad.clave)
+        || !isNonEmptyString(actividad.descripcion))
+        return (badRequest(res, 'persona.actividad_economica es inválida'), false);
+    }
+    if (hasOwn(personaPatch, 'identificacion')) {
+      if (!isPlainObject(personaPatch.identificacion))
+        return (badRequest(res, 'persona.identificacion debe ser un objeto'), false);
+      const identificacion = persona.identificacion ?? {};
+      if (!isNonEmptyString(identificacion.tipo))
+        return (badRequest(res, 'persona.identificacion.tipo es obligatorio'), false);
+      if (!isNonEmptyString(identificacion.autoridad))
+        return (badRequest(res, 'persona.identificacion.autoridad es obligatoria'), false);
+      if (!isNonEmptyString(identificacion.numero))
+        return (badRequest(res, 'persona.identificacion.numero es obligatorio'), false);
+      if (!isYYYYMMDD(identificacion.fecha_expedicion))
+        return (badRequest(res, 'persona.identificacion.fecha_expedicion inválida (AAAAMMDD)'), false);
+      if (parseBooleanLike(identificacion.sin_vigencia) !== true
+        && !isYYYYMMDD(identificacion.fecha_expiracion))
+        return (badRequest(res, 'persona.identificacion.fecha_expiracion inválida (AAAAMMDD)'), false);
+    }
+  }
+
+  if (hasOwn(patch, 'cargo_publico')) {
+    if (!isPlainObject(patch.cargo_publico))
+      return (badRequest(res, 'cargo_publico debe ser un objeto'), false);
+    const cargoPublico = merged?.cargo_publico ?? {};
+    for (const field of ['actual', 'previo', 'familiar']) {
+      if (!['si', 'no'].includes(String(cargoPublico[field] ?? '').trim().toLowerCase()))
+        return (badRequest(res, `cargo_publico.${field} inválido`), false);
+    }
+  }
+
+  if (tipo === 'persona_moral' && hasOwn(patch, 'empresa')) {
+    if (!isPlainObject(patch.empresa)) return (badRequest(res, 'empresa debe ser un objeto'), false);
+    const empresaPatch = patch.empresa;
+    const empresa = merged?.empresa ?? {};
+    if (hasOwn(empresaPatch, 'rfc')) {
+      if (!isNonEmptyString(empresa.rfc)) return (badRequest(res, 'empresa.rfc es obligatorio'), false);
+      if (!isRFC(empresa.rfc)) return (badRequest(res, 'empresa.rfc inválido'), false);
+    }
+    if (hasOwn(empresaPatch, 'fecha_constitucion')) {
+      if (!isNonEmptyString(empresa.fecha_constitucion))
+        return (badRequest(res, 'empresa.fecha_constitucion es obligatoria'), false);
+      if (!isYYYYMMDD(empresa.fecha_constitucion))
+        return (badRequest(res, 'empresa.fecha_constitucion inválida (AAAAMMDD)'), false);
+    }
+    if (hasOwn(empresaPatch, 'giro_mercantil')) {
+      const giro = empresa.giro_mercantil;
+      if (!isPlainObject(giro) || !isNonEmptyString(giro.clave) || !isNonEmptyString(giro.descripcion))
+        return (badRequest(res, 'empresa.giro_mercantil es inválido'), false);
+    }
+    if (hasOwn(empresaPatch, 'giro'))
+      return (badRequest(res, 'empresa.giro no es válido; use empresa.giro_mercantil'), false);
+    if (hasOwn(empresaPatch, 'representante')) {
+      if (!isPlainObject(empresaPatch.representante))
+        return (badRequest(res, 'empresa.representante debe ser un objeto'), false);
+      const rep = empresa.representante ?? {};
+      if (!isNonEmptyString(rep.nombres))
+        return (badRequest(res, 'empresa.representante.nombres es obligatorio'), false);
+      if (!isNonEmptyString(rep.apellido_paterno))
+        return (badRequest(res, 'empresa.representante.apellido_paterno es obligatorio'), false);
+      if (!isNonEmptyString(rep.apellido_materno))
+        return (badRequest(res, 'empresa.representante.apellido_materno es obligatorio'), false);
+      if (!isYYYYMMDD(rep.fecha_nacimiento))
+        return (badRequest(res, 'empresa.representante.fecha_nacimiento inválida (AAAAMMDD)'), false);
+      if (!isNonEmptyString(rep.nacionalidad))
+        return (badRequest(res, 'empresa.representante.nacionalidad es obligatoria'), false);
+      if (!isNonEmptyString(rep.rfc))
+        return (badRequest(res, 'empresa.representante.rfc es obligatorio'), false);
+      if (!isRFC(rep.rfc)) return (badRequest(res, 'empresa.representante.rfc inválido'), false);
+      if (!isNonEmptyString(rep.curp))
+        return (badRequest(res, 'empresa.representante.curp es obligatoria'), false);
+      if (!isCURP(rep.curp)) return (badRequest(res, 'empresa.representante.curp inválida'), false);
+      const identificacion = rep.identificacion ?? {};
+      if (!isNonEmptyString(identificacion.tipo))
+        return (badRequest(res, 'empresa.representante.identificacion.tipo es obligatorio'), false);
+      if (!isNonEmptyString(identificacion.autoridad))
+        return (badRequest(res, 'empresa.representante.identificacion.autoridad es obligatoria'), false);
+      if (!isNonEmptyString(identificacion.numero))
+        return (badRequest(res, 'empresa.representante.identificacion.numero es obligatorio'), false);
+      if (!isYYYYMMDD(identificacion.fecha_expedicion))
+        return (badRequest(res, 'empresa.representante.identificacion.fecha_expedicion inválida (AAAAMMDD)'), false);
+      if (!isYYYYMMDD(identificacion.fecha_expiracion))
+        return (badRequest(res, 'empresa.representante.identificacion.fecha_expiracion inválida (AAAAMMDD)'), false);
+      const domicilio = rep.domicilio ?? {};
+      for (const field of ['calle', 'numero', 'colonia', 'municipio', 'ciudad_delegacion', 'codigo_postal', 'estado', 'pais']) {
+        if (!isNonEmptyString(domicilio[field]))
+          return (badRequest(res, `empresa.representante.domicilio.${field} es obligatorio`), false);
+      }
+      if (isMexicoValue(domicilio.pais) && !/^\d{5}$/.test(domicilio.codigo_postal.trim()))
+        return (badRequest(res, 'empresa.representante.domicilio.codigo_postal inválido'), false);
+    }
+  }
+
+  if (tipo === 'fideicomiso') {
+    if (hasOwn(patch, 'fideicomiso')) {
+      if (!isPlainObject(patch.fideicomiso))
+        return (badRequest(res, 'fideicomiso debe ser un objeto'), false);
+      const fidePatch = patch.fideicomiso;
+      const fide = merged?.fideicomiso ?? {};
+      for (const field of ['fideicomiso_nombre', 'identificador', 'denominacion_fiduciario']) {
+        if (hasOwn(fidePatch, field) && !isNonEmptyString(fide[field]))
+          return (badRequest(res, `fideicomiso.${field} es obligatorio`), false);
+      }
+      if (hasOwn(fidePatch, 'rfc_fiduciario')) {
+        if (!isNonEmptyString(fide.rfc_fiduciario))
+          return (badRequest(res, 'fideicomiso.rfc_fiduciario es obligatorio'), false);
+        if (!isRFC(fide.rfc_fiduciario))
+          return (badRequest(res, 'fideicomiso.rfc_fiduciario inválido'), false);
+      }
+    }
+    if (hasOwn(patch, 'representante')) {
+      if (!isPlainObject(patch.representante))
+        return (badRequest(res, 'representante debe ser un objeto'), false);
+      const rep = merged?.representante ?? {};
+      if (!isNonEmptyString(rep.nombre_completo))
+        return (badRequest(res, 'representante.nombre_completo es obligatorio'), false);
+      if (!isNonEmptyString(rep.rfc)) return (badRequest(res, 'representante.rfc es obligatorio'), false);
+      if (!isRFC(rep.rfc)) return (badRequest(res, 'representante.rfc inválido'), false);
+      if (!isNonEmptyString(rep.curp)) return (badRequest(res, 'representante.curp es obligatoria'), false);
+      if (!isCURP(rep.curp)) return (badRequest(res, 'representante.curp inválida'), false);
+      if (!isYYYYMMDD(rep.fecha_nacimiento))
+        return (badRequest(res, 'representante.fecha_nacimiento inválida (AAAAMMDD)'), false);
+    }
+  }
+
+  return true;
+}
+
+function hasPrincipalRfcPatch(tipo: string, datosCompletos: any): boolean {
+  if (tipo === 'persona_fisica') {
+    return isPlainObject(datosCompletos?.persona) && hasOwn(datosCompletos.persona, 'rfc');
+  }
+  if (tipo === 'persona_moral') {
+    return isPlainObject(datosCompletos?.empresa) && hasOwn(datosCompletos.empresa, 'rfc');
+  }
+  return false;
+}
+
 type CanonicalPrincipalCatalogResult =
   | { ok: true; datosCompletos: any }
   | { ok: false; error: string };
@@ -2614,7 +2851,7 @@ router.put('/clientes/:id', authenticate, authorizeRoles('admin', 'consultor', '
         preparedPatchDatos = canonicalCatalog.datosCompletos;
       }
       nextDatos = deepMerge(currentDatos, preparedPatchDatos);
-      if (!validateDatosCompletosOr400(res, tipo, nextDatos, { validateChildLists: false })) {
+      if (!validateDatosCompletosPatchOr400(res, tipo, preparedPatchDatos, nextDatos)) {
         await client.query('ROLLBACK');
         transactionStarted = false;
         return;
@@ -2626,7 +2863,9 @@ router.put('/clientes/:id', authenticate, authorizeRoles('admin', 'consultor', '
         return;
       }
 
-      nextRfcPrincipal = extractRfcPrincipal(tipo, nextDatos);
+      nextRfcPrincipal = hasPrincipalRfcPatch(tipo, preparedPatchDatos)
+        ? extractRfcPrincipal(tipo, nextDatos)
+        : null;
       if (nextRfcPrincipal) {
         const dupRfc = await client.query(
           `SELECT id FROM clientes WHERE empresa_id=$1 AND rfc_principal=$2 AND id<>$3 LIMIT 1`,
