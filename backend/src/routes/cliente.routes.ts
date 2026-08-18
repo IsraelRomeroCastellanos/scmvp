@@ -1619,6 +1619,87 @@ function validateDatosCompletosOr400(
   return validateChildListsOr400(res, tipo, datos_completos);
 }
 
+type CanonicalPrincipalCatalogResult =
+  | { ok: true; datosCompletos: any }
+  | { ok: false; error: string };
+
+async function canonicalizePrincipalActivityCatalog(
+  client: PoolClient,
+  tipo: string,
+  datosCompletos: any,
+): Promise<CanonicalPrincipalCatalogResult> {
+  const isPersonaFisica = tipo === 'persona_fisica';
+  const isPersonaMoral = tipo === 'persona_moral';
+  if (!isPersonaFisica && !isPersonaMoral) {
+    return { ok: true, datosCompletos };
+  }
+
+  const containerKey = isPersonaFisica ? 'persona' : 'empresa';
+  const fieldKey = isPersonaFisica ? 'actividad_economica' : 'giro_mercantil';
+  const container = datosCompletos?.[containerKey];
+  const value = container?.[fieldKey];
+  const structureError = isPersonaFisica
+    ? 'persona.actividad_economica debe contener una clave canónica'
+    : 'empresa.giro_mercantil debe contener una clave canónica';
+  const catalogError = isPersonaFisica
+    ? 'persona.actividad_economica.clave no existe o no está activa'
+    : 'empresa.giro_mercantil.clave no existe o no está activa';
+
+  if (!isPlainObject(container) || !isPlainObject(value) || !isNonEmptyString(value.clave)) {
+    return { ok: false, error: structureError };
+  }
+  const clave = value.clave;
+  if (clave !== clave.trim()) {
+    return { ok: false, error: structureError };
+  }
+
+  const table = isPersonaFisica
+    ? 'public.cat_actividades_economicas'
+    : 'public.cat_giros_mercantiles';
+  const catalog = await client.query<{ clave: string; descripcion: string }>(
+    `SELECT clave, descripcion
+       FROM ${table}
+      WHERE clave = $1
+        AND activo = TRUE
+      ORDER BY id`,
+    [clave],
+  );
+  if (catalog.rows.length !== 1) {
+    return { ok: false, error: catalogError };
+  }
+
+  const row = catalog.rows[0];
+  if (!isNonEmptyString(row.clave) || !isNonEmptyString(row.descripcion)) {
+    return { ok: false, error: catalogError };
+  }
+
+  return {
+    ok: true,
+    datosCompletos: {
+      ...datosCompletos,
+      [containerKey]: {
+        ...container,
+        [fieldKey]: {
+          clave: row.clave,
+          descripcion: row.descripcion,
+        },
+      },
+    },
+  };
+}
+
+function hasPrincipalActivityCatalogPatch(tipo: string, datosCompletos: any): boolean {
+  if (tipo === 'persona_fisica') {
+    return isPlainObject(datosCompletos?.persona)
+      && hasOwn(datosCompletos.persona, 'actividad_economica');
+  }
+  if (tipo === 'persona_moral') {
+    return isPlainObject(datosCompletos?.empresa)
+      && hasOwn(datosCompletos.empresa, 'giro_mercantil');
+  }
+  return false;
+}
+
 /**
  * ===============================
  * OBTENER EMPRESA DE LA SESIÓN
@@ -1886,14 +1967,30 @@ router.post('/registrar-cliente', authenticate, authorizeRoles('admin', 'consult
     const canonicalPreparation = prepareCanonicalBeneficiarios(tipo, datos_completos);
     if (!canonicalPreparation.ok) return badRequest(res, canonicalPreparation.error || 'Contrato canónico inválido');
 
-    const preparedDatos = canonicalPreparation.datosCompletos;
-    if (!validateDatosCompletosOr400(res, tipo, preparedDatos)) return;
-
-    const rfc_principal = extractRfcPrincipal(tipo, preparedDatos);
+    let preparedDatos = canonicalPreparation.datosCompletos;
 
     client = await pool.connect();
     await client.query('BEGIN');
     transactionStarted = true;
+
+    const canonicalCatalog = await canonicalizePrincipalActivityCatalog(
+      client,
+      tipo,
+      preparedDatos,
+    );
+    if (!canonicalCatalog.ok) {
+      await client.query('ROLLBACK');
+      transactionStarted = false;
+      return badRequest(res, canonicalCatalog.error);
+    }
+    preparedDatos = canonicalCatalog.datosCompletos;
+    if (!validateDatosCompletosOr400(res, tipo, preparedDatos)) {
+      await client.query('ROLLBACK');
+      transactionStarted = false;
+      return;
+    }
+
+    const rfc_principal = extractRfcPrincipal(tipo, preparedDatos);
 
     const empresaResult = await client.query(
       `SELECT id
@@ -2503,6 +2600,19 @@ router.put('/clientes/:id', authenticate, authorizeRoles('admin', 'consultor', '
       }
 
       preparedPatchDatos = canonicalPreparation.datosCompletos;
+      if (hasPrincipalActivityCatalogPatch(tipo, preparedPatchDatos)) {
+        const canonicalCatalog = await canonicalizePrincipalActivityCatalog(
+          client,
+          tipo,
+          preparedPatchDatos,
+        );
+        if (!canonicalCatalog.ok) {
+          await client.query('ROLLBACK');
+          transactionStarted = false;
+          return badRequest(res, canonicalCatalog.error);
+        }
+        preparedPatchDatos = canonicalCatalog.datosCompletos;
+      }
       nextDatos = deepMerge(currentDatos, preparedPatchDatos);
       if (!validateDatosCompletosOr400(res, tipo, nextDatos, { validateChildLists: false })) {
         await client.query('ROLLBACK');
