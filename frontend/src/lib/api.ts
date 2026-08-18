@@ -122,6 +122,7 @@ export interface CriterioBorradorMatriz {
   unidad_canonica: string | null;
   opciones: Array<{
     id: number;
+    codigo: string;
     etiqueta: string;
     orden: number;
     puntaje: 1 | 2 | 3;
@@ -136,6 +137,41 @@ export interface CriterioBorradorMatriz {
     orden: number;
     puntaje: 1 | 2 | 3;
   }>;
+  reglas?: ReglaMatrizGr[];
+  cobertura?: CoberturaCriterioGr;
+}
+
+export interface ReglaMatrizGr {
+  id: number;
+  codigo: string;
+  marca_canonica: string | null;
+  condicion_controlada: string | null;
+  puntaje: number;
+  prioridad: number;
+  alto_automatico: boolean;
+  causa_codigo: string | null;
+}
+
+export interface CoberturaCriterioGr {
+  esperada: string[];
+  actual: string[];
+  faltantes: string[];
+  extras: string[];
+  duplicadas: string[];
+  reglas_invalidas: string[];
+  estado: "COMPLETA" | "INCOMPLETA";
+}
+
+export interface CoberturaGr {
+  estado: "COMPLETA" | "INCOMPLETA";
+  criterios_esperados: string[];
+  criterios_actuales: string[];
+  criterios_faltantes: string[];
+  criterios_duplicados: string[];
+  dependencia_destino_recursos_pt: "COMPLETA" | "INCOMPLETA";
+  criterios: Record<string, CoberturaCriterioGr>;
+  bandas_gr: { estado: "COMPLETA" | "INCOMPLETA"; detalles: string[] };
+  detalles: string[];
 }
 
 export interface BorradorMatrizEmpresa {
@@ -151,6 +187,7 @@ export interface BorradorMatrizEmpresa {
   criterios_gr: CriterioBorradorMatriz[];
   resultados_pt: ResultadoMatrizEmpresa[];
   resultados_gr: ResultadoMatrizEmpresa[];
+  cobertura_gr: CoberturaGr;
 }
 
 export interface MatrizCreadaEmpresa {
@@ -173,11 +210,20 @@ export interface MatrizPublicadaFuente {
 
 export interface ResultadoMatrizEmpresa {
   id: number;
+  codigo: string;
   nombre: string;
   minimo: number;
   maximo: number;
   orden: number;
 }
+
+export type ReglaMatrizGrInput = {
+  clave: string;
+  puntaje: 1 | 2 | 3;
+  prioridad: number;
+  alto_automatico: boolean;
+  causa_codigo: string | null;
+};
 
 export async function obtenerCatalogoCriteriosMatriz(
   ambito: AmbitoMatriz,
@@ -279,6 +325,22 @@ export async function guardarOpcionesCriterioMatriz(
   );
   if (!response.data?.data) {
     throw new Error("La respuesta de parametrización no es válida");
+  }
+  return response.data.data;
+}
+
+export async function guardarReglasMatrizGr(
+  empresaId: string | number,
+  matrizId: number,
+  criterioId: number,
+  reglas: ReglaMatrizGrInput[],
+): Promise<BorradorMatrizEmpresa> {
+  const response = await api.put<{ data: BorradorMatrizEmpresa }>(
+    `/api/admin/empresas/${empresaId}/matrices/${matrizId}/criterios/${criterioId}/reglas`,
+    { reglas },
+  );
+  if (!response.data?.data) {
+    throw new Error("La respuesta del guardado de reglas GR no es válida");
   }
   return response.data.data;
 }

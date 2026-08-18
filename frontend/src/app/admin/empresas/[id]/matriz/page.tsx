@@ -13,6 +13,7 @@ import {
   getApiErrorMessage,
   guardarComposicionMatrizEmpresa,
   guardarOpcionesCriterioMatriz,
+  guardarReglasMatrizGr,
   guardarResultadosMatrizEmpresa,
   isApiRequestCanceled,
   obtenerBorradorMatrizEmpresa,
@@ -27,6 +28,8 @@ import {
   type CriterioCatalogoMatriz,
   type ResultadoMatrizEmpresa,
   type MatrizPublicadaFuente,
+  type CoberturaCriterioGr,
+  type ReglaMatrizGrInput,
 } from '@/lib/api';
 
 type EmpresaResumen = {
@@ -42,6 +45,16 @@ type CriterioEditable = {
   texto: string;
   tipoResolucion: string;
   opciones: string[];
+  reglas: ReglaEditable[];
+  cobertura?: CoberturaCriterioGr;
+};
+
+type ReglaEditable = {
+  clave: string;
+  puntaje: '' | 1 | 2 | 3;
+  prioridad: string;
+  altoAutomatico: boolean;
+  causaCodigo: string;
 };
 
 type BandaEditable = { nombre: string; minimo: string; maximo: string };
@@ -55,14 +68,62 @@ function toBands(items: ResultadoMatrizEmpresa[]): BandaEditable[] {
 }
 
 function toEditable(items: CriterioBorradorMatriz[]): CriterioEditable[] {
-  return items.map((item) => ({
-    versionId: item.catalogo_criterio_version_id,
-    matrizCriterioId: item.matriz_criterio_id,
-    codigo: item.codigo,
-    texto: item.texto,
-    tipoResolucion: item.tipo_resolucion,
-    opciones: [0, 1, 2].map((index) => item.opciones[index]?.etiqueta ?? ''),
-  }));
+  return items.map((item) => {
+    const persisted = new Map(
+      (item.reglas ?? []).map((rule) => [
+        rule.marca_canonica ?? rule.condicion_controlada ?? '',
+        rule,
+      ]),
+    );
+    return {
+      versionId: item.catalogo_criterio_version_id,
+      matrizCriterioId: item.matriz_criterio_id,
+      codigo: item.codigo,
+      texto: item.texto,
+      tipoResolucion: item.tipo_resolucion,
+      opciones: [0, 1, 2].map((index) => item.opciones[index]?.etiqueta ?? ''),
+      cobertura: item.cobertura,
+      reglas: (item.cobertura?.esperada ?? []).map((clave) => {
+        const rule = persisted.get(clave);
+        return {
+          clave,
+          puntaje: rule && [1, 2, 3].includes(rule.puntaje)
+            ? rule.puntaje as 1 | 2 | 3
+            : '',
+          prioridad: String(rule?.prioridad ?? 0),
+          altoAutomatico: rule?.alto_automatico ?? false,
+          causaCodigo: rule?.causa_codigo ?? '',
+        };
+      }),
+    };
+  });
+}
+
+const RULE_LABELS: Record<string, string> = {
+  AV: 'Actividad vulnerable',
+  HUACHICOL: 'Hidrocarburos / huachicol',
+  DOBLE_USO: 'Bienes o actividades de doble uso',
+  PEP: 'Persona políticamente expuesta',
+  PEP_EXTRANJERO: 'PEP extranjero',
+  OSFL: 'Organización sin fines de lucro',
+  SIN_MARCA_ACTIVIDAD: 'Sin marca PLD especial',
+  GAFI_ALTO_RIESGO: 'Jurisdicción GAFI de alto riesgo',
+  GAFI_LISTA_GRIS: 'Jurisdicción bajo monitoreo GAFI',
+  REGIMEN_FISCAL_PREFERENTE: 'Régimen fiscal preferente',
+  SIN_MARCA_PLD: 'Sin marca geográfica PLD',
+};
+
+function getDetailedApiError(error: unknown, fallback: string): string {
+  const apiError = (error as {
+    response?: { data?: { error?: { mensaje?: unknown; detalles?: unknown } } };
+  })?.response?.data?.error;
+  const message = typeof apiError?.mensaje === 'string' && apiError.mensaje.trim()
+    ? apiError.mensaje.trim()
+    : getApiErrorMessage(error, fallback);
+  const details = Array.isArray(apiError?.detalles)
+    ? apiError.detalles.filter((detail): detail is string => typeof detail === 'string' && !!detail.trim())
+    : [];
+  return details.length > 0 ? `${message}: ${details.join(' · ')}` : message;
 }
 
 function MatrixSection({
@@ -74,6 +135,11 @@ function MatrixSection({
   onChange,
   onParameterChange,
   onSaveOptions,
+  conditionLabels,
+  savingRuleId,
+  rulesDisabled,
+  onSaveRules,
+  onRulesChange,
 }: {
   ambito: AmbitoMatriz;
   catalogo: CriterioCatalogoMatriz[];
@@ -83,6 +149,11 @@ function MatrixSection({
   onChange: (items: CriterioEditable[]) => void;
   onParameterChange: (items: CriterioEditable[]) => void;
   onSaveOptions: (item: CriterioEditable) => void;
+  conditionLabels: Record<string, string>;
+  savingRuleId: number | null;
+  rulesDisabled: boolean;
+  onSaveRules: (item: CriterioEditable) => void;
+  onRulesChange: (items: CriterioEditable[], criterioId?: number) => void;
 }) {
   const selectedIds = new Set(selected.map((item) => item.versionId));
   const available = catalogo.filter((item) => !selectedIds.has(item.version_vigente_id));
@@ -96,6 +167,7 @@ function MatrixSection({
         texto: item.nombre_visible_global,
         tipoResolucion: item.tipo_resolucion,
         opciones: ['', '', ''],
+        reglas: [],
       },
     ]);
   };
@@ -230,9 +302,135 @@ function MatrixSection({
               </p>
             ) : null}
             {ambito === 'GR' && ['CATALOGO_GLOBAL', 'DERIVADO', 'ESTRUCTURADO'].includes(item.tipoResolucion) ? (
-              <p className="mt-4 border-t border-border-light pt-4 text-sm text-text-secondary">
-                Se calcula automáticamente con datos del cliente y/o perfil transaccional.
-              </p>
+              <div className="mt-4 border-t border-border-light pt-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-text-primary">Reglas de evaluación</h3>
+                    <p className="mt-1 text-xs text-text-secondary">
+                      Asigna cómo valora la empresa cada condición detectada.
+                    </p>
+                  </div>
+                  <Badge variant={item.cobertura?.estado === 'COMPLETA' ? 'success' : 'warning'}>
+                    {item.cobertura?.estado === 'COMPLETA' ? 'Completa' : 'Incompleta'}
+                  </Badge>
+                </div>
+                {item.reglas.length === 0 ? (
+                  <p className="mt-3 rounded-card bg-surface-muted p-3 text-sm text-text-secondary">
+                    Guarda primero la composición y las dependencias PT para obtener las condiciones esperadas.
+                  </p>
+                ) : (
+                  <div className="mt-3 space-y-3">
+                    {item.reglas.map((rule, ruleIndex) => {
+                      const controlledPriority = item.codigo === 'DESTINO_RECURSOS_GR' ||
+                        item.codigo === 'PERFIL_TRANSACCIONAL';
+                      return (
+                        <div
+                          key={rule.clave}
+                          className="grid gap-3 rounded-card border border-border-light p-3 lg:grid-cols-[minmax(12rem,2fr)_8rem_8rem_10rem_minmax(12rem,2fr)]"
+                        >
+                          <div>
+                            <p className="text-sm font-medium text-text-primary">
+                              {RULE_LABELS[rule.clave] ?? conditionLabels[rule.clave] ?? rule.clave}
+                            </p>
+                            <p className="mt-1 break-all text-xs text-text-secondary">{rule.clave}</p>
+                          </div>
+                          <label className="text-xs font-medium text-text-secondary">
+                            Puntaje
+                            <select
+                              className="mt-1 h-10 w-full rounded-control border border-border-light bg-white px-3 text-sm text-text-primary disabled:bg-neutral-100"
+                              aria-label={`Puntaje para ${rule.clave}`}
+                              value={rule.puntaje}
+                              disabled={rulesDisabled}
+                              onChange={(event) => {
+                                const next = [...selected];
+                                const rules = [...item.reglas];
+                                const score = event.target.value === ''
+                                  ? ''
+                                  : Number(event.target.value) as 1 | 2 | 3;
+                                rules[ruleIndex] = { ...rule, puntaje: score };
+                                next[index] = { ...item, reglas: rules };
+                                onRulesChange(next, item.matrizCriterioId);
+                              }}
+                            >
+                              <option value="">Seleccionar puntaje</option>
+                              <option value="1">1</option>
+                              <option value="2">2</option>
+                              <option value="3">3</option>
+                            </select>
+                          </label>
+                          <label className="text-xs font-medium text-text-secondary">
+                            Prioridad
+                            <Input
+                              className="mt-1"
+                              inputMode="numeric"
+                              value={controlledPriority ? '0' : rule.prioridad}
+                              disabled={rulesDisabled || controlledPriority}
+                              onChange={(event) => {
+                                const next = [...selected];
+                                const rules = [...item.reglas];
+                                rules[ruleIndex] = { ...rule, prioridad: event.target.value };
+                                next[index] = { ...item, reglas: rules };
+                                onRulesChange(next, item.matrizCriterioId);
+                              }}
+                            />
+                          </label>
+                          <label className="flex items-center gap-2 text-sm font-medium text-text-primary lg:pt-6">
+                            <input
+                              type="checkbox"
+                              checked={rule.altoAutomatico}
+                              disabled={rulesDisabled}
+                              onChange={(event) => {
+                                const next = [...selected];
+                                const rules = [...item.reglas];
+                                rules[ruleIndex] = {
+                                  ...rule,
+                                  altoAutomatico: event.target.checked,
+                                  causaCodigo: event.target.checked ? rule.causaCodigo : '',
+                                };
+                                next[index] = { ...item, reglas: rules };
+                                onRulesChange(next, item.matrizCriterioId);
+                              }}
+                            />
+                            Alto automático
+                          </label>
+                          <label className="text-xs font-medium text-text-secondary">
+                            Causa
+                            <Input
+                              className="mt-1"
+                              maxLength={100}
+                              value={rule.causaCodigo}
+                              placeholder={rule.altoAutomatico ? 'Causa obligatoria' : 'No aplica'}
+                              disabled={rulesDisabled || !rule.altoAutomatico}
+                              onChange={(event) => {
+                                const next = [...selected];
+                                const rules = [...item.reglas];
+                                rules[ruleIndex] = { ...rule, causaCodigo: event.target.value };
+                                next[index] = { ...item, reglas: rules };
+                                onRulesChange(next, item.matrizCriterioId);
+                              }}
+                            />
+                          </label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {item.cobertura && item.cobertura.faltantes.length > 0 ? (
+                  <p className="mt-3 text-xs text-semantic-warning">
+                    Faltan: {item.cobertura.faltantes.join(', ')}
+                  </p>
+                ) : null}
+                {item.matrizCriterioId && item.reglas.length > 0 && !rulesDisabled ? (
+                  <Button
+                    className="mt-3"
+                    size="sm"
+                    disabled={savingRuleId === item.matrizCriterioId}
+                    onClick={() => onSaveRules(item)}
+                  >
+                    {savingRuleId === item.matrizCriterioId ? 'Guardando reglas…' : 'Guardar reglas'}
+                  </Button>
+                ) : null}
+              </div>
             ) : null}
           </div>
         ))}
@@ -355,6 +553,8 @@ export default function ConfigurarMatrizEmpresaPage() {
   const [saving, setSaving] = useState(false);
   const [savingParameterId, setSavingParameterId] = useState<number | null>(null);
   const [savingBands, setSavingBands] = useState<AmbitoMatriz | null>(null);
+  const [savingRuleId, setSavingRuleId] = useState<number | null>(null);
+  const [dirtyRuleIds, setDirtyRuleIds] = useState<Set<number>>(new Set());
   const [transitioning, setTransitioning] = useState(false);
   const [compositionDirty, setCompositionDirty] = useState(false);
   const [ptBandsDirty, setPtBandsDirty] = useState(false);
@@ -394,6 +594,7 @@ export default function ConfigurarMatrizEmpresaPage() {
         setCompositionDirty(false);
         setPtBandsDirty(false);
         setGrBandsDirty(false);
+        setDirtyRuleIds(new Set());
         setNotFoundDraft(false);
       } catch (requestError: unknown) {
         const status = (requestError as { response?: { status?: number } })?.response?.status;
@@ -406,6 +607,7 @@ export default function ConfigurarMatrizEmpresaPage() {
           setCompositionDirty(false);
           setPtBandsDirty(false);
           setGrBandsDirty(false);
+          setDirtyRuleIds(new Set());
           setNotFoundDraft(true);
         } else {
           throw requestError;
@@ -433,7 +635,31 @@ export default function ConfigurarMatrizEmpresaPage() {
     () => [...criteriosPt, ...criteriosGr].some((item) => !item.texto.trim()),
     [criteriosPt, criteriosGr],
   );
-  const hasPendingChanges = compositionDirty || ptBandsDirty || grBandsDirty;
+  const hasPendingChanges = compositionDirty || ptBandsDirty || grBandsDirty || dirtyRuleIds.size > 0;
+  const ruleConditionLabels = useMemo(() => {
+    const labels: Record<string, string> = {};
+    const destination = draft?.criterios_pt.find(
+      (criterion) => criterion.codigo === 'DESTINO_RECURSOS_PT',
+    );
+    destination?.opciones.forEach((option) => { labels[option.codigo] = option.etiqueta; });
+    draft?.resultados_pt.forEach((result) => { labels[result.codigo] = result.nombre; });
+    return labels;
+  }, [draft]);
+  const mergeSavedGrCriteria = (
+    savedCriteria: CriterioBorradorMatriz[],
+    current: CriterioEditable[],
+    justSavedId?: number,
+  ) => {
+    const currentById = new Map(current.map((criterion) => [criterion.matrizCriterioId, criterion]));
+    return toEditable(savedCriteria).map((criterion) => {
+      const currentCriterion = currentById.get(criterion.matrizCriterioId);
+      return criterion.matrizCriterioId !== justSavedId &&
+        criterion.matrizCriterioId !== undefined &&
+        dirtyRuleIds.has(criterion.matrizCriterioId) && currentCriterion
+        ? { ...criterion, reglas: currentCriterion.reglas }
+        : criterion;
+    });
+  };
 
   const createDraft = async () => {
     setCreating(true);
@@ -490,6 +716,7 @@ export default function ConfigurarMatrizEmpresaPage() {
       setCriteriosPt(toEditable(saved.criterios_pt));
       setCriteriosGr(toEditable(saved.criterios_gr));
       setCompositionDirty(false);
+      setDirtyRuleIds(new Set());
       setSuccess('Composición guardada correctamente.');
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, 'No fue posible guardar la composición'));
@@ -518,12 +745,6 @@ export default function ConfigurarMatrizEmpresaPage() {
           criterion,
         ]),
       );
-      const savedGrByVersion = new Map(
-        saved.criterios_gr.map((criterion) => [
-          criterion.catalogo_criterio_version_id,
-          criterion,
-        ]),
-      );
       const refreshParameters = (
         criteria: CriterioEditable[],
         savedByVersion: Map<number, CriterioBorradorMatriz>,
@@ -538,7 +759,7 @@ export default function ConfigurarMatrizEmpresaPage() {
           : criterion;
       });
       setCriteriosPt((current) => refreshParameters(current, savedPtByVersion));
-      setCriteriosGr((current) => refreshParameters(current, savedGrByVersion));
+      setCriteriosGr((current) => mergeSavedGrCriteria(saved.criterios_gr, current));
       setSuccess('Respuestas del criterio guardadas correctamente.');
     } catch (requestError) {
       setError(getApiErrorMessage(
@@ -547,6 +768,59 @@ export default function ConfigurarMatrizEmpresaPage() {
       ));
     } finally {
       setSavingParameterId(null);
+    }
+  };
+
+  const saveRules = async (item: CriterioEditable) => {
+    if (!draft || !item.matrizCriterioId || item.reglas.length === 0) return;
+    const controlledPriority = item.codigo === 'DESTINO_RECURSOS_GR' ||
+      item.codigo === 'PERFIL_TRANSACCIONAL';
+    const payload: ReglaMatrizGrInput[] = [];
+    for (const rule of item.reglas) {
+      const priority = controlledPriority ? 0 : Number(rule.prioridad);
+      if (
+        ![1, 2, 3].includes(Number(rule.puntaje)) ||
+        !Number.isSafeInteger(priority) || priority < 0 || priority > 2147483647 ||
+        (rule.altoAutomatico && (!rule.causaCodigo.trim() || rule.causaCodigo.trim().length > 100))
+      ) {
+        setError('Completa todos los puntajes, prioridades y causas antes de guardar las reglas.');
+        setSuccess('');
+        return;
+      }
+      payload.push({
+        clave: rule.clave,
+        puntaje: Number(rule.puntaje) as 1 | 2 | 3,
+        prioridad: priority,
+        alto_automatico: rule.altoAutomatico,
+        causa_codigo: rule.altoAutomatico ? rule.causaCodigo.trim() : null,
+      });
+    }
+    setSavingRuleId(item.matrizCriterioId);
+    setError('');
+    setSuccess('');
+    try {
+      const saved = await guardarReglasMatrizGr(
+        empresaId,
+        draft.id,
+        item.matrizCriterioId,
+        payload,
+      );
+      setDraft(saved);
+      setCriteriosGr((current) => (
+        mergeSavedGrCriteria(saved.criterios_gr, current, item.matrizCriterioId)
+      ));
+      if (!ptBandsDirty) setBandasPt(toBands(saved.resultados_pt));
+      if (!grBandsDirty) setBandasGr(toBands(saved.resultados_gr));
+      setDirtyRuleIds((current) => {
+        const next = new Set(current);
+        next.delete(item.matrizCriterioId!);
+        return next;
+      });
+      setSuccess(`Reglas de ${item.texto} guardadas correctamente.`);
+    } catch (requestError) {
+      setError(getDetailedApiError(requestError, 'No fue posible guardar las reglas GR.'));
+    } finally {
+      setSavingRuleId(null);
     }
   };
 
@@ -569,6 +843,7 @@ export default function ConfigurarMatrizEmpresaPage() {
         })),
       );
       setDraft(saved);
+      setCriteriosGr((current) => mergeSavedGrCriteria(saved.criterios_gr, current));
       if (ambito === 'PT') {
         setBandasPt(toBands(saved.resultados_pt));
         setPtBandsDirty(false);
@@ -605,6 +880,7 @@ export default function ConfigurarMatrizEmpresaPage() {
       setCompositionDirty(false);
       setPtBandsDirty(false);
       setGrBandsDirty(false);
+      setDirtyRuleIds(new Set());
       setSuccess(
         action === 'VALIDAR' ? 'Matriz validada correctamente.'
           : action === 'PUBLICAR' ? 'Matriz publicada. Ya puede activarse.'
@@ -612,7 +888,7 @@ export default function ConfigurarMatrizEmpresaPage() {
               : 'Matriz activada correctamente.',
       );
     } catch (requestError) {
-      setError(getApiErrorMessage(
+      setError(getDetailedApiError(
         requestError,
         action === 'ACTIVAR'
           ? 'No fue posible activar; verifica que no exista otra matriz activa.'
@@ -716,7 +992,25 @@ export default function ConfigurarMatrizEmpresaPage() {
             {draft.version_origen_id ? (
               <span>Origen histórico #{draft.version_origen_id}</span>
             ) : null}
+            <Badge variant={draft.cobertura_gr.estado === 'COMPLETA' ? 'success' : 'warning'}>
+              Reglas GR: {draft.cobertura_gr.estado === 'COMPLETA' ? 'completa' : 'incompleta'}
+            </Badge>
           </div>
+
+          {draft.cobertura_gr.estado === 'INCOMPLETA' ? (
+            <Alert variant="warning">
+              <div>
+                <p className="font-semibold">La configuración GR todavía no puede validarse.</p>
+                {draft.cobertura_gr.detalles.length > 0 ? (
+                  <ul className="mt-2 list-disc space-y-1 pl-5">
+                    {draft.cobertura_gr.detalles.map((detail, index) => (
+                      <li key={`${detail}-${index}`}>{detail}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            </Alert>
+          ) : null}
 
           <MatrixSection
             ambito="PT"
@@ -730,6 +1024,11 @@ export default function ConfigurarMatrizEmpresaPage() {
             }}
             onParameterChange={setCriteriosPt}
             onSaveOptions={saveOptions}
+            conditionLabels={ruleConditionLabels}
+            savingRuleId={savingRuleId}
+            rulesDisabled
+            onSaveRules={saveRules}
+            onRulesChange={setCriteriosPt}
           />
           <MatrixSection
             ambito="GR"
@@ -743,6 +1042,19 @@ export default function ConfigurarMatrizEmpresaPage() {
             }}
             onParameterChange={setCriteriosGr}
             onSaveOptions={saveOptions}
+            conditionLabels={ruleConditionLabels}
+            savingRuleId={savingRuleId}
+            rulesDisabled={
+              draft.estado_editorial !== 'BORRADOR' || draft.activa || compositionDirty ||
+              saving || savingRuleId !== null
+            }
+            onSaveRules={saveRules}
+            onRulesChange={(items, criterioId) => {
+              setCriteriosGr(items);
+              if (criterioId !== undefined) {
+                setDirtyRuleIds((current) => new Set(current).add(criterioId));
+              }
+            }}
           />
 
           {invalidLabels ? (
@@ -759,7 +1071,10 @@ export default function ConfigurarMatrizEmpresaPage() {
             ambito="PT"
             criterionCount={criteriosPt.length}
             bands={bandasPt}
-            disabled={draft.estado_editorial !== 'BORRADOR' || savingBands !== null || transitioning}
+            disabled={
+              draft.estado_editorial !== 'BORRADOR' || savingBands !== null ||
+              savingRuleId !== null || transitioning
+            }
             saving={savingBands === 'PT'}
             onChange={(bands) => {
               setBandasPt(bands);
@@ -771,7 +1086,10 @@ export default function ConfigurarMatrizEmpresaPage() {
             ambito="GR"
             criterionCount={criteriosGr.length}
             bands={bandasGr}
-            disabled={draft.estado_editorial !== 'BORRADOR' || savingBands !== null || transitioning}
+            disabled={
+              draft.estado_editorial !== 'BORRADOR' || savingBands !== null ||
+              savingRuleId !== null || transitioning
+            }
             saving={savingBands === 'GR'}
             onChange={(bands) => {
               setBandasGr(bands);
@@ -811,7 +1129,10 @@ export default function ConfigurarMatrizEmpresaPage() {
             <div className="flex flex-wrap justify-end gap-3">
               {draft.estado_editorial === 'BORRADOR' ? (
               <Button
-                disabled={transitioning || saving || savingBands !== null || hasPendingChanges}
+                disabled={
+                  transitioning || saving || savingBands !== null || hasPendingChanges ||
+                  draft.cobertura_gr.estado !== 'COMPLETA'
+                }
                 onClick={() => void changeState('VALIDAR')}
               >
                 {transitioning ? 'Validando…' : 'Validar matriz'}
