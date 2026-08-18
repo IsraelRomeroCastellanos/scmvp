@@ -139,9 +139,6 @@ export type ResultadosInput = {
 export type ReglaConfiguracionInput = {
   clave: string;
   puntaje: 1 | 2 | 3;
-  prioridad: number;
-  alto_automatico: boolean;
-  causa_codigo: string | null;
 };
 
 export type ReglasCriterioInput = { reglas: ReglaConfiguracionInput[] };
@@ -1507,6 +1504,28 @@ function generateRuleCode(criterionCode: string, key: string): string {
   return `GR_${criterionCode}_${digest}`;
 }
 
+const TECHNICAL_PRIORITY_BLOCK_SIZE = 1000;
+
+function technicalRulePriority(
+  criterionCode: string,
+  key: string,
+  score: 1 | 2 | 3,
+): number {
+  if (criterionCode === 'DESTINO_RECURSOS_GR' || criterionCode === 'PERFIL_TRANSACCIONAL') {
+    return 0;
+  }
+  const canonicalKeys: readonly string[] | null = criterionCode === 'ACTIVIDAD_ECONOMICA'
+    ? ACTIVITY_MARKS
+    : criterionCode === 'ZONA_GEOGRAFICA'
+      ? GEOGRAPHIC_MARKS
+      : null;
+  const canonicalRank = canonicalKeys?.indexOf(key) ?? -1;
+  if (canonicalRank < 0) throw new ConfiguracionMatrizError('REGLAS_INVALIDAS');
+  // El ranking sólo desempata técnicamente marcas con igual valoración. No expresa
+  // una preferencia jurídica o empresarial y nunca cambia el puntaje configurado.
+  return score * TECHNICAL_PRIORITY_BLOCK_SIZE + canonicalRank + 1;
+}
+
 export async function replaceCompanyMatrixCriterionRules(
   db: Pool,
   empresaId: number,
@@ -1577,14 +1596,7 @@ export async function replaceCompanyMatrixCriterionRules(
     const isControlled = criterion.codigo === 'DESTINO_RECURSOS_GR' ||
       criterion.codigo === 'PERFIL_TRANSACCIONAL';
     const invalid = input.reglas.filter((rule) =>
-      !Number.isSafeInteger(rule.puntaje) || ![1, 2, 3].includes(rule.puntaje) ||
-      !Number.isSafeInteger(rule.prioridad) || rule.prioridad < 0 || rule.prioridad > 2147483647 ||
-      (isControlled && rule.prioridad !== 0) ||
-      typeof rule.alto_automatico !== 'boolean' ||
-      (rule.alto_automatico &&
-        (typeof rule.causa_codigo !== 'string' || !rule.causa_codigo.trim() ||
-          rule.causa_codigo.length > 100)) ||
-      (!rule.alto_automatico && rule.causa_codigo !== null)
+      !Number.isSafeInteger(rule.puntaje) || ![1, 2, 3].includes(rule.puntaje)
     ).map((rule) => rule.clave);
     const details = [
       ...missing.map((key) => `Regla faltante: ${key}`),
@@ -1613,9 +1625,9 @@ export async function replaceCompanyMatrixCriterionRules(
           isControlled ? null : rule.clave,
           isControlled ? rule.clave : null,
           rule.puntaje,
-          rule.prioridad,
-          rule.alto_automatico,
-          rule.alto_automatico ? rule.causa_codigo : null,
+          technicalRulePriority(criterion.codigo, rule.clave, rule.puntaje),
+          false,
+          null,
         ],
       );
     }

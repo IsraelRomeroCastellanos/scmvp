@@ -585,6 +585,16 @@ La validación del Excel y la configuración operativa KYC son controles distint
 
 Esta decisión no crea un estado editorial nuevo ni modifica el flujo `BORRADOR -> VALIDADA -> PUBLICADA -> ACTIVA`.
 
+### 2.14 Configuración simplificada de reglas GR V1
+
+El configurador V1 solicita al Administrador exclusivamente la valoración empresarial de cada condición GR: `Bajo`, `Medio` o `Alto`. El sistema persiste internamente la equivalencia `Bajo = 1`, `Medio = 2` y `Alto = 3`.
+
+La prioridad es un detalle técnico generado por el sistema para resolver de forma determinista la coexistencia de marcas; no es una valoración jurídica o empresarial adicional. En `DESTINO_RECURSOS_GR` y `PERFIL_TRANSACCIONAL` la prioridad interna es `0`.
+
+`alto_automatico` y `causa_codigo` no son configurables en V1. Todas las reglas guardadas por este configurador persisten `alto_automatico = false` y `causa_codigo = null`. Cualquier política especial futura requiere aprobación funcional y versionado explícitos antes de incorporarse.
+
+Los archivos Excel y los materiales CAVIACE son referencias funcionales. No constituyen una plantilla literal de la interfaz ni definen por sí solos el flujo operativo del configurador.
+
 ## 3. Pendiente
 
 Las siguientes decisiones no están aprobadas por este contrato y no deben inferirse del archivo de muestra:
@@ -604,9 +614,9 @@ Mientras estas decisiones sigan pendientes, no se consideran aprobados:
 - totales visibles fuera de los controles opcionales `C19:E19` de ambas hojas;
 - claves técnicas KYC;
 - catálogos KYC;
-- reglas especiales;
-- prioridades u *overrides*;
-- motores de reglas;
+- reglas especiales, salvo la configuración simplificada GR V1 definida en 2.14;
+- prioridades u *overrides* distintos del mecanismo técnico GR V1 definido en 2.14;
+- motores de reglas distintos del mecanismo ejecutable GR V1 definido en 2.14;
 - columnas adicionales que no estén presentes en el ejemplo;
 - un parser definitivo.
 
