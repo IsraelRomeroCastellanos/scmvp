@@ -199,29 +199,17 @@ function parseRulesBody(body: unknown): ReglasCriterioInput | null {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
     const rule = value as Record<string, unknown>;
     if (
-      Object.keys(rule).length !== 5 ||
-      Object.keys(rule).some(
-        (key) => !['clave', 'puntaje', 'prioridad', 'alto_automatico', 'causa_codigo'].includes(key),
-      )
+      Object.keys(rule).length !== 2 ||
+      Object.keys(rule).some((key) => !['clave', 'puntaje'].includes(key))
     ) return null;
     if (
       typeof rule.clave !== 'string' || !rule.clave || rule.clave !== rule.clave.trim() ||
       rule.clave.length > 100 || !Number.isSafeInteger(rule.puntaje) ||
-      ![1, 2, 3].includes(Number(rule.puntaje)) ||
-      !Number.isSafeInteger(rule.prioridad) || Number(rule.prioridad) < 0 ||
-      Number(rule.prioridad) > 2147483647 || typeof rule.alto_automatico !== 'boolean' ||
-      (rule.causa_codigo !== null &&
-        (typeof rule.causa_codigo !== 'string' || !rule.causa_codigo.trim() ||
-          rule.causa_codigo.trim().length > 100)) ||
-      (rule.alto_automatico === true && rule.causa_codigo === null) ||
-      (rule.alto_automatico === false && rule.causa_codigo !== null)
+      ![1, 2, 3].includes(Number(rule.puntaje))
     ) return null;
     rules.push({
       clave: rule.clave,
       puntaje: Number(rule.puntaje) as 1 | 2 | 3,
-      prioridad: Number(rule.prioridad),
-      alto_automatico: rule.alto_automatico,
-      causa_codigo: typeof rule.causa_codigo === 'string' ? rule.causa_codigo.trim() : null,
     });
   }
   return { reglas: rules };

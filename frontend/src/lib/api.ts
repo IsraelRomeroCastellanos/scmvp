@@ -220,9 +220,6 @@ export interface ResultadoMatrizEmpresa {
 export type ReglaMatrizGrInput = {
   clave: string;
   puntaje: 1 | 2 | 3;
-  prioridad: number;
-  alto_automatico: boolean;
-  causa_codigo: string | null;
 };
 
 export async function obtenerCatalogoCriteriosMatriz(

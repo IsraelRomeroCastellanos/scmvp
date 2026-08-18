@@ -52,9 +52,6 @@ type CriterioEditable = {
 type ReglaEditable = {
   clave: string;
   puntaje: '' | 1 | 2 | 3;
-  prioridad: string;
-  altoAutomatico: boolean;
-  causaCodigo: string;
 };
 
 type BandaEditable = { nombre: string; minimo: string; maximo: string };
@@ -90,9 +87,6 @@ function toEditable(items: CriterioBorradorMatriz[]): CriterioEditable[] {
           puntaje: rule && [1, 2, 3].includes(rule.puntaje)
             ? rule.puntaje as 1 | 2 | 3
             : '',
-          prioridad: String(rule?.prioridad ?? 0),
-          altoAutomatico: rule?.alto_automatico ?? false,
-          causaCodigo: rule?.causa_codigo ?? '',
         };
       }),
     };
@@ -320,99 +314,40 @@ function MatrixSection({
                   </p>
                 ) : (
                   <div className="mt-3 space-y-3">
-                    {item.reglas.map((rule, ruleIndex) => {
-                      const controlledPriority = item.codigo === 'DESTINO_RECURSOS_GR' ||
-                        item.codigo === 'PERFIL_TRANSACCIONAL';
-                      return (
-                        <div
-                          key={rule.clave}
-                          className="grid gap-3 rounded-card border border-border-light p-3 lg:grid-cols-[minmax(12rem,2fr)_8rem_8rem_10rem_minmax(12rem,2fr)]"
-                        >
-                          <div>
-                            <p className="text-sm font-medium text-text-primary">
-                              {RULE_LABELS[rule.clave] ?? conditionLabels[rule.clave] ?? rule.clave}
-                            </p>
-                            <p className="mt-1 break-all text-xs text-text-secondary">{rule.clave}</p>
-                          </div>
-                          <label className="text-xs font-medium text-text-secondary">
-                            Puntaje
-                            <select
-                              className="mt-1 h-10 w-full rounded-control border border-border-light bg-white px-3 text-sm text-text-primary disabled:bg-neutral-100"
-                              aria-label={`Puntaje para ${rule.clave}`}
-                              value={rule.puntaje}
-                              disabled={rulesDisabled}
-                              onChange={(event) => {
-                                const next = [...selected];
-                                const rules = [...item.reglas];
-                                const score = event.target.value === ''
-                                  ? ''
-                                  : Number(event.target.value) as 1 | 2 | 3;
-                                rules[ruleIndex] = { ...rule, puntaje: score };
-                                next[index] = { ...item, reglas: rules };
-                                onRulesChange(next, item.matrizCriterioId);
-                              }}
-                            >
-                              <option value="">Seleccionar puntaje</option>
-                              <option value="1">1</option>
-                              <option value="2">2</option>
-                              <option value="3">3</option>
-                            </select>
-                          </label>
-                          <label className="text-xs font-medium text-text-secondary">
-                            Prioridad
-                            <Input
-                              className="mt-1"
-                              inputMode="numeric"
-                              value={controlledPriority ? '0' : rule.prioridad}
-                              disabled={rulesDisabled || controlledPriority}
-                              onChange={(event) => {
-                                const next = [...selected];
-                                const rules = [...item.reglas];
-                                rules[ruleIndex] = { ...rule, prioridad: event.target.value };
-                                next[index] = { ...item, reglas: rules };
-                                onRulesChange(next, item.matrizCriterioId);
-                              }}
-                            />
-                          </label>
-                          <label className="flex items-center gap-2 text-sm font-medium text-text-primary lg:pt-6">
-                            <input
-                              type="checkbox"
-                              checked={rule.altoAutomatico}
-                              disabled={rulesDisabled}
-                              onChange={(event) => {
-                                const next = [...selected];
-                                const rules = [...item.reglas];
-                                rules[ruleIndex] = {
-                                  ...rule,
-                                  altoAutomatico: event.target.checked,
-                                  causaCodigo: event.target.checked ? rule.causaCodigo : '',
-                                };
-                                next[index] = { ...item, reglas: rules };
-                                onRulesChange(next, item.matrizCriterioId);
-                              }}
-                            />
-                            Alto automático
-                          </label>
-                          <label className="text-xs font-medium text-text-secondary">
-                            Causa
-                            <Input
-                              className="mt-1"
-                              maxLength={100}
-                              value={rule.causaCodigo}
-                              placeholder={rule.altoAutomatico ? 'Causa obligatoria' : 'No aplica'}
-                              disabled={rulesDisabled || !rule.altoAutomatico}
-                              onChange={(event) => {
-                                const next = [...selected];
-                                const rules = [...item.reglas];
-                                rules[ruleIndex] = { ...rule, causaCodigo: event.target.value };
-                                next[index] = { ...item, reglas: rules };
-                                onRulesChange(next, item.matrizCriterioId);
-                              }}
-                            />
-                          </label>
-                        </div>
-                      );
-                    })}
+                    {item.reglas.map((rule, ruleIndex) => (
+                      <div
+                        key={rule.clave}
+                        className="grid gap-3 rounded-card border border-border-light p-3 sm:grid-cols-[minmax(12rem,1fr)_14rem] sm:items-end"
+                      >
+                        <p className="text-sm font-medium text-text-primary sm:pb-3">
+                          {RULE_LABELS[rule.clave] ?? conditionLabels[rule.clave] ?? 'Condición'}
+                        </p>
+                        <label className="text-xs font-medium text-text-secondary">
+                          Valoración
+                          <select
+                            className="mt-1 h-10 w-full rounded-control border border-border-light bg-white px-3 text-sm text-text-primary disabled:bg-neutral-100"
+                            aria-label={`Valoración para ${RULE_LABELS[rule.clave] ?? conditionLabels[rule.clave] ?? 'condición'}`}
+                            value={rule.puntaje}
+                            disabled={rulesDisabled}
+                            onChange={(event) => {
+                              const next = [...selected];
+                              const rules = [...item.reglas];
+                              const score = event.target.value === ''
+                                ? ''
+                                : Number(event.target.value) as 1 | 2 | 3;
+                              rules[ruleIndex] = { ...rule, puntaje: score };
+                              next[index] = { ...item, reglas: rules };
+                              onRulesChange(next, item.matrizCriterioId);
+                            }}
+                          >
+                            <option value="">Seleccionar valoración</option>
+                            <option value="1">Bajo</option>
+                            <option value="2">Medio</option>
+                            <option value="3">Alto</option>
+                          </select>
+                        </label>
+                      </div>
+                    ))}
                   </div>
                 )}
                 {item.cobertura && item.cobertura.faltantes.length > 0 ? (
@@ -773,26 +708,16 @@ export default function ConfigurarMatrizEmpresaPage() {
 
   const saveRules = async (item: CriterioEditable) => {
     if (!draft || !item.matrizCriterioId || item.reglas.length === 0) return;
-    const controlledPriority = item.codigo === 'DESTINO_RECURSOS_GR' ||
-      item.codigo === 'PERFIL_TRANSACCIONAL';
     const payload: ReglaMatrizGrInput[] = [];
     for (const rule of item.reglas) {
-      const priority = controlledPriority ? 0 : Number(rule.prioridad);
-      if (
-        ![1, 2, 3].includes(Number(rule.puntaje)) ||
-        !Number.isSafeInteger(priority) || priority < 0 || priority > 2147483647 ||
-        (rule.altoAutomatico && (!rule.causaCodigo.trim() || rule.causaCodigo.trim().length > 100))
-      ) {
-        setError('Completa todos los puntajes, prioridades y causas antes de guardar las reglas.');
+      if (![1, 2, 3].includes(Number(rule.puntaje))) {
+        setError('Selecciona una valoración para todas las condiciones antes de guardar.');
         setSuccess('');
         return;
       }
       payload.push({
         clave: rule.clave,
         puntaje: Number(rule.puntaje) as 1 | 2 | 3,
-        prioridad: priority,
-        alto_automatico: rule.altoAutomatico,
-        causa_codigo: rule.altoAutomatico ? rule.causaCodigo.trim() : null,
       });
     }
     setSavingRuleId(item.matrizCriterioId);
