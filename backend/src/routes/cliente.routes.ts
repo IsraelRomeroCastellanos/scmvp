@@ -21,6 +21,14 @@ import {
   parsePerfilTransaccionalV1Body,
   PerfilTransaccionalV1Error,
 } from '../services/perfil-transaccional-v1.service';
+import {
+  crearGradoRiesgoV1,
+  GradoRiesgoV1Error,
+} from '../services/grado-riesgo-v1.service';
+import { GrActividadEconomicaError } from '../services/gr-actividad-economica-resolver.service';
+import { GrZonaGeograficaError } from '../services/gr-zona-geografica-resolver.service';
+import { GrDestinoRecursosError } from '../services/gr-destino-recursos-resolver.service';
+import { GrPerfilTransaccionalError } from '../services/gr-perfil-transaccional-resolver.service';
 
 const router = Router();
 
@@ -1988,6 +1996,75 @@ function perfilTransaccionalV1Error(
   return res.status(status).json({ error: { codigo, mensaje } });
 }
 
+function gradoRiesgoV1Error(
+  res: Response,
+  status: number,
+  codigo: string,
+  mensaje: string,
+) {
+  return res.status(status).json({ error: { codigo, mensaje } });
+}
+
+type GradoRiesgoV1Body = {
+  matrizVersionId: number;
+  ptEvaluacionId: number;
+};
+
+function parseGradoRiesgoV1Body(body: unknown): GradoRiesgoV1Body | null {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) return null;
+  const value = body as Record<string, unknown>;
+  const keys = Object.keys(value);
+  if (
+    keys.length !== 2
+    || !Object.prototype.hasOwnProperty.call(value, 'matriz_version_id')
+    || !Object.prototype.hasOwnProperty.call(value, 'pt_evaluacion_id')
+  ) return null;
+
+  const matrizVersionId = value.matriz_version_id;
+  const ptEvaluacionId = value.pt_evaluacion_id;
+  if (
+    typeof matrizVersionId !== 'number'
+    || !Number.isSafeInteger(matrizVersionId)
+    || matrizVersionId <= 0
+    || typeof ptEvaluacionId !== 'number'
+    || !Number.isSafeInteger(ptEvaluacionId)
+    || ptEvaluacionId <= 0
+  ) return null;
+
+  return { matrizVersionId, ptEvaluacionId };
+}
+
+function mapGradoRiesgoV1DomainError(error: unknown): {
+  status: number;
+  codigo: string;
+  mensaje: string;
+} | null {
+  const isKnownError = error instanceof GradoRiesgoV1Error
+    || error instanceof GrActividadEconomicaError
+    || error instanceof GrZonaGeograficaError
+    || error instanceof GrDestinoRecursosError
+    || error instanceof GrPerfilTransaccionalError;
+  if (!isKnownError) return null;
+
+  const notFoundCodes = new Set([
+    'GR_CLIENTE_NO_ENCONTRADO',
+    'GR_MATRIZ_NO_ENCONTRADA',
+    'GR_PT_NO_ENCONTRADO',
+    'GR_ACTIVIDAD_CLIENTE_NO_ENCONTRADO',
+    'GR_ZONA_CLIENTE_NO_ENCONTRADO',
+    'GR_DESTINO_PT_EVALUACION_NO_ENCONTRADA',
+    'GR_PERFIL_PT_EVALUACION_NO_ENCONTRADA',
+  ]);
+  const status = error.code === 'GR_USUARIO_INVALIDO'
+    ? 403
+    : notFoundCodes.has(error.code)
+      ? 404
+      : error.code === 'GR_PERSISTENCIA_INCOMPLETA'
+        ? 500
+        : 409;
+  return { status, codigo: error.code, mensaje: error.message };
+}
+
 router.get(
   '/clientes/:id/perfil-transaccional-v1',
   authenticate,
@@ -2068,6 +2145,114 @@ router.post(
         500,
         'PT_CREACION_ERROR',
         'No fue posible crear el Perfil Transaccional',
+      );
+    }
+  },
+);
+
+router.post(
+  '/clientes/:id/grado-riesgo-v1',
+  authenticate,
+  authorizeRoles('admin', 'consultor'),
+  async (req: Request, res: Response) => {
+    const clienteId = parsePositiveInt(req.params.id);
+    if (!clienteId) {
+      return gradoRiesgoV1Error(
+        res,
+        400,
+        'GR_SOLICITUD_INVALIDA',
+        'El identificador del cliente no es valido',
+      );
+    }
+
+    const body = parseGradoRiesgoV1Body(req.body);
+    if (!body) {
+      return gradoRiesgoV1Error(
+        res,
+        400,
+        'GR_SOLICITUD_INVALIDA',
+        'El cuerpo debe contener exclusivamente matriz_version_id y pt_evaluacion_id como enteros positivos',
+      );
+    }
+
+    const actorUsuarioId = req.user?.id;
+    if (
+      typeof actorUsuarioId !== 'number'
+      || !Number.isSafeInteger(actorUsuarioId)
+      || actorUsuarioId <= 0
+    ) {
+      return gradoRiesgoV1Error(
+        res,
+        403,
+        'GR_USUARIO_INVALIDO',
+        'No fue posible identificar al usuario autenticado',
+      );
+    }
+
+    const rol = req.user?.rol;
+    let empresaId: number;
+    try {
+      if (rol === 'consultor') {
+        const consultorEmpresaId = req.user?.empresa_id;
+        if (
+          typeof consultorEmpresaId !== 'number'
+          || !Number.isSafeInteger(consultorEmpresaId)
+          || consultorEmpresaId <= 0
+        ) {
+          return gradoRiesgoV1Error(
+            res,
+            403,
+            'GR_USUARIO_INVALIDO',
+            'No fue posible identificar la empresa del consultor',
+          );
+        }
+        const cliente = await pool.query<{ empresa_id: number }>(
+          'SELECT empresa_id FROM public.clientes WHERE id = $1 AND empresa_id = $2',
+          [clienteId, consultorEmpresaId],
+        );
+        if (cliente.rows.length === 0) {
+          return gradoRiesgoV1Error(res, 404, 'GR_CLIENTE_NO_ENCONTRADO', 'Cliente no encontrado');
+        }
+        empresaId = consultorEmpresaId;
+      } else {
+        const cliente = await pool.query<{ empresa_id: number }>(
+          'SELECT empresa_id FROM public.clientes WHERE id = $1',
+          [clienteId],
+        );
+        if (cliente.rows.length === 0) {
+          return gradoRiesgoV1Error(res, 404, 'GR_CLIENTE_NO_ENCONTRADO', 'Cliente no encontrado');
+        }
+        empresaId = Number(cliente.rows[0].empresa_id);
+        if (!Number.isSafeInteger(empresaId) || empresaId <= 0) {
+          return gradoRiesgoV1Error(
+            res,
+            409,
+            'GR_EMPRESA_INCONSISTENTE',
+            'El cliente no tiene una empresa valida',
+          );
+        }
+      }
+
+      const resultado = await crearGradoRiesgoV1(
+        pool,
+        clienteId,
+        empresaId,
+        body.matrizVersionId,
+        body.ptEvaluacionId,
+        actorUsuarioId,
+      );
+      return res.status(resultado.idempotente ? 200 : 201).json({ data: resultado });
+    } catch (error) {
+      const mapped = mapGradoRiesgoV1DomainError(error);
+      if (mapped) {
+        return gradoRiesgoV1Error(res, mapped.status, mapped.codigo, mapped.mensaje);
+      }
+      console.error('Error inesperado al generar Grado de Riesgo V1');
+      return gradoRiesgoV1Error(
+        res,
+        500,
+        'GR_CREACION_ERROR',
+        'No fue posible generar el Grado de Riesgo',
       );
     }
   },
