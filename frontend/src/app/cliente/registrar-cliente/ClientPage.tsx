@@ -1141,10 +1141,33 @@ function valueToCatalogKey(v: string) {
           }))
           .filter((item: CatalogItem) => item.clave && item.descripcion);
 
+        const girosData = (
+          await api.get<{
+            giros_mercantiles: Array<{
+              id?: string | number;
+              clave?: unknown;
+              descripcion?: unknown;
+            }>;
+          }>("/api/catalogos/giros-mercantiles", {
+            signal: controller.signal,
+          })
+        ).data;
+        if (!Array.isArray(girosData?.giros_mercantiles)) {
+          throw new Error("La respuesta del catálogo de giros mercantiles no es válida");
+        }
+
+        const girosApi: CatalogItem[] = girosData.giros_mercantiles
+          .map((item) => ({
+            id: item?.id,
+            clave: String(item?.clave ?? "").trim(),
+            descripcion: String(item?.descripcion ?? "").trim(),
+          }))
+          .filter((item: CatalogItem) => item.clave && item.descripcion);
+
         const [p, a, g] = await Promise.all([
           Promise.resolve(paisesApi),
           Promise.resolve(actividadesApi),
-          loadCatalogo("internos/giro_mercantil"),
+          Promise.resolve(girosApi),
         ]);
         if (!active) return;
         setPaises(p);
@@ -3542,7 +3565,7 @@ persona: {
             fecha_constitucion: pmFechaNorm,
             giro_mercantil: giro
               ? { clave: giro.clave, descripcion: giro.descripcion }
-              : pmGiro,
+              : undefined,
             subtipo_pm: pmSubtipoPm.trim(),
             rsi_aplica: pmSubtipoPm.trim() === "pm_rsi",
             rsi_subtipo: pmSubtipoPm.trim() === "pm_rsi" ? pmRsiSubtipo.trim() : null,

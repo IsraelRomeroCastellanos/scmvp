@@ -14,7 +14,7 @@ import {
   buildBeneficiariosControladoresContract,
   validateBeneficiariosControladores,
 } from '../../registrar-cliente/validate';
-import {
+import api, {
   actualizarCliente,
   getApiErrorMessage,
   isApiRequestCanceled,
@@ -1045,6 +1045,53 @@ export default function Page() {
       alive = false;
     };
   }, []);
+
+  useEffect(() => {
+    let alive = true;
+    const controller = new AbortController();
+
+    Promise.all([
+      api.get<{ actividades_economicas: CatalogItem[] }>(
+        '/api/catalogos/actividades-economicas',
+        { signal: controller.signal },
+      ),
+      api.get<{ giros_mercantiles: CatalogItem[] }>(
+        '/api/catalogos/giros-mercantiles',
+        { signal: controller.signal },
+      ),
+    ])
+      .then(([actividadesResponse, girosResponse]) => {
+        if (!alive) return;
+        const actividadesApi = actividadesResponse.data?.actividades_economicas;
+        const girosApi = girosResponse.data?.giros_mercantiles;
+        if (!Array.isArray(actividadesApi) || !Array.isArray(girosApi)) {
+          throw new Error('La respuesta de los catálogos de actividad y giro no es válida');
+        }
+        setActividades(actividadesApi
+          .map((item) => ({
+            id: item?.id,
+            clave: safeInput(item?.clave).trim(),
+            descripcion: safeInput(item?.descripcion).trim(),
+          }))
+          .filter((item) => item.clave && item.descripcion));
+        setGiros(girosApi
+          .map((item) => ({
+            id: item?.id,
+            clave: safeInput(item?.clave).trim(),
+            descripcion: safeInput(item?.descripcion).trim(),
+          }))
+          .filter((item) => item.clave && item.descripcion));
+      })
+      .catch((error) => {
+        if (!alive || isApiRequestCanceled(error)) return;
+        setFatal(getApiErrorMessage(error, 'No se pudieron cargar los catálogos de actividad y giro'));
+      });
+
+    return () => {
+      alive = false;
+      controller.abort();
+    };
+  }, []);
   const [email, setEmail] = useState(''); // ✅ obligatorio (según decisión)
   const [telefono, setTelefono] = useState('');
 
@@ -1185,7 +1232,6 @@ export default function Page() {
   const [pfCurp, setPfCurp] = useState('');
   const [pfPaisNacimiento, setPfPaisNacimiento] = useState('');
   const [pfActividad, setPfActividad] = useState('');
-  const [pfActividadOriginal, setPfActividadOriginal] = useState<any>(null);
   const [pfIdTipo, setPfIdTipo] = useState('');
   const [pfIdAutoridad, setPfIdAutoridad] = useState('');
   const [pfIdNumero, setPfIdNumero] = useState('');
@@ -1193,7 +1239,6 @@ export default function Page() {
   const [pfIdExpiracion, setPfIdExpiracion] = useState('');
   // PM
   const [pmGiro, setPmGiro] = useState('');
-  const [pmGiroOriginal, setPmGiroOriginal] = useState<any>(null);
 
   function catalogStateValue(value: any): string {
     if (isPlainObject(value)) {
@@ -1202,19 +1247,11 @@ export default function Page() {
     return safeInput(value).trim();
   }
 
-  function catalogPayloadValue(items: CatalogItem[], value: string, originalValue?: any) {
+  function catalogPayloadValue(items: CatalogItem[], value: string) {
     const key = safeInput(value).trim();
     const found = items.find((item) => item.clave === key);
     if (found) return { clave: found.clave, descripcion: found.descripcion };
-
-    if (isPlainObject(originalValue) && catalogStateValue(originalValue) === key) {
-      return {
-        clave: safeInput(originalValue?.clave).trim(),
-        descripcion: safeInput(originalValue?.descripcion).trim(),
-      };
-    }
-
-    return key;
+    return undefined;
   }
 
   function catalogHasKey(items: CatalogItem[], value: string) {
@@ -1382,8 +1419,6 @@ export default function Page() {
         setPfIdNumero(safeInput(identificacionPrincipal?.numero));
         setPfIdExpedicion(safeInput(identificacionPrincipal?.fecha_expedicion));
         setPfIdExpiracion(safeInput(identificacionPrincipal?.fecha_expiracion));
-        setPfActividadOriginal(nextPfActividadOriginal);
-        setPmGiroOriginal(nextPmGiroOriginal);
         setPfActividad(catalogStateValue(nextPfActividadOriginal));
         setPmGiro(catalogStateValue(nextPmGiroOriginal));
         const contacto = datos?.contacto || {};
@@ -1768,8 +1803,8 @@ export default function Page() {
 
     setSaving(true);
     try {
-      const actividadEconomicaPrincipal = catalogPayloadValue(actividades, pfActividad, pfActividadOriginal);
-      const giroMercantilPrincipal = catalogPayloadValue(giros, pmGiro, pmGiroOriginal);
+      const actividadEconomicaPrincipal = catalogPayloadValue(actividades, pfActividad);
+      const giroMercantilPrincipal = catalogPayloadValue(giros, pmGiro);
 
       // ✅ Base: comunes + contacto (incluye email + domicilio contacto)
       const body: any = {
