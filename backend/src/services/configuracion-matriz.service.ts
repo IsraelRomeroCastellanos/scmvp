@@ -1,4 +1,5 @@
 import type { Pool, PoolClient } from 'pg';
+import { createHash } from 'node:crypto';
 
 export type AmbitoMatriz = 'PT' | 'GR';
 
@@ -25,10 +26,13 @@ export type CriterioBorrador = {
   unidad_canonica: string | null;
   opciones: OpcionBorrador[];
   rangos: RangoBorrador[];
+  reglas?: ReglaMatrizBorrador[];
+  cobertura?: CoberturaCriterioGr;
 };
 
 export type OpcionBorrador = {
   id: number;
+  codigo: string;
   etiqueta: string;
   orden: number;
   puntaje: 1 | 2 | 3;
@@ -58,14 +62,49 @@ export type BorradorConfigurable = {
   criterios_gr: CriterioBorrador[];
   resultados_pt: ResultadoMatriz[];
   resultados_gr: ResultadoMatriz[];
+  cobertura_gr: CoberturaGr;
 };
 
 export type ResultadoMatriz = {
   id: number;
+  codigo: string;
   nombre: string;
   minimo: number;
   maximo: number;
   orden: number;
+};
+
+export type ReglaMatrizBorrador = {
+  id: number;
+  codigo: string;
+  marca_canonica: string | null;
+  condicion_controlada: string | null;
+  puntaje: number;
+  prioridad: number;
+  alto_automatico: boolean;
+  causa_codigo: string | null;
+};
+
+export type CoberturaCriterioGr = {
+  esperada: string[];
+  actual: string[];
+  faltantes: string[];
+  extras: string[];
+  duplicadas: string[];
+  reglas_invalidas: string[];
+  estado: 'COMPLETA' | 'INCOMPLETA';
+};
+
+export type CoberturaGr = {
+  estado: 'COMPLETA' | 'INCOMPLETA';
+  criterios_esperados: string[];
+  criterios_actuales: string[];
+  criterios_faltantes: string[];
+  criterios_duplicados: string[];
+  dependencia_destino_recursos_pt: 'COMPLETA' | 'INCOMPLETA';
+  criterios: Record<string, CoberturaCriterioGr>;
+  bandas_gr: { estado: 'COMPLETA' | 'INCOMPLETA'; detalles: string[] };
+  detalles: string[];
 };
 
 export type CriterioComposicionInput = {
@@ -97,6 +136,16 @@ export type ResultadosInput = {
   resultados: Array<{ nombre: string; minimo: number; maximo: number }>;
 };
 
+export type ReglaConfiguracionInput = {
+  clave: string;
+  puntaje: 1 | 2 | 3;
+  prioridad: number;
+  alto_automatico: boolean;
+  causa_codigo: string | null;
+};
+
+export type ReglasCriterioInput = { reglas: ReglaConfiguracionInput[] };
+
 export type ConfiguracionMatrizErrorCode =
   | 'AMBITO_INVALIDO'
   | 'EMPRESA_NO_ENCONTRADA'
@@ -109,6 +158,11 @@ export type ConfiguracionMatrizErrorCode =
   | 'PARAMETRIZACION_NO_PERMITIDA'
   | 'UNIDAD_CANONICA_INCOMPATIBLE'
   | 'RESULTADOS_INVALIDOS'
+  | 'CRITERIO_NO_GR'
+  | 'CRITERIO_GR_NO_SOPORTADO'
+  | 'REGLAS_INVALIDAS'
+  | 'COBERTURA_GR_INCOMPLETA'
+  | 'PERSISTENCIA_INCOMPLETA'
   | 'MATRIZ_NO_PUBLICABLE'
   | 'MATRIZ_ACTIVA_EXISTENTE'
   | 'MATRIZ_YA_ACTIVA'
@@ -127,6 +181,11 @@ const ERROR_STATUS: Record<ConfiguracionMatrizErrorCode, number> = {
   PARAMETRIZACION_NO_PERMITIDA: 409,
   UNIDAD_CANONICA_INCOMPATIBLE: 409,
   RESULTADOS_INVALIDOS: 400,
+  CRITERIO_NO_GR: 409,
+  CRITERIO_GR_NO_SOPORTADO: 409,
+  REGLAS_INVALIDAS: 400,
+  COBERTURA_GR_INCOMPLETA: 409,
+  PERSISTENCIA_INCOMPLETA: 500,
   MATRIZ_NO_PUBLICABLE: 400,
   MATRIZ_ACTIVA_EXISTENTE: 409,
   MATRIZ_YA_ACTIVA: 409,
@@ -146,6 +205,11 @@ const ERROR_MESSAGE: Record<ConfiguracionMatrizErrorCode, string> = {
   PARAMETRIZACION_NO_PERMITIDA: 'El criterio no admite esta parametrizacion',
   UNIDAD_CANONICA_INCOMPATIBLE: 'La unidad canonica no es compatible con los rangos',
   RESULTADOS_INVALIDOS: 'Las bandas no cubren completamente el dominio del ambito',
+  CRITERIO_NO_GR: 'El criterio no pertenece al ambito GR',
+  CRITERIO_GR_NO_SOPORTADO: 'El criterio GR no tiene un contrato de reglas V1 soportado',
+  REGLAS_INVALIDAS: 'La configuracion de reglas GR es invalida',
+  COBERTURA_GR_INCOMPLETA: 'La matriz no tiene cobertura ejecutable GR completa',
+  PERSISTENCIA_INCOMPLETA: 'No fue posible persistir todas las reglas GR',
   MATRIZ_NO_PUBLICABLE: 'La matriz no cumple los requisitos para publicarse',
   MATRIZ_ACTIVA_EXISTENTE: 'La empresa ya tiene otra matriz activa',
   MATRIZ_YA_ACTIVA: 'La matriz ya se encuentra activa',
@@ -154,7 +218,10 @@ const ERROR_MESSAGE: Record<ConfiguracionMatrizErrorCode, string> = {
 };
 
 export class ConfiguracionMatrizError extends Error {
-  constructor(public readonly code: ConfiguracionMatrizErrorCode) {
+  constructor(
+    public readonly code: ConfiguracionMatrizErrorCode,
+    public readonly details: string[] = [],
+  ) {
     super(ERROR_MESSAGE[code]);
     this.name = 'ConfiguracionMatrizError';
   }
@@ -273,7 +340,7 @@ async function loadDraftCriteria(
 
   const [optionsResult, rangesResult] = await Promise.all([
     db.query(
-      `SELECT id, criterio_id, etiqueta, orden, puntaje
+      `SELECT id, criterio_id, codigo, etiqueta, orden, puntaje
        FROM public.matriz_opcion
        WHERE criterio_id = ANY($1::integer[])
        ORDER BY criterio_id, orden`,
@@ -296,6 +363,7 @@ async function loadDraftCriteria(
     const options = optionsByCriterion.get(criterionId) ?? [];
     options.push({
       id: normalizePositiveInteger(option.id),
+      codigo: option.codigo,
       etiqueta: option.etiqueta,
       orden: normalizePositiveInteger(option.orden),
       puntaje: normalizeScore(option.puntaje),
@@ -364,7 +432,7 @@ async function loadMatrixResults(
   ambito: AmbitoMatriz,
 ): Promise<ResultadoMatriz[]> {
   const result = await db.query(
-    `SELECT id, nombre_empresarial, minimo, maximo, orden,
+    `SELECT id, codigo, nombre_empresarial, minimo, maximo, orden,
             minimo_incluido, maximo_incluido
      FROM public.matriz_resultado
      WHERE matriz_version_id = $1 AND ambito = $2
@@ -387,12 +455,314 @@ async function loadMatrixResults(
     }
     return {
       id: normalizePositiveInteger(row.id),
+      codigo: row.codigo,
       nombre: row.nombre_empresarial,
       minimo: minimum,
       maximo: maximum,
       orden: order,
     };
   });
+}
+
+const GR_V1_CRITERIA = [
+  'ACTIVIDAD_ECONOMICA',
+  'ZONA_GEOGRAFICA',
+  'DESTINO_RECURSOS_GR',
+  'PERFIL_TRANSACCIONAL',
+] as const;
+
+const ACTIVITY_MARKS = [
+  'AV', 'HUACHICOL', 'DOBLE_USO', 'PEP', 'PEP_EXTRANJERO', 'OSFL',
+  'SIN_MARCA_ACTIVIDAD',
+] as const;
+
+const GEOGRAPHIC_MARKS = [
+  'GAFI_ALTO_RIESGO', 'GAFI_LISTA_GRIS', 'REGIMEN_FISCAL_PREFERENTE',
+  'SIN_MARCA_PLD',
+] as const;
+
+type GrCriterionContract = {
+  id: number;
+  codigo: string;
+  tipo_resolucion: string;
+  resolver_codigo: string;
+  parametrizacion: string;
+  unidad_canonica: string | null;
+};
+
+function emptyCriterionCoverage(expected: string[]): CoberturaCriterioGr {
+  return {
+    esperada: expected,
+    actual: [],
+    faltantes: [...expected],
+    extras: [],
+    duplicadas: [],
+    reglas_invalidas: [],
+    estado: 'INCOMPLETA',
+  };
+}
+
+async function loadGrCriterionContracts(
+  db: Pool | PoolClient,
+  matrizId: number,
+): Promise<GrCriterionContract[]> {
+  const result = await db.query(
+    `SELECT mc.id, c.codigo_canonico AS codigo, v.tipo_resolucion,
+            v.resolver_codigo, v.tipo_parametrizacion AS parametrizacion,
+            v.unidad_canonica
+     FROM public.matriz_criterio mc
+     JOIN public.catalogo_criterio_gr_version v
+       ON v.id = mc.catalogo_criterio_gr_version_id
+     JOIN public.catalogo_criterio_gr c ON c.id = v.criterio_gr_id
+     WHERE mc.matriz_version_id = $1 AND mc.ambito = 'GR'
+     ORDER BY mc.orden`,
+    [matrizId],
+  );
+  return result.rows.map((row) => ({
+    ...row,
+    id: normalizePositiveInteger(row.id),
+  }));
+}
+
+async function expectedKeysForCriterion(
+  db: Pool | PoolClient,
+  matrizId: number,
+  criterionCode: string,
+): Promise<string[]> {
+  if (criterionCode === 'ACTIVIDAD_ECONOMICA') return [...ACTIVITY_MARKS];
+  if (criterionCode === 'ZONA_GEOGRAFICA') return [...GEOGRAPHIC_MARKS];
+  if (criterionCode === 'DESTINO_RECURSOS_GR') {
+    const result = await db.query(
+      `SELECT mo.codigo
+       FROM public.matriz_criterio mc
+       JOIN public.catalogo_criterio_pt_version v
+         ON v.id = mc.catalogo_criterio_pt_version_id
+       JOIN public.catalogo_criterio_pt c ON c.id = v.criterio_pt_id
+       JOIN public.matriz_opcion mo ON mo.criterio_id = mc.id
+       WHERE mc.matriz_version_id = $1 AND mc.ambito = 'PT'
+         AND c.codigo_canonico = 'DESTINO_RECURSOS_PT'
+       ORDER BY mo.orden, mo.codigo`,
+      [matrizId],
+    );
+    return result.rows.map((row) => String(row.codigo));
+  }
+  if (criterionCode === 'PERFIL_TRANSACCIONAL') {
+    const result = await db.query(
+      `SELECT codigo FROM public.matriz_resultado
+       WHERE matriz_version_id = $1 AND ambito = 'PT'
+       ORDER BY orden, codigo`,
+      [matrizId],
+    );
+    return result.rows.map((row) => String(row.codigo));
+  }
+  throw new ConfiguracionMatrizError('CRITERIO_GR_NO_SOPORTADO');
+}
+
+function validateGrContract(contract: GrCriterionContract): string[] {
+  const expectedResolution: Record<string, string> = {
+    ACTIVIDAD_ECONOMICA: 'CATALOGO_GLOBAL',
+    ZONA_GEOGRAFICA: 'CATALOGO_GLOBAL',
+    DESTINO_RECURSOS_GR: 'ESTRUCTURADO',
+    PERFIL_TRANSACCIONAL: 'DERIVADO',
+  };
+  const details: string[] = [];
+  if (
+    contract.tipo_resolucion !== expectedResolution[contract.codigo] ||
+    contract.resolver_codigo !== contract.codigo ||
+    contract.parametrizacion !== 'NINGUNA' ||
+    contract.unidad_canonica !== null
+  ) {
+    details.push(`${contract.codigo}: contrato canonico GR inconsistente`);
+  }
+  return details;
+}
+
+async function loadRulesForCriterion(
+  db: Pool | PoolClient,
+  matrizId: number,
+  criterionId: number,
+): Promise<ReglaMatrizBorrador[]> {
+  const result = await db.query(
+    `SELECT id, codigo, marca_canonica, condicion_controlada, puntaje,
+            prioridad, alto_automatico, causa_codigo
+     FROM public.matriz_regla
+     WHERE matriz_version_id = $1 AND criterio_id = $2
+     ORDER BY prioridad DESC, codigo, id`,
+    [matrizId, criterionId],
+  );
+  return result.rows.map((row) => ({
+    id: normalizePositiveInteger(row.id),
+    codigo: row.codigo,
+    marca_canonica: row.marca_canonica,
+    condicion_controlada: row.condicion_controlada,
+    puntaje: Number(row.puntaje),
+    prioridad: Number(row.prioridad),
+    alto_automatico: row.alto_automatico,
+    causa_codigo: row.causa_codigo,
+  }));
+}
+
+function evaluateCriterionCoverage(
+  code: string,
+  expected: string[],
+  rawRules: Array<Record<string, unknown>>,
+): CoberturaCriterioGr {
+  const isMark = code === 'ACTIVIDAD_ECONOMICA' || code === 'ZONA_GEOGRAFICA';
+  const actual: string[] = [];
+  const invalid: string[] = [];
+  const counts = new Map<string, number>();
+  for (const rule of rawRules) {
+    const key = isMark ? rule.marca_canonica : rule.condicion_controlada;
+    const opposite = isMark ? rule.condicion_controlada : rule.marca_canonica;
+    const label = typeof key === 'string' ? key : `regla:${String(rule.codigo)}`;
+    if (typeof key === 'string') {
+      actual.push(key);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    const score = Number(rule.puntaje);
+    const priority = Number(rule.prioridad);
+    const cause = rule.causa_codigo;
+    if (
+      typeof key !== 'string' || !key || opposite !== null ||
+      !Number.isInteger(score) || ![1, 2, 3].includes(score) ||
+      !Number.isSafeInteger(priority) || priority < 0 || priority > 2147483647 ||
+      typeof rule.alto_automatico !== 'boolean' ||
+      (rule.alto_automatico === true &&
+        (typeof cause !== 'string' || !cause.trim() || cause.length > 100)) ||
+      (rule.alto_automatico === false && cause !== null)
+    ) invalid.push(label);
+  }
+  const actualUnique = [...new Set(actual)].sort();
+  const expectedSet = new Set(expected);
+  const faltantes = expected.filter((key) => !counts.has(key));
+  const extras = actualUnique.filter((key) => !expectedSet.has(key));
+  const duplicadas = [...counts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([key]) => key)
+    .sort();
+  const reglasInvalidas = [...new Set(invalid)].sort();
+  const complete = expected.length > 0 && faltantes.length === 0 && extras.length === 0 &&
+    duplicadas.length === 0 && reglasInvalidas.length === 0 && rawRules.length === expected.length;
+  return {
+    esperada: expected,
+    actual: actualUnique,
+    faltantes,
+    extras,
+    duplicadas,
+    reglas_invalidas: reglasInvalidas,
+    estado: complete ? 'COMPLETA' : 'INCOMPLETA',
+  };
+}
+
+export async function calculateCompanyMatrixGrCoverage(
+  db: Pool | PoolClient,
+  matrizId: number,
+): Promise<CoberturaGr> {
+  const contracts = await loadGrCriterionContracts(db, matrizId);
+  const actualCodes = contracts.map((item) => item.codigo);
+  const counts = new Map<string, number>();
+  actualCodes.forEach((code) => counts.set(code, (counts.get(code) ?? 0) + 1));
+  const missing = GR_V1_CRITERIA.filter((code) => !counts.has(code));
+  const duplicates = [...counts.entries()].filter(([, total]) => total > 1).map(([code]) => code);
+  const details: string[] = [];
+  missing.forEach((code) => details.push(`${code}: criterio GR faltante`));
+  duplicates.forEach((code) => details.push(`${code}: criterio GR duplicado`));
+  actualCodes.filter((code) => !GR_V1_CRITERIA.includes(code as typeof GR_V1_CRITERIA[number]))
+    .forEach((code) => details.push(`${code}: criterio GR extra`));
+
+  const ptDependency = await db.query<{ total: string }>(
+    `SELECT pg_catalog.count(*)::text AS total
+     FROM public.matriz_criterio mc
+     JOIN public.catalogo_criterio_pt_version v
+       ON v.id = mc.catalogo_criterio_pt_version_id
+     JOIN public.catalogo_criterio_pt c ON c.id = v.criterio_pt_id
+     WHERE mc.matriz_version_id = $1 AND mc.ambito = 'PT'
+       AND c.codigo_canonico = 'DESTINO_RECURSOS_PT'`,
+    [matrizId],
+  );
+  const destinationPtComplete = Number(ptDependency.rows[0].total) === 1;
+  if (!destinationPtComplete) details.push('DESTINO_RECURSOS_PT: dependencia PT faltante o duplicada');
+
+  const criterionCoverage: Record<string, CoberturaCriterioGr> = {};
+  for (const code of GR_V1_CRITERIA) {
+    const matching = contracts.filter((item) => item.codigo === code);
+    const expected = await expectedKeysForCriterion(db, matrizId, code);
+    if (expected.length === 0 && code === 'DESTINO_RECURSOS_GR') {
+      details.push('DESTINO_RECURSOS_GR: DESTINO_RECURSOS_PT no tiene opciones configuradas');
+    }
+    if (expected.length === 0 && code === 'PERFIL_TRANSACCIONAL') {
+      details.push('PERFIL_TRANSACCIONAL: no existen resultados PT configurados');
+    }
+    if (matching.length !== 1) {
+      criterionCoverage[code] = emptyCriterionCoverage(expected);
+      continue;
+    }
+    const contractProblems = validateGrContract(matching[0]);
+    details.push(...contractProblems);
+    const ruleResult = await db.query(
+      `SELECT id, codigo, marca_canonica, condicion_controlada, puntaje,
+              prioridad, alto_automatico, causa_codigo
+       FROM public.matriz_regla
+       WHERE matriz_version_id = $1 AND criterio_id = $2
+       ORDER BY codigo, id`,
+      [matrizId, matching[0].id],
+    );
+    const coverage = evaluateCriterionCoverage(code, expected, ruleResult.rows);
+    if (contractProblems.length > 0) {
+      coverage.reglas_invalidas.push('CONTRATO_CANONICO');
+      coverage.estado = 'INCOMPLETA';
+    }
+    criterionCoverage[code] = coverage;
+    coverage.faltantes.forEach((key) => details.push(`${code}: falta ${key}`));
+    coverage.extras.forEach((key) => details.push(`${code}: regla extra ${key}`));
+    coverage.duplicadas.forEach((key) => details.push(`${code}: regla duplicada ${key}`));
+    coverage.reglas_invalidas.forEach((key) => details.push(`${code}: regla invalida ${key}`));
+  }
+
+  const bandRows = await db.query(
+    `SELECT minimo, maximo, minimo_incluido, maximo_incluido
+     FROM public.matriz_resultado
+     WHERE matriz_version_id = $1 AND ambito = 'GR'
+     ORDER BY minimo, maximo, id`,
+    [matrizId],
+  );
+  const bandDetails: string[] = [];
+  if (bandRows.rows.length !== 3) bandDetails.push('GR: deben existir exactamente tres bandas');
+  let expectedMinimum = 4;
+  for (const band of bandRows.rows) {
+    const minimum = Number(band.minimo);
+    const maximum = Number(band.maximo);
+    if (
+      !Number.isSafeInteger(minimum) || !Number.isSafeInteger(maximum) ||
+      minimum !== expectedMinimum || maximum < minimum ||
+      band.minimo_incluido !== true || band.maximo_incluido !== true
+    ) bandDetails.push(`GR: banda invalida ${String(band.minimo)}..${String(band.maximo)}`);
+    expectedMinimum = maximum + 1;
+  }
+  if (expectedMinimum !== 13) bandDetails.push('GR: las bandas no cubren exactamente 4..12');
+  const maximumBands = bandRows.rows.filter(
+    (band) => Number(band.minimo) <= 12 && Number(band.maximo) >= 12,
+  );
+  if (maximumBands.length !== 1) bandDetails.push('GR: debe existir una sola banda que contenga 12');
+  details.push(...bandDetails);
+
+  const allCriteriaComplete = GR_V1_CRITERIA.every(
+    (code) => criterionCoverage[code].estado === 'COMPLETA',
+  );
+  const complete = missing.length === 0 && duplicates.length === 0 &&
+    actualCodes.length === GR_V1_CRITERIA.length && destinationPtComplete &&
+    allCriteriaComplete && bandDetails.length === 0 && details.length === 0;
+  return {
+    estado: complete ? 'COMPLETA' : 'INCOMPLETA',
+    criterios_esperados: [...GR_V1_CRITERIA],
+    criterios_actuales: actualCodes,
+    criterios_faltantes: [...missing],
+    criterios_duplicados: duplicates,
+    dependencia_destino_recursos_pt: destinationPtComplete ? 'COMPLETA' : 'INCOMPLETA',
+    criterios: criterionCoverage,
+    bandas_gr: { estado: bandDetails.length === 0 ? 'COMPLETA' : 'INCOMPLETA', detalles: bandDetails },
+    detalles: details,
+  };
 }
 
 async function loadMatrixConfiguration(
@@ -406,6 +776,11 @@ async function loadMatrixConfiguration(
     loadMatrixResults(client, id, 'PT'),
     loadMatrixResults(client, id, 'GR'),
   ]);
+  const coverage = await calculateCompanyMatrixGrCoverage(client, id);
+  for (const criterion of criteriosGr) {
+    criterion.reglas = await loadRulesForCriterion(client, id, criterion.matriz_criterio_id);
+    criterion.cobertura = coverage.criterios[criterion.codigo] ?? emptyCriterionCoverage([]);
+  }
   await ensureAllCriteriaAreCanonical(client, id, criteriosPt.length + criteriosGr.length);
   return {
     ...row,
@@ -417,6 +792,7 @@ async function loadMatrixConfiguration(
     criterios_gr: criteriosGr,
     resultados_pt: resultadosPt,
     resultados_gr: resultadosGr,
+    cobertura_gr: coverage,
   };
 }
 
@@ -968,6 +1344,12 @@ async function validatePublishableMatrix(
   if (configuration.criterios_pt.length < 1 || configuration.criterios_gr.length < 1) {
     throw new ConfiguracionMatrizError('MATRIZ_NO_PUBLICABLE');
   }
+  if (configuration.cobertura_gr.estado !== 'COMPLETA') {
+    throw new ConfiguracionMatrizError(
+      'COBERTURA_GR_INCOMPLETA',
+      configuration.cobertura_gr.detalles,
+    );
+  }
 
   for (const criteria of [configuration.criterios_pt, configuration.criterios_gr]) {
     const versions = new Set<number>();
@@ -1120,6 +1502,164 @@ async function lockMatrixForMutation(
   return matrix.rows[0];
 }
 
+function generateRuleCode(criterionCode: string, key: string): string {
+  const digest = createHash('sha256').update(`${criterionCode}\u0000${key}`).digest('hex').slice(0, 20);
+  return `GR_${criterionCode}_${digest}`;
+}
+
+export async function replaceCompanyMatrixCriterionRules(
+  db: Pool,
+  empresaId: number,
+  matrizId: number,
+  criterioId: number,
+  actorUsuarioId: number,
+  input: ReglasCriterioInput,
+): Promise<BorradorConfigurable> {
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('SELECT pg_catalog.pg_advisory_xact_lock(2205, $1)', [empresaId]);
+    const company = await client.query('SELECT id FROM public.empresas WHERE id = $1', [empresaId]);
+    if (company.rows.length === 0) throw new ConfiguracionMatrizError('EMPRESA_NO_ENCONTRADA');
+    const matrixResult = await client.query(
+      `SELECT id, empresa_id, numero_version, estado_editorial, activa, revision, procedencia
+       FROM public.matriz_empresa_version
+       WHERE id = $1 AND empresa_id = $2
+       FOR UPDATE`,
+      [matrizId, empresaId],
+    );
+    if (matrixResult.rows.length === 0) {
+      throw new ConfiguracionMatrizError('BORRADOR_NO_ENCONTRADO');
+    }
+    const matrix = matrixResult.rows[0];
+    if (matrix.estado_editorial !== 'BORRADOR' || matrix.activa !== false) {
+      throw new ConfiguracionMatrizError('MATRIZ_NO_EDITABLE');
+    }
+
+    const criterionResult = await client.query(
+      `SELECT mc.id, mc.ambito, c.codigo_canonico AS codigo,
+              v.tipo_resolucion, v.resolver_codigo,
+              v.tipo_parametrizacion AS parametrizacion, v.unidad_canonica
+       FROM public.matriz_criterio mc
+       LEFT JOIN public.catalogo_criterio_gr_version v
+         ON v.id = mc.catalogo_criterio_gr_version_id
+       LEFT JOIN public.catalogo_criterio_gr c ON c.id = v.criterio_gr_id
+       WHERE mc.id = $1 AND mc.matriz_version_id = $2
+       FOR UPDATE OF mc`,
+      [criterioId, matrizId],
+    );
+    if (criterionResult.rows.length === 0) {
+      throw new ConfiguracionMatrizError('CRITERIO_NO_ENCONTRADO');
+    }
+    const criterion = criterionResult.rows[0] as GrCriterionContract & { ambito: string };
+    if (criterion.ambito !== 'GR') throw new ConfiguracionMatrizError('CRITERIO_NO_GR');
+    if (!GR_V1_CRITERIA.includes(criterion.codigo as typeof GR_V1_CRITERIA[number])) {
+      throw new ConfiguracionMatrizError('CRITERIO_GR_NO_SOPORTADO');
+    }
+    const contractProblems = validateGrContract({ ...criterion, id: criterioId });
+    if (contractProblems.length > 0) {
+      throw new ConfiguracionMatrizError('CRITERIO_GR_NO_SOPORTADO', contractProblems);
+    }
+
+    const expected = await expectedKeysForCriterion(client, matrizId, criterion.codigo);
+    if (expected.length === 0) {
+      const dependency = criterion.codigo === 'DESTINO_RECURSOS_GR'
+        ? 'DESTINO_RECURSOS_PT no tiene opciones configuradas'
+        : 'La matriz no tiene resultados PT configurados';
+      throw new ConfiguracionMatrizError('REGLAS_INVALIDAS', [dependency]);
+    }
+    const expectedSet = new Set(expected);
+    const counts = new Map<string, number>();
+    for (const rule of input.reglas) counts.set(rule.clave, (counts.get(rule.clave) ?? 0) + 1);
+    const missing = expected.filter((key) => !counts.has(key));
+    const extras = [...counts.keys()].filter((key) => !expectedSet.has(key));
+    const duplicates = [...counts.entries()].filter(([, total]) => total > 1).map(([key]) => key);
+    const isControlled = criterion.codigo === 'DESTINO_RECURSOS_GR' ||
+      criterion.codigo === 'PERFIL_TRANSACCIONAL';
+    const invalid = input.reglas.filter((rule) =>
+      !Number.isSafeInteger(rule.puntaje) || ![1, 2, 3].includes(rule.puntaje) ||
+      !Number.isSafeInteger(rule.prioridad) || rule.prioridad < 0 || rule.prioridad > 2147483647 ||
+      (isControlled && rule.prioridad !== 0) ||
+      typeof rule.alto_automatico !== 'boolean' ||
+      (rule.alto_automatico &&
+        (typeof rule.causa_codigo !== 'string' || !rule.causa_codigo.trim() ||
+          rule.causa_codigo.length > 100)) ||
+      (!rule.alto_automatico && rule.causa_codigo !== null)
+    ).map((rule) => rule.clave);
+    const details = [
+      ...missing.map((key) => `Regla faltante: ${key}`),
+      ...extras.map((key) => `Regla extra: ${key}`),
+      ...duplicates.map((key) => `Regla duplicada: ${key}`),
+      ...invalid.map((key) => `Regla invalida: ${key}`),
+    ];
+    if (input.reglas.length !== expected.length || details.length > 0) {
+      throw new ConfiguracionMatrizError('REGLAS_INVALIDAS', details);
+    }
+
+    await client.query(
+      'DELETE FROM public.matriz_regla WHERE matriz_version_id = $1 AND criterio_id = $2',
+      [matrizId, criterioId],
+    );
+    for (const rule of input.reglas) {
+      await client.query(
+        `INSERT INTO public.matriz_regla (
+           matriz_version_id, criterio_id, codigo, marca_canonica,
+           condicion_controlada, puntaje, prioridad, alto_automatico, causa_codigo
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [
+          matrizId,
+          criterioId,
+          generateRuleCode(criterion.codigo, rule.clave),
+          isControlled ? null : rule.clave,
+          isControlled ? rule.clave : null,
+          rule.puntaje,
+          rule.prioridad,
+          rule.alto_automatico,
+          rule.alto_automatico ? rule.causa_codigo : null,
+        ],
+      );
+    }
+    const persisted = await client.query<{ total: string }>(
+      `SELECT pg_catalog.count(*)::text AS total FROM public.matriz_regla
+       WHERE matriz_version_id = $1 AND criterio_id = $2`,
+      [matrizId, criterioId],
+    );
+    if (Number(persisted.rows[0].total) !== expected.length) {
+      throw new ConfiguracionMatrizError('PERSISTENCIA_INCOMPLETA');
+    }
+    const updated = await client.query(
+      `UPDATE public.matriz_empresa_version SET revision = revision + 1
+       WHERE id = $1 AND empresa_id = $2 AND estado_editorial = 'BORRADOR'
+       RETURNING id, empresa_id, numero_version, estado_editorial, activa,
+                 revision, procedencia, version_origen_id`,
+      [matrizId, empresaId],
+    );
+    if (updated.rowCount !== 1) throw new ConfiguracionMatrizError('MATRIZ_NO_EDITABLE');
+    await client.query(
+      `INSERT INTO public.matriz_auditoria_evento (
+         empresa_id, matriz_version_id, actor_usuario_id, accion, operacion,
+         estado_anterior, estado_nuevo, activa_anterior, activa_nueva, resumen
+       ) VALUES ($1,$2,$3,'REGLAS_GR_GUARDADAS','GUARDAR_REGLAS_GR',
+                 'BORRADOR','BORRADOR',FALSE,FALSE,$4::jsonb)`,
+      [empresaId, matrizId, actorUsuarioId, JSON.stringify({
+        criterio_id: criterioId,
+        criterio_codigo: criterion.codigo,
+        reglas: expected.length,
+        revision_anterior: normalizePositiveInteger(matrix.revision),
+        revision_nueva: normalizePositiveInteger(updated.rows[0].revision),
+      })],
+    );
+    const response = await loadMatrixConfiguration(client, updated.rows[0]);
+    await client.query('COMMIT');
+    return response;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function saveCompanyMatrixResults(
   db: Pool,
   empresaId: number,
@@ -1215,6 +1755,7 @@ export async function transitionCompanyMatrix(
         criterios_gr: configuration.criterios_gr.length,
         resultados_pt: 3,
         resultados_gr: 3,
+        cobertura_gr: configuration.cobertura_gr,
       };
       updated = await client.query(
         `UPDATE public.matriz_empresa_version

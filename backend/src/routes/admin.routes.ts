@@ -27,19 +27,27 @@ import {
   getEditableCompanyMatrixDraft,
   listSelectableMatrixCriteria,
   replaceCompanyMatrixDraftComposition,
+  replaceCompanyMatrixCriterionRules,
   saveCompanyMatrixCriterionParameters,
   saveCompanyMatrixResults,
   transitionCompanyMatrix,
   type CriterioComposicionInput,
   type ParametrizacionInput,
   type ResultadosInput,
+  type ReglasCriterioInput,
 } from '../services/configuracion-matriz.service';
 
 const router = Router();
 
-function matrizError(res: any, status: number, codigo: string, mensaje: string) {
+function matrizError(
+  res: any,
+  status: number,
+  codigo: string,
+  mensaje: string,
+  detalles: string[] = [],
+) {
   return res.status(status).json({
-    error: { codigo, mensaje, detalles: [] },
+    error: { codigo, mensaje, detalles },
   });
 }
 
@@ -180,6 +188,43 @@ function parseResultsBody(body: unknown): ResultadosInput | null {
     resultados.push({ nombre, minimo: Number(item.minimo), maximo: Number(item.maximo) });
   }
   return { revision, resultados };
+}
+
+function parseRulesBody(body: unknown): ReglasCriterioInput | null {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+  const raw = body as Record<string, unknown>;
+  if (Object.keys(raw).length !== 1 || !Array.isArray(raw.reglas)) return null;
+  const rules: ReglasCriterioInput['reglas'] = [];
+  for (const value of raw.reglas) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const rule = value as Record<string, unknown>;
+    if (
+      Object.keys(rule).length !== 5 ||
+      Object.keys(rule).some(
+        (key) => !['clave', 'puntaje', 'prioridad', 'alto_automatico', 'causa_codigo'].includes(key),
+      )
+    ) return null;
+    if (
+      typeof rule.clave !== 'string' || !rule.clave || rule.clave !== rule.clave.trim() ||
+      rule.clave.length > 100 || !Number.isSafeInteger(rule.puntaje) ||
+      ![1, 2, 3].includes(Number(rule.puntaje)) ||
+      !Number.isSafeInteger(rule.prioridad) || Number(rule.prioridad) < 0 ||
+      Number(rule.prioridad) > 2147483647 || typeof rule.alto_automatico !== 'boolean' ||
+      (rule.causa_codigo !== null &&
+        (typeof rule.causa_codigo !== 'string' || !rule.causa_codigo.trim() ||
+          rule.causa_codigo.trim().length > 100)) ||
+      (rule.alto_automatico === true && rule.causa_codigo === null) ||
+      (rule.alto_automatico === false && rule.causa_codigo !== null)
+    ) return null;
+    rules.push({
+      clave: rule.clave,
+      puntaje: Number(rule.puntaje) as 1 | 2 | 3,
+      prioridad: Number(rule.prioridad),
+      alto_automatico: rule.alto_automatico,
+      causa_codigo: typeof rule.causa_codigo === 'string' ? rule.causa_codigo.trim() : null,
+    });
+  }
+  return { reglas: rules };
 }
 
 function parseRevisionBody(body: unknown): number | null {
@@ -382,6 +427,55 @@ router.put(
   },
 );
 
+// ==========================================
+// REEMPLAZAR REGLAS GR DE CRITERIO (ADMIN)
+// ==========================================
+router.put(
+  '/empresas/:empresaId/matrices/:matrizId/criterios/:criterioId/reglas',
+  authenticate,
+  authorizeRoles('admin'),
+  async (req, res) => {
+    const empresaId = Number(req.params.empresaId);
+    const matrizId = Number(req.params.matrizId);
+    const criterioId = Number(req.params.criterioId);
+    const actorUsuarioId = req.user?.id;
+    if (
+      !Number.isSafeInteger(empresaId) || empresaId <= 0 ||
+      !Number.isSafeInteger(matrizId) || matrizId <= 0 ||
+      !Number.isSafeInteger(criterioId) || criterioId <= 0 ||
+      !Number.isSafeInteger(actorUsuarioId) || (actorUsuarioId ?? 0) <= 0
+    ) {
+      return matrizError(res, 404, 'CRITERIO_NO_ENCONTRADO', 'Criterio de matriz no encontrado');
+    }
+    const input = parseRulesBody(req.body);
+    if (input === null) {
+      return matrizError(res, 400, 'REGLAS_INVALIDAS', 'Body de reglas GR invalido');
+    }
+    try {
+      const data = await replaceCompanyMatrixCriterionRules(
+        pool,
+        empresaId,
+        matrizId,
+        criterioId,
+        actorUsuarioId!,
+        input,
+      );
+      return res.json({ data });
+    } catch (error) {
+      if (error instanceof ConfiguracionMatrizError) {
+        return matrizError(res, error.status, error.code, error.message, error.details);
+      }
+      console.error('Error al guardar reglas GR:', error);
+      return matrizError(
+        res,
+        500,
+        'REGLAS_GUARDAR_ERROR',
+        'No fue posible guardar las reglas GR',
+      );
+    }
+  },
+);
+
 router.put(
   '/empresas/:empresaId/matrices/:matrizId/resultados/:ambito',
   authenticate,
@@ -455,7 +549,7 @@ for (const [path, transition] of [
         return res.json({ data });
       } catch (error) {
         if (error instanceof ConfiguracionMatrizError) {
-          return matrizError(res, error.status, error.code, error.message);
+          return matrizError(res, error.status, error.code, error.message, error.details);
         }
         console.error(`Error al ${path} matriz:`, error);
         return matrizError(res, 500, 'TRANSICION_MATRIZ_ERROR', 'No fue posible cambiar el estado');
