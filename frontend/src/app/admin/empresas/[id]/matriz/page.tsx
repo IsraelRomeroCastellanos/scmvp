@@ -757,6 +757,7 @@ export default function ConfigurarMatrizEmpresaPage() {
   const [notFoundDraft, setNotFoundDraft] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [workflowView, setWorkflowView] = useState<'PT' | 'SUMMARY' | 'GR'>('PT');
 
   const load = useCallback(async (signal?: AbortSignal) => {
     if (!Number.isSafeInteger(empresaId) || empresaId <= 0) {
@@ -786,6 +787,7 @@ export default function ConfigurarMatrizEmpresaPage() {
         setPtCompositionDirty(false);
         setPtBandsDirty(false);
         setPtConfirmationRequired(currentDraft.resultados_pt.length !== 3);
+        setWorkflowView(currentDraft.resultados_pt.length === 3 ? 'SUMMARY' : 'PT');
         setGrBandsDirty(false);
         setDirtyRuleIds(new Set());
         setDirtyPtOptionIds(new Set());
@@ -802,6 +804,7 @@ export default function ConfigurarMatrizEmpresaPage() {
           setPtCompositionDirty(false);
           setPtBandsDirty(false);
           setPtConfirmationRequired(true);
+          setWorkflowView('PT');
           setGrBandsDirty(false);
           setDirtyRuleIds(new Set());
           setDirtyPtOptionIds(new Set());
@@ -1121,6 +1124,7 @@ export default function ConfigurarMatrizEmpresaPage() {
         setBandasPt(toBands(saved.resultados_pt));
         setPtBandsDirty(false);
         setPtConfirmationRequired(false);
+        setWorkflowView('SUMMARY');
       } else {
         setBandasGr(toBands(saved.resultados_gr));
         setGrBandsDirty(false);
@@ -1226,7 +1230,7 @@ export default function ConfigurarMatrizEmpresaPage() {
 
       {loading ? <LoadingState label="Cargando configuración de matriz…" /> : null}
       {!loading && error ? <Alert variant="danger">{error}</Alert> : null}
-      {!loading && success ? <Alert variant="success">{success}</Alert> : null}
+      {!loading && success && workflowView !== 'SUMMARY' ? <Alert variant="success">{success}</Alert> : null}
 
       {!loading && notFoundDraft ? (
         <Card className="p-6">
@@ -1276,14 +1280,14 @@ export default function ConfigurarMatrizEmpresaPage() {
             {draft.version_origen_id ? (
               <span>Origen histórico #{draft.version_origen_id}</span>
             ) : null}
-            {ptComplete ? (
+            {ptComplete && workflowView === 'GR' ? (
               <Badge variant={draft.cobertura_gr.estado === 'COMPLETA' ? 'success' : 'warning'}>
                 Reglas GR: {draft.cobertura_gr.estado === 'COMPLETA' ? 'completa' : 'incompleta'}
               </Badge>
             ) : null}
           </div>
 
-          {ptComplete && draft.cobertura_gr.estado === 'INCOMPLETA' ? (
+          {ptComplete && workflowView === 'GR' && draft.cobertura_gr.estado === 'INCOMPLETA' ? (
             <Alert variant="warning">
               <div>
                 <p className="font-semibold">La configuración GR todavía no puede validarse.</p>
@@ -1298,6 +1302,7 @@ export default function ConfigurarMatrizEmpresaPage() {
             </Alert>
           ) : null}
 
+          {workflowView === 'PT' || !ptComplete ? <>
           <section className="space-y-4" aria-labelledby="configuracion-criterios-pt">
             <div>
               <h2 id="configuracion-criterios-pt" className="text-xl font-semibold text-text-primary">
@@ -1350,10 +1355,6 @@ export default function ConfigurarMatrizEmpresaPage() {
               </div>
             ) : null}
           </section>
-
-          {invalidLabels ? (
-            <Alert variant="danger">Todas las etiquetas visibles deben contener texto.</Alert>
-          ) : null}
 
           <section className="space-y-4 border-t border-border-light pt-6" aria-labelledby="fronteras-pt">
             <div>
@@ -1450,10 +1451,86 @@ export default function ConfigurarMatrizEmpresaPage() {
               {savingBands === 'PT' ? 'Guardando matriz PT…' : 'Guardar matriz PT'}
             </Button>
           </section>
+          </> : null}
 
-          {!ptComplete ? (
+          {workflowView === 'SUMMARY' && ptComplete ? (
+            <section className="space-y-5" aria-labelledby="resumen-pt-configurado">
+              <Alert variant="success">Perfil Transaccional configurado correctamente.</Alert>
+              <div>
+                <h2 id="resumen-pt-configurado" className="text-xl font-semibold text-text-primary">
+                  Resumen de Perfil Transaccional
+                </h2>
+                <p className="mt-1 text-sm text-text-secondary">
+                  Revisa la configuración guardada antes de continuar.
+                </p>
+              </div>
+              <Card className="space-y-5 p-5">
+                {criteriosPt.map((criterion, criterionIndex) => (
+                  <div key={criterion.versionId}>
+                    <h3 className="font-semibold text-text-primary">
+                      {criterionIndex + 1}. {criterion.texto}
+                    </h3>
+                    {criterion.tipoResolucion === 'CAPTURA_RANGO_NUMERICO' ? (
+                      <p className="mt-1 text-sm text-text-secondary">
+                        Unidad: {criterion.unidadEmpresarial} · Cortes: {criterion.corte1} y {criterion.corte2}
+                      </p>
+                    ) : null}
+                    <div className="mt-2 overflow-hidden rounded-card border border-border-light">
+                      {['Bajo', 'Medio', 'Alto'].map((label, index) => (
+                        <div
+                          key={label}
+                          className="grid grid-cols-[5rem_1fr_4rem] gap-3 border-b border-border-light px-3 py-2 text-sm last:border-b-0"
+                        >
+                          <span className="font-medium text-text-primary">{label}</span>
+                          <span className="text-text-secondary">
+                            {criterion.tipoResolucion === 'CAPTURA_RANGO_NUMERICO'
+                              ? formatAmountRange(criterion.rangos[index], criterion.unidadEmpresarial)
+                              : criterion.opciones[index]}
+                          </span>
+                          <span className="text-right font-semibold text-text-primary">Valor {index + 1}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <div>
+                  <h3 className="font-semibold text-text-primary">Resultado PT</h3>
+                  <p className="mt-1 text-sm text-text-secondary">
+                    Puntaje mínimo: {criteriosPt.length} · Puntaje máximo: {criteriosPt.length * 3}
+                  </p>
+                  <div className="mt-2 overflow-hidden rounded-card border border-border-light">
+                    {bandasPt.map((band, index) => (
+                      <div key={index} className="grid grid-cols-[5rem_1fr] gap-3 border-b border-border-light px-3 py-2 text-sm last:border-b-0">
+                        <span className="font-medium text-text-primary">PT{index + 1}</span>
+                        <span className="text-text-secondary">{band.minimo}–{band.maximo}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Card>
+              <div className="flex flex-wrap gap-3">
+                <Button onClick={() => { setError(''); setSuccess(''); setWorkflowView('GR'); }}>
+                  Configurar Grado de Riesgo
+                </Button>
+                <Button variant="secondary" onClick={() => router.push('/dashboard')}>
+                  Ir al Dashboard
+                </Button>
+              </div>
+            </section>
+          ) : null}
+
+          {workflowView === 'PT' && !ptComplete ? (
             <Alert variant="info">Completa y guarda Perfil Transaccional para continuar a GR.</Alert>
-          ) : (
+          ) : null}
+          {workflowView === 'GR' && ptComplete ? <>
+            <div className="flex justify-start">
+              <Button variant="secondary" onClick={() => { setError(''); setSuccess(''); setWorkflowView('PT'); }}>
+                Editar Perfil Transaccional
+              </Button>
+            </div>
+            {invalidLabels ? (
+              <Alert variant="danger">Todas las etiquetas visibles deben contener texto.</Alert>
+            ) : null}
             <MatrixSection
               ambito="GR"
               catalogo={catalogoGr}
@@ -1481,8 +1558,7 @@ export default function ConfigurarMatrizEmpresaPage() {
                 }
               }}
             />
-          )}
-          {ptComplete ? <ResultBandsSection
+          <ResultBandsSection
             ambito="GR"
             criterionCount={criteriosGr.length}
             bands={bandasGr}
@@ -1496,9 +1572,9 @@ export default function ConfigurarMatrizEmpresaPage() {
               setGrBandsDirty(true);
             }}
             onSave={() => void saveBands('GR')}
-          /> : null}
+          />
 
-          {ptComplete ? <div className="flex justify-end">
+          <div className="flex justify-end">
             <Button
               disabled={
                 draft.estado_editorial !== 'BORRADOR' || saving ||
@@ -1508,7 +1584,7 @@ export default function ConfigurarMatrizEmpresaPage() {
             >
               {saving ? 'Guardando…' : 'Guardar composición GR'}
             </Button>
-          </div> : null}
+          </div>
           {hasPendingChanges ? (
             <Alert variant="warning">Guarda los cambios pendientes antes de validar.</Alert>
           ) : null}
@@ -1569,6 +1645,7 @@ export default function ConfigurarMatrizEmpresaPage() {
               {draft.activa ? <Badge variant="success">Matriz activa</Badge> : null}
             </div>
           </div>
+          </> : null}
         </>
       ) : null}
 
