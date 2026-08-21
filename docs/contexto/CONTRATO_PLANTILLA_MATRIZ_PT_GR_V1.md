@@ -282,13 +282,33 @@ Perfil Transaccional funciona de la siguiente manera:
 
 1. El catálogo PT V1 contiene exactamente seis criterios canónicos: `TIPO_PRODUCTO` (Número y Tipo de Producto), `NATURALEZA_PRODUCTO` (Naturaleza del Producto), `MONTO` (Monto), `FRECUENCIA_PRODUCTO` (Frecuencia), `DESTINO_RECURSOS_PT` (Origen y Destino de los recursos) y `ZONA_GEOGRAFICA_PT` (Zona geográfica).
 2. La empresa selecciona entre tres y seis criterios. Sus nombres son fijos y no editables.
-3. Por cada criterio seleccionado la empresa captura exclusivamente tres descripciones: Bajo, Medio y Alto.
-4. El sistema asigna internamente Bajo=`1`, Medio=`2` y Alto=`3`; el usuario no captura ni ve el puntaje.
-5. Para evaluar a un cliente se selecciona una respuesta de cada criterio configurado y se suman sus valores internos.
-6. Para `N` criterios el dominio total es `N..3N` y la suma determina uno de los tres resultados finales configurados por la empresa.
-7. PT debe quedar guardado y completo antes de habilitar la configuración de GR.
+3. Para cada criterio descriptivo seleccionado, la empresa configura tres respuestas: Bajo, Medio y Alto; durante el PT se selecciona una de esas opciones.
+4. Para `MONTO` V2, la empresa configura unidad `UMA` o `PESOS` y dos cortes; durante el PT se captura el monto esperado/declarado y el sistema resuelve automáticamente Bajo, Medio o Alto.
+5. El sistema asigna internamente Bajo=`1`, Medio=`2` y Alto=`3`; el usuario no captura ni ve el puntaje. Se suma un valor interno por cada criterio configurado.
+6. Para `N` criterios el dominio total es `N..3N`. La empresa define las fronteras inclusivas de `PT1`, `PT2` y `PT3`, que deben cubrir el dominio completo sin huecos ni traslapes.
+7. Antes del guardado final, la interfaz presenta una vista previa con las respuestas de los criterios descriptivos, los tramos derivados de MONTO V2, sus valores internos `1/2/3`, el mínimo y máximo posibles y las fronteras `PT1/PT2/PT3`.
+8. El capturista confirma expresamente mediante **Guardar matriz PT**. Sólo esa confirmación deja PT completo y habilita la configuración de GR.
 
-La interfaz principal PT no muestra códigos, nombres de persistencia, cobertura ni diagnósticos internos. Los archivos Excel y CAVIACE son referencia funcional e histórica, no el contrato literal de esta interfaz ni un flujo operativo de importación. Las matrices y evaluaciones históricas conservan sus textos, versiones, composición y resultados originales; el catálogo V1 se aplica a matrices nuevas o nuevas versiones.
+La interfaz principal PT no muestra códigos, nombres de persistencia, cobertura, diagnósticos internos ni términos técnicos de almacenamiento. Las fronteras son una decisión empresarial; ningún ejemplo se convierte en fórmula universal. Los archivos Excel y CAVIACE son referencia funcional e histórica, no el contrato literal de esta interfaz ni un flujo operativo de importación. Las matrices y evaluaciones históricas conservan sus textos, versiones, composición y resultados originales; el catálogo V1 se aplica a matrices nuevas o nuevas versiones.
+
+`MONTO` conserva su versión de contrato 1 histórica basada en tres opciones. Su
+versión vigente 2 usa `MONTO` como dimensión canónica; la empresa elige `UMA` o
+`PESOS` como unidad concreta y captura dos puntos de corte decimales. El sistema
+deriva tres tramos continuos y sin traslape: hasta el primer corte=Bajo (`1`),
+más del primero y hasta el segundo=Medio (`2`), y más del segundo=Alto (`3`). La
+captura PT inicial recibe el monto esperado/declarado en esa misma unidad,
+resuelve el rango y conserva valor, unidad, rango, puntaje, versión de matriz y
+resultado PT. No se realizan conversiones UMA/PESOS.
+
+El flujo operacional futuro queda fuera de este contrato ejecutable: valor
+observado → resolver de la matriz aplicable → rango observado → comparación con
+el rango esperado → consistente/desviación. Una operación nunca reescribe la
+evaluación PT histórica. La captura individual/masiva de operaciones y sus
+alertas permanecen pendientes.
+
+El patrón reutilizable es: dimensión/fuente → unidad empresarial → dos límites
+→ tres tramos → valoración `1/2/3`. Su posible aplicación futura en GR requiere
+un contrato propio y no forma parte de esta versión PT.
 
 ### 2.4 Grado de Riesgo
 

@@ -326,6 +326,25 @@ export async function guardarOpcionesCriterioMatriz(
   return response.data.data;
 }
 
+export async function guardarRangosCriterioMatriz(
+  empresaId: string | number,
+  matrizId: number,
+  criterioId: number,
+  revision: number,
+  unidad: "UMA" | "PESOS",
+  corte1: number,
+  corte2: number,
+): Promise<BorradorMatrizEmpresa> {
+  const response = await api.put<{ data: BorradorMatrizEmpresa }>(
+    `/api/admin/empresas/${empresaId}/matrices/${matrizId}/criterios/${criterioId}/parametrizacion`,
+    { revision, unidad, corte_1: corte1, corte_2: corte2 },
+  );
+  if (!response.data?.data) {
+    throw new Error("La respuesta de parametrización no es válida");
+  }
+  return response.data.data;
+}
+
 export async function guardarReglasMatrizGr(
   empresaId: string | number,
   matrizId: number,
@@ -483,6 +502,8 @@ export interface PerfilTransaccionalV1Criterio {
   codigo: string;
   texto: string;
   orden: number;
+  tipo_captura: "OPCION" | "NUMERICA";
+  unidad: "UMA" | "PESOS" | null;
   opciones: PerfilTransaccionalV1Opcion[];
 }
 
@@ -519,10 +540,9 @@ export interface PerfilTransaccionalV1Context {
   ultima_evaluacion: PerfilTransaccionalV1UltimaEvaluacion | null;
 }
 
-export interface PerfilTransaccionalV1RespuestaInput {
-  criterio_id: number;
-  opcion_id: number;
-}
+export type PerfilTransaccionalV1RespuestaInput =
+  | { criterio_id: number; opcion_id: number }
+  | { criterio_id: number; valor: number; unidad: "UMA" | "PESOS" };
 
 export interface PerfilTransaccionalV1Evaluacion {
   id: number;
@@ -540,7 +560,8 @@ export interface PerfilTransaccionalV1Evaluacion {
     minimo: number;
     maximo: number;
   };
-  respuestas: Array<{
+  respuestas: Array<({
+    tipo: "OPCION";
     criterio_id: number;
     criterio_codigo: string;
     criterio_texto: string;
@@ -548,7 +569,17 @@ export interface PerfilTransaccionalV1Evaluacion {
     opcion_id: number;
     opcion_etiqueta: string;
     puntaje: number;
-  }>;
+  } | {
+    tipo: "MONTO";
+    criterio_id: number;
+    criterio_codigo: string;
+    criterio_texto: string;
+    orden: number;
+    valor: number;
+    unidad: "UMA" | "PESOS";
+    matriz_rango_id: number;
+    puntaje: number;
+  })>;
   creada_en: string;
 }
 

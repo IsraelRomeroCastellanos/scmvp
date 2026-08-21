@@ -3,7 +3,7 @@
 import axios from 'axios';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Alert, Button, Card, PageHeader } from '@/components/ui';
+import { Alert, Button, Card, Input, PageHeader } from '@/components/ui';
 import {
   crearPerfilTransaccionalV1,
   isApiRequestCanceled,
@@ -54,6 +54,7 @@ export default function PerfilTransaccionalPage() {
   const [role, setRole] = useState<NormalizedRole | null>(null);
   const [context, setContext] = useState<PerfilTransaccionalV1Context | null>(null);
   const [selections, setSelections] = useState<Record<number, number>>({});
+  const [numericValues, setNumericValues] = useState<Record<number, string>>({});
   const [evaluation, setEvaluation] = useState<PerfilTransaccionalV1Evaluacion | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -89,9 +90,12 @@ export default function PerfilTransaccionalPage() {
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!clienteId || !context || saving) return;
-    const missing = context.criterios.some((criterio) => selections[criterio.id] === undefined);
+    const missing = context.criterios.some((criterio) => criterio.tipo_captura === 'NUMERICA'
+      ? numericValues[criterio.id]?.trim() === '' ||
+        !Number.isFinite(Number(numericValues[criterio.id])) || !criterio.unidad
+      : selections[criterio.id] === undefined);
     if (missing) {
-      setError('Selecciona una opción en cada pregunta antes de continuar.');
+      setError('Completa una respuesta válida en cada criterio antes de continuar.');
       return;
     }
 
@@ -99,10 +103,9 @@ export default function PerfilTransaccionalPage() {
       setSaving(true);
       setError('');
       const saved = await crearPerfilTransaccionalV1(clienteId, {
-        respuestas: context.criterios.map((criterio) => ({
-          criterio_id: criterio.id,
-          opcion_id: selections[criterio.id],
-        })),
+        respuestas: context.criterios.map((criterio) => criterio.tipo_captura === 'NUMERICA'
+          ? { criterio_id: criterio.id, valor: Number(numericValues[criterio.id]), unidad: criterio.unidad! }
+          : { criterio_id: criterio.id, opcion_id: selections[criterio.id] }),
       });
       setEvaluation(saved);
     } catch (requestError) {
@@ -176,7 +179,11 @@ export default function PerfilTransaccionalPage() {
               {[...evaluation.respuestas].sort((a, b) => a.orden - b.orden).map((respuesta, index) => (
                 <li key={respuesta.criterio_id} className="rounded-control border border-border-light p-4">
                   <p className="font-medium">{index + 1}. {respuesta.criterio_texto}</p>
-                  <p className="mt-1 text-sm text-text-secondary">{respuesta.opcion_etiqueta}</p>
+                  <p className="mt-1 text-sm text-text-secondary">
+                    {respuesta.tipo === 'MONTO'
+                      ? `${respuesta.valor} ${respuesta.unidad}`
+                      : respuesta.opcion_etiqueta}
+                  </p>
                 </li>
               ))}
             </ol>
@@ -189,7 +196,20 @@ export default function PerfilTransaccionalPage() {
             <fieldset key={criterio.id} className="rounded-panel border border-border-light bg-white p-5 shadow-card">
               <legend className="px-1 font-semibold">{index + 1}. {criterio.texto}</legend>
               <div className="mt-3 space-y-2">
-                {[...criterio.opciones].sort((a, b) => a.orden - b.orden).map((opcion) => (
+                {criterio.tipo_captura === 'NUMERICA' ? (
+                  <label className="block text-sm text-text-secondary">
+                    Monto esperado o declarado ({criterio.unidad})
+                    <Input
+                      className="mt-1"
+                      inputMode="decimal"
+                      value={numericValues[criterio.id] ?? ''}
+                      onChange={(event) => setNumericValues((current) => ({
+                        ...current,
+                        [criterio.id]: event.target.value,
+                      }))}
+                    />
+                  </label>
+                ) : [...criterio.opciones].sort((a, b) => a.orden - b.orden).map((opcion) => (
                   <label key={opcion.id} className="flex cursor-pointer items-center gap-3 rounded-control border border-border-light p-3 hover:bg-surface-muted">
                     <input
                       type="radio"

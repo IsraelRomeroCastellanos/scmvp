@@ -213,10 +213,35 @@ Seeds PT, todos `CAPTURA_OPCIONES`:
 - `ZONA_GEOGRAFICA_PT`: Zona geográfica.
 
 PT V1 permite seleccionar entre tres y seis criterios. Cada nombre es canónico y
-fijo; la empresa captura sólo las descripciones Bajo, Medio y Alto, asociadas
-internamente a 1, 2 y 3. Para `N` criterios el dominio es `N..3N`. PT debe quedar
-guardado y completo antes de habilitar GR. Las versiones históricas no se
-reescriben ni reinterpretan.
+fijo. En criterios descriptivos, la empresa configura Bajo, Medio y Alto y el PT
+selecciona una opción. En `MONTO` V2 configura `UMA` o `PESOS` y dos cortes; el
+PT captura el monto esperado/declarado y resuelve automáticamente su tramo. En
+ambos casos Bajo, Medio y Alto equivalen internamente a 1, 2 y 3. Para `N`
+criterios el dominio es `N..3N`. PT debe quedar
+guardado y completo antes de habilitar GR. La empresa define fronteras inclusivas
+`PT1/PT2/PT3` sin huecos ni traslapes; una vista previa muestra criterios,
+descripciones, valores internos, dominio y fronteras antes de la confirmación
+expresa **Guardar matriz PT**. Las versiones históricas no se reescriben ni
+reinterpretan.
+
+`MONTO` V1 permanece histórica como `CAPTURA_OPCIONES/OPCIONES`. `MONTO` V2 es
+la versión vigente `CAPTURA_RANGO_NUMERICO/RANGOS_NUMERICOS`: `MONTO` identifica
+la dimensión canónica y cada empresa elige `UMA` o `PESOS` como unidad concreta.
+La captura recibe dos cortes decimales y deriva tres tramos: hasta corte 1=`1`,
+más de corte 1 y hasta corte 2=`2`, y más de corte 2=`3`. Las matrices enlazadas
+a V1 conservan sus opciones. El resolver numérico está disponible, pero la
+captura PT inicial recibe el monto esperado/declarado en la misma unidad y
+persiste valor numérico, unidad, rango resuelto y puntaje junto con la evaluación,
+matriz y resultado PT. No existe conversión UMA/PESOS.
+
+La operación futura seguirá el flujo valor observado → resolver de la matriz
+aplicable → rango observado → comparación con rango esperado →
+consistente/desviación, sin reescribir el PT inicial. La captura de operaciones,
+su carga masiva y las alertas no forman parte de este sublote.
+
+El patrón arquitectónico reutilizable es dimensión/fuente → unidad empresarial
+→ dos límites → tres tramos → valoración. Su eventual uso en GR no se implementa
+en este sublote.
 
 Seeds GR:
 
@@ -627,8 +652,9 @@ permita crear clientes sin una versión `PUBLICADA` y activa.
 - identificación de los roles efectivos de PostgreSQL y definición nominal de
   `GRANT`/`REVOKE`;
 - smoke funcional integral del flujo editorial real y del bloqueo de clientes;
-- publicación PT: entre 3 y 6 criterios canónicos, tres bandas y cobertura
-  N..3N sin huecos ni solapes; GR conserva su contrato independiente;
+- publicación PT: entre 3 y 6 criterios canónicos, fronteras empresariales
+  `PT1/PT2/PT3` y cobertura N..3N sin huecos ni solapes, confirmadas después de
+  una vista previa; GR conserva su contrato independiente;
 - futuro motor GR: un dato fuente faltante produce `NO_EVALUABLE`, sin puntaje
   ni resultado final mientras exista un criterio requerido no evaluable;
 - clonado futuro: toma la versión vigente de criterios `ACTIVO`; un criterio
@@ -693,7 +719,7 @@ backend y frontend:
 4. crear borrador;
 5. seleccionar criterios PT/GR;
 6. parametrizar criterios;
-7. configurar bandas PT/GR;
+7. definir fronteras PT y resultados GR;
 8. validar;
 9. reabrir y volver a validar cuando corresponda;
 10. publicar;
@@ -710,8 +736,8 @@ activación son operaciones separadas. Si ya existe otra activa, corresponde
 `409 MATRIZ_ACTIVA_EXISTENTE`, sin reemplazo silencioso.
 
 La composición PT exige entre 3 y 6 criterios. Para N criterios, el score va de
-N a 3N; se exigen exactamente tres bandas PT con cobertura completa sin huecos
-ni traslapes. La composición publicada
+N a 3N; se exigen las fronteras `PT1/PT2/PT3` con cobertura completa sin huecos
+ni traslapes y confirmación posterior a la vista previa. La composición publicada
 queda congelada y cualquier cambio exige nueva versión. GR nunca es captura
 manual. El motor de evaluación de clientes y los resolvers GR no deben
 declararse terminados mientras no estén implementados y probados.

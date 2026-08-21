@@ -126,6 +126,13 @@ export type ParametrizacionInput =
   | { revision: number; tipo: 'OPCIONES'; opciones: Array<{ etiqueta: string }> }
   | {
       revision: number;
+      tipo: 'MONTO_CORTES';
+      unidad: 'UMA' | 'PESOS';
+      corte_1: number;
+      corte_2: number;
+    }
+  | {
+      revision: number;
       tipo: 'RANGOS';
       rangos: Array<{
         minimo: number | null;
@@ -1000,6 +1007,12 @@ export async function replaceCompanyMatrixDraftComposition(
       .map((row) => normalizePositiveInteger(row.catalogo_criterio_gr_version_id));
     const grCompositionChanged = existingGrIds.length !== grIds.length ||
       existingGrIds.some((id, index) => id !== grIds[index]);
+    const existingPtIds = existingResult.rows
+      .filter((row) => row.ambito === 'PT')
+      .sort((left, right) => Number(left.orden) - Number(right.orden))
+      .map((row) => normalizePositiveInteger(row.catalogo_criterio_pt_version_id));
+    const ptCompositionChanged = existingPtIds.length !== ptIds.length ||
+      existingPtIds.some((id, index) => id !== ptIds[index]);
     if (grCompositionChanged) {
       const proposedPtCriterionIds = ptIds.map(
         (versionId) => existingByVersion.get(`PT:${versionId}`)?.id,
@@ -1125,6 +1138,16 @@ export async function replaceCompanyMatrixDraftComposition(
       }
     }
 
+    if (ptCompositionChanged) {
+      // Las fronteras PT sólo quedan confirmadas para la composición con la que
+      // fueron guardadas. Una composición nueva exige una confirmación final nueva.
+      await client.query(
+        `DELETE FROM public.matriz_resultado
+         WHERE matriz_version_id = $1 AND ambito = 'PT'`,
+        [matrizId],
+      );
+    }
+
     const updated = await client.query<{ revision: string }>(
       `UPDATE public.matriz_empresa_version
        SET revision = revision + 1
@@ -1184,7 +1207,45 @@ const RANGE_UNITS = new Set([
   'MONTO',
   'PUNTAJE',
   'OTRA',
+  'UMA',
+  'PESOS',
 ]);
+
+function validateAmountRanges(
+  ranges: Array<{
+    minimo: number | null;
+    maximo: number | null;
+    incluye_minimo: boolean;
+    incluye_maximo: boolean;
+  }>,
+): void {
+  if (ranges.length !== 3) throw new ConfiguracionMatrizError('CONFIGURACION_INCONSISTENTE');
+  for (const [index, range] of ranges.entries()) {
+    if (
+      (range.minimo !== null && !Number.isFinite(range.minimo)) ||
+      (range.maximo !== null && !Number.isFinite(range.maximo)) ||
+      (range.minimo === null && index !== 0) ||
+      (range.maximo === null && index !== 2) ||
+      (range.minimo === null && range.maximo === null) ||
+      (range.minimo !== null && range.maximo !== null && range.minimo >= range.maximo) ||
+      (index === 0 && (range.incluye_minimo || !range.incluye_maximo)) ||
+      (index === 1 && (range.incluye_minimo || !range.incluye_maximo)) ||
+      (index === 2 && range.incluye_minimo)
+    ) {
+      throw new ConfiguracionMatrizError('CONFIGURACION_INCONSISTENTE');
+    }
+    if (index > 0) {
+      const previous = ranges[index - 1];
+      if (
+        previous.maximo === null || range.minimo === null ||
+        previous.maximo !== range.minimo ||
+        previous.incluye_maximo === range.incluye_minimo
+      ) {
+        throw new ConfiguracionMatrizError('CONFIGURACION_INCONSISTENTE');
+      }
+    }
+  }
+}
 
 export async function saveCompanyMatrixCriterionParameters(
   db: Pool,
@@ -1278,9 +1339,11 @@ export async function saveCompanyMatrixCriterionParameters(
     const expectsRanges =
       (isPt && contractRow.tipo_resolucion === 'CAPTURA_RANGO_NUMERICO') ||
       (!isPt && contractRow.tipo_resolucion === 'KYC_RANGO');
+    const expectsAmountCuts = isPt && expectsRanges && contractRow.unidad_canonica === 'MONTO';
     if (
       (input.tipo === 'OPCIONES' && !expectsOptions) ||
-      (input.tipo === 'RANGOS' && !expectsRanges)
+      (input.tipo === 'RANGOS' && (!expectsRanges || expectsAmountCuts)) ||
+      (input.tipo === 'MONTO_CORTES' && !expectsAmountCuts)
     ) {
       throw new ConfiguracionMatrizError('PARAMETRIZACION_NO_PERMITIDA');
     }
@@ -1308,12 +1371,29 @@ export async function saveCompanyMatrixCriterionParameters(
         );
       }
     } else {
-      const unit = contractRow.unidad_canonica;
+      const unit = input.tipo === 'MONTO_CORTES' ? input.unidad : contractRow.unidad_canonica;
       if (typeof unit !== 'string' || !RANGE_UNITS.has(unit)) {
         throw new ConfiguracionMatrizError('UNIDAD_CANONICA_INCOMPATIBLE');
       }
+      const ranges = input.tipo === 'MONTO_CORTES'
+        ? [
+            {
+              minimo: null, maximo: input.corte_1,
+              incluye_minimo: false, incluye_maximo: true,
+            },
+            {
+              minimo: input.corte_1, maximo: input.corte_2,
+              incluye_minimo: false, incluye_maximo: true,
+            },
+            {
+              minimo: input.corte_2, maximo: null,
+              incluye_minimo: false, incluye_maximo: false,
+            },
+          ]
+        : input.rangos;
+      if (input.tipo === 'MONTO_CORTES') validateAmountRanges(ranges);
       await client.query('DELETE FROM public.matriz_rango WHERE criterio_id = $1', [criterioId]);
-      for (const [index, range] of input.rangos.entries()) {
+      for (const [index, range] of ranges.entries()) {
         await client.query(
           `INSERT INTO public.matriz_rango (
              criterio_id, codigo, unidad, minimo, maximo,
@@ -1333,6 +1413,14 @@ export async function saveCompanyMatrixCriterionParameters(
           ],
         );
       }
+    }
+
+    if (isPt) {
+      await client.query(
+        `DELETE FROM public.matriz_resultado
+         WHERE matriz_version_id = $1 AND ambito = 'PT'`,
+        [matrizId],
+      );
     }
 
     const updated = await client.query<{ revision: string }>(
@@ -1407,6 +1495,44 @@ function validateFinalBands(
       throw new ConfiguracionMatrizError('RESULTADOS_INVALIDOS');
     }
   }
+}
+
+async function ensurePtCompleteForGrEditing(
+  client: PoolClient,
+  matrizId: number,
+): Promise<void> {
+  const criteria = await loadDraftCriteria(client, matrizId, 'PT');
+  if (
+    criteria.length < 3 || criteria.length > PT_V1_CRITERIA.length ||
+    criteria.some((criterion) => {
+      if (!PT_V1_CRITERIA.includes(criterion.codigo as typeof PT_V1_CRITERIA[number])) return true;
+      if (criterion.tipo_resolucion === 'CAPTURA_OPCIONES') {
+        return criterion.rangos.length !== 0 || criterion.opciones.length !== 3 ||
+          criterion.opciones.some((option, index) =>
+            option.orden !== index + 1 || option.puntaje !== index + 1 || !option.etiqueta.trim()
+          ) || new Set(criterion.opciones.map((option) => option.etiqueta.trim())).size !== 3;
+      }
+      if (
+        criterion.codigo !== 'MONTO' ||
+        criterion.tipo_resolucion !== 'CAPTURA_RANGO_NUMERICO' ||
+        criterion.parametrizacion !== 'RANGOS_NUMERICOS' ||
+        criterion.unidad_canonica !== 'MONTO' || criterion.opciones.length !== 0
+      ) return true;
+      try {
+        validateAmountRanges(criterion.rangos);
+        const units = new Set(criterion.rangos.map((range) => range.unidad));
+        return criterion.rangos.some((range, index) =>
+          range.orden !== index + 1 || range.puntaje !== index + 1
+        ) || units.size !== 1 || !['UMA', 'PESOS'].includes([...units][0]);
+      } catch {
+        return true;
+      }
+    })
+  ) {
+    throw new ConfiguracionMatrizError('CONFIGURACION_INCONSISTENTE');
+  }
+  const results = await loadMatrixResults(client, matrizId, 'PT');
+  validateFinalBands(results, criteria.length);
 }
 
 async function validatePublishableMatrix(
@@ -1537,12 +1663,25 @@ async function validatePublishableMatrix(
       if (ranges.length !== 3 || options.length !== 0) {
         throw new ConfiguracionMatrizError('MATRIZ_NO_PUBLICABLE');
       }
+      if (criterion.codigo === 'MONTO') {
+        const units = new Set(ranges.map((range) => String(range.unidad)));
+        if (units.size !== 1 || !['UMA', 'PESOS'].includes([...units][0])) {
+          throw new ConfiguracionMatrizError('CONFIGURACION_INCONSISTENTE');
+        }
+        validateAmountRanges(ranges.map((range) => ({
+          minimo: normalizeNullableNumber(range.minimo),
+          maximo: normalizeNullableNumber(range.maximo),
+          incluye_minimo: range.minimo_incluido,
+          incluye_maximo: range.maximo_incluido,
+        })));
+      }
       ranges.forEach((range, index) => {
         const minimum = normalizeNullableNumber(range.minimo);
         const maximum = normalizeNullableNumber(range.maximo);
         if (
           range.codigo !== `RANGO_${index + 1}` || Number(range.orden) !== index + 1 ||
-          Number(range.puntaje) !== index + 1 || range.unidad !== criterion.unidad_canonica ||
+          Number(range.puntaje) !== index + 1 ||
+          (criterion.codigo !== 'MONTO' && range.unidad !== criterion.unidad_canonica) ||
           (minimum === null && index !== 0) || (maximum === null && index !== 2) ||
           (minimum === null && maximum === null) ||
           (minimum !== null && maximum !== null && minimum > maximum) ||
@@ -1648,6 +1787,7 @@ export async function replaceCompanyMatrixCriterionRules(
     if (matrix.estado_editorial !== 'BORRADOR' || matrix.activa !== false) {
       throw new ConfiguracionMatrizError('MATRIZ_NO_EDITABLE');
     }
+    await ensurePtCompleteForGrEditing(client, matrizId);
 
     const criterionResult = await client.query(
       `SELECT mc.id, mc.ambito, c.codigo_canonico AS codigo,
@@ -1780,6 +1920,9 @@ export async function saveCompanyMatrixResults(
     const matrix = await lockMatrixForMutation(client, empresaId, matrizId, input.revision);
     if (matrix.estado_editorial !== 'BORRADOR') {
       throw new ConfiguracionMatrizError('MATRIZ_NO_EDITABLE');
+    }
+    if (ambito === 'GR') {
+      await ensurePtCompleteForGrEditing(client, matrizId);
     }
     const count = await client.query<{ total: string }>(
       `SELECT pg_catalog.count(*)::text AS total

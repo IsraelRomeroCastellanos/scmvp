@@ -13,6 +13,7 @@ import {
   getApiErrorMessage,
   guardarComposicionMatrizEmpresa,
   guardarOpcionesCriterioMatriz,
+  guardarRangosCriterioMatriz,
   guardarReglasMatrizGr,
   guardarResultadosMatrizEmpresa,
   isApiRequestCanceled,
@@ -44,9 +45,21 @@ type CriterioEditable = {
   codigo: string;
   texto: string;
   tipoResolucion: string;
+  unidadCanonica: string | null;
+  unidadEmpresarial: '' | 'UMA' | 'PESOS';
+  corte1: string;
+  corte2: string;
   opciones: string[];
+  rangos: RangoEditable[];
   reglas: ReglaEditable[];
   cobertura?: CoberturaCriterioGr;
+};
+
+type RangoEditable = {
+  minimo: string;
+  maximo: string;
+  incluyeMinimo: boolean;
+  incluyeMaximo: boolean;
 };
 
 type ReglaEditable = {
@@ -55,6 +68,67 @@ type ReglaEditable = {
 };
 
 type BandaEditable = { nombre: string; minimo: string; maximo: string };
+
+function arePtBoundariesValid(bands: BandaEditable[], criterionCount: number): boolean {
+  if (criterionCount < 3 || criterionCount > 6 || bands.length !== 3) return false;
+  let expectedMinimum = criterionCount;
+  for (const band of bands) {
+    if (!/^\d+$/.test(band.minimo) || !/^\d+$/.test(band.maximo)) return false;
+    const minimum = Number(band.minimo);
+    const maximum = Number(band.maximo);
+    if (minimum !== expectedMinimum || maximum < minimum) return false;
+    expectedMinimum = maximum + 1;
+  }
+  return expectedMinimum === criterionCount * 3 + 1;
+}
+
+function areAmountRangesValid(ranges: RangoEditable[]): boolean {
+  if (ranges.length !== 3) return false;
+  const normalized = ranges.map((range) => ({
+    minimo: range.minimo.trim() === '' ? null : Number(range.minimo),
+    maximo: range.maximo.trim() === '' ? null : Number(range.maximo),
+    incluyeMinimo: range.incluyeMinimo,
+    incluyeMaximo: range.incluyeMaximo,
+  }));
+  return normalized.every((range, index) =>
+    (range.minimo === null ? index === 0 : Number.isFinite(range.minimo)) &&
+    (range.maximo === null ? index === 2 : Number.isFinite(range.maximo)) &&
+    !(range.minimo === null && range.maximo === null) &&
+    (range.minimo === null || range.maximo === null || range.minimo <= range.maximo) &&
+    (index === 0 || (
+      normalized[index - 1].maximo === range.minimo &&
+      normalized[index - 1].incluyeMaximo !== range.incluyeMinimo
+    ))
+  );
+}
+
+function deriveAmountRanges(cut1: string, cut2: string): RangoEditable[] {
+  return [
+    { minimo: '', maximo: cut1, incluyeMinimo: false, incluyeMaximo: true },
+    { minimo: cut1, maximo: cut2, incluyeMinimo: false, incluyeMaximo: true },
+    { minimo: cut2, maximo: '', incluyeMinimo: false, incluyeMaximo: false },
+  ];
+}
+
+function formatAmountRange(range: RangoEditable, unit: string | null): string {
+  const suffix = unit ? ` ${unit}` : '';
+  if (range.minimo.trim() === '') return `Hasta ${range.maximo}${suffix}`;
+  if (range.maximo.trim() === '') return `Más de ${range.minimo}${suffix}`;
+  return `Más de ${range.minimo} y hasta ${range.maximo}${suffix}`;
+}
+
+function isPtCriterionConfigured(item: CriterioEditable): boolean {
+  if (item.matrizCriterioId === undefined) return false;
+  if (item.tipoResolucion === 'CAPTURA_OPCIONES') {
+    return item.opciones.length === 3 && item.opciones.every((option) => !!option.trim()) &&
+      new Set(item.opciones.map((option) => option.trim())).size === 3;
+  }
+  return item.codigo === 'MONTO' && item.unidadCanonica === 'MONTO' &&
+    (item.unidadEmpresarial === 'UMA' || item.unidadEmpresarial === 'PESOS') &&
+    Number.isFinite(Number(item.corte1)) && Number.isFinite(Number(item.corte2)) &&
+    item.corte1.trim() !== '' && item.corte2.trim() !== '' &&
+    Number(item.corte1) < Number(item.corte2) && areAmountRangesValid(item.rangos);
+}
 
 function toBands(items: ResultadoMatrizEmpresa[]): BandaEditable[] {
   return [0, 1, 2].map((index) => ({
@@ -78,7 +152,22 @@ function toEditable(items: CriterioBorradorMatriz[]): CriterioEditable[] {
       codigo: item.codigo,
       texto: item.texto,
       tipoResolucion: item.tipo_resolucion,
+      unidadCanonica: item.unidad_canonica,
+      unidadEmpresarial: item.rangos[0]?.unidad === 'UMA' || item.rangos[0]?.unidad === 'PESOS'
+        ? item.rangos[0].unidad : '',
+      corte1: item.rangos[0]?.maximo === null || item.rangos[0]?.maximo === undefined
+        ? '' : String(item.rangos[0].maximo),
+      corte2: item.rangos[1]?.maximo === null || item.rangos[1]?.maximo === undefined
+        ? '' : String(item.rangos[1].maximo),
       opciones: [0, 1, 2].map((index) => item.opciones[index]?.etiqueta ?? ''),
+      rangos: [0, 1, 2].map((index) => ({
+        minimo: item.rangos[index]?.minimo === null || item.rangos[index]?.minimo === undefined
+          ? '' : String(item.rangos[index].minimo),
+        maximo: item.rangos[index]?.maximo === null || item.rangos[index]?.maximo === undefined
+          ? '' : String(item.rangos[index].maximo),
+        incluyeMinimo: item.rangos[index]?.incluye_minimo ?? index === 0,
+        incluyeMaximo: item.rangos[index]?.incluye_maximo ?? true,
+      })),
       cobertura: item.cobertura,
       reglas: (item.cobertura?.esperada ?? []).map((clave) => {
         const rule = persisted.get(clave);
@@ -129,6 +218,7 @@ function MatrixSection({
   onChange,
   onParameterChange,
   onSaveOptions,
+  onSaveRanges,
   conditionLabels,
   savingRuleId,
   rulesDisabled,
@@ -145,6 +235,7 @@ function MatrixSection({
   onChange: (items: CriterioEditable[]) => void;
   onParameterChange: (items: CriterioEditable[], criterioId?: number) => void;
   onSaveOptions: (item: CriterioEditable) => void;
+  onSaveRanges: (item: CriterioEditable) => void;
   conditionLabels: Record<string, string>;
   savingRuleId: number | null;
   rulesDisabled: boolean;
@@ -164,7 +255,14 @@ function MatrixSection({
         codigo: item.codigo,
         texto: item.nombre_visible_global,
         tipoResolucion: item.tipo_resolucion,
+        unidadCanonica: item.unidad_canonica,
+        unidadEmpresarial: '',
+        corte1: '',
+        corte2: '',
         opciones: ['', '', ''],
+        rangos: [0, 1, 2].map((index) => ({
+          minimo: '', maximo: '', incluyeMinimo: index === 0, incluyeMaximo: true,
+        })),
         reglas: [],
       },
     ]);
@@ -301,11 +399,81 @@ function MatrixSection({
                 )}
               </div>
             ) : null}
-            {item.tipoResolucion === 'CAPTURA_RANGO_NUMERICO' || item.tipoResolucion === 'KYC_RANGO' ? (
-              <p className="mt-4 border-t border-border-light pt-4 text-sm text-text-secondary">
-                Este criterio usa tres rangos numéricos. La API valida su unidad canónica;
-                la captura visual de rangos se incorporará cuando exista un criterio activo de este tipo.
-              </p>
+            {ambito === 'PT' && item.tipoResolucion === 'CAPTURA_RANGO_NUMERICO' ? (
+              <div className="mt-4 border-t border-border-light pt-4">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <label className="text-xs font-medium text-text-secondary">
+                    Unidad
+                    <select
+                      className="mt-1 h-10 w-full rounded-md border border-border-light bg-surface px-3 text-sm text-text-primary"
+                      value={item.unidadEmpresarial}
+                      disabled={disabled || parametersDisabled || !item.matrizCriterioId}
+                      onChange={(event) => {
+                        const next = [...selected];
+                        next[index] = {
+                          ...item,
+                          unidadEmpresarial: event.target.value as '' | 'UMA' | 'PESOS',
+                        };
+                        onParameterChange(next, item.matrizCriterioId);
+                      }}
+                    >
+                      <option value="">Seleccionar unidad</option>
+                      <option value="UMA">UMA</option>
+                      <option value="PESOS">PESOS</option>
+                    </select>
+                  </label>
+                  {[
+                    { label: 'Límite Bajo / Medio', key: 'corte1' as const },
+                    { label: 'Límite Medio / Alto', key: 'corte2' as const },
+                  ].map(({ label, key }) => (
+                    <label key={key} className="text-xs font-medium text-text-secondary">
+                      {label}
+                      <Input
+                        className="mt-1"
+                        inputMode="decimal"
+                        value={item[key]}
+                        disabled={disabled || parametersDisabled || !item.matrizCriterioId}
+                        onChange={(event) => {
+                          const next = [...selected];
+                          const cuts = { corte1: item.corte1, corte2: item.corte2, [key]: event.target.value };
+                          next[index] = {
+                            ...item,
+                            [key]: event.target.value,
+                            rangos: deriveAmountRanges(cuts.corte1, cuts.corte2),
+                          };
+                          onParameterChange(next, item.matrizCriterioId);
+                        }}
+                      />
+                    </label>
+                  ))}
+                </div>
+                <div className="mt-4 overflow-hidden rounded-card border border-border-light">
+                  {['Bajo', 'Medio', 'Alto'].map((label, rangeIndex) => (
+                    <div key={label} className="grid grid-cols-[5rem_1fr_4rem] gap-3 border-b border-border-light px-3 py-2 text-sm last:border-b-0">
+                      <span className="font-medium text-text-primary">{label}</span>
+                      <span className="text-text-secondary">
+                        {formatAmountRange(item.rangos[rangeIndex], item.unidadEmpresarial)}
+                      </span>
+                      <span className="text-right font-semibold text-text-primary">Valor {rangeIndex + 1}</span>
+                    </div>
+                  ))}
+                </div>
+                {item.matrizCriterioId ? (
+                  <Button
+                    className="mt-3"
+                    size="sm"
+                    disabled={disabled || parametersDisabled || savingParameterId === item.matrizCriterioId}
+                    onClick={() => onSaveRanges(item)}
+                  >
+                    {savingParameterId === item.matrizCriterioId
+                      ? 'Guardando rangos…' : 'Guardar rangos de Monto'}
+                  </Button>
+                ) : (
+                  <p className="mt-3 text-xs text-semantic-warning">
+                    Guarda primero la selección de criterios.
+                  </p>
+                )}
+              </div>
             ) : null}
             {ambito === 'GR' && ['CATALOGO_GLOBAL', 'DERIVADO', 'ESTRUCTURADO'].includes(item.tipoResolucion) ? (
               <div className="mt-4 border-t border-border-light pt-4">
@@ -484,6 +652,79 @@ function ResultBandsSection({
   );
 }
 
+function PtBoundariesSection({
+  criterionCount,
+  bands,
+  disabled,
+  onChange,
+}: {
+  criterionCount: number;
+  bands: BandaEditable[];
+  disabled: boolean;
+  onChange: (bands: BandaEditable[]) => void;
+}) {
+  return (
+    <Card className="p-5">
+      <h3 className="font-semibold text-text-primary">
+        Define los rangos de PT1, PT2 y PT3
+      </h3>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <p className="rounded-card bg-surface-muted p-3 text-sm text-text-primary">
+          Puntaje mínimo posible: <strong>{criterionCount}</strong>
+        </p>
+        <p className="rounded-card bg-surface-muted p-3 text-sm text-text-primary">
+          Puntaje máximo posible: <strong>{criterionCount * 3}</strong>
+        </p>
+      </div>
+      <div className="mt-4 space-y-3">
+        {bands.map((band, index) => (
+          <div
+            key={index}
+            className="grid gap-3 rounded-card border border-border-light p-3 sm:grid-cols-[5rem_1fr_1fr] sm:items-end"
+          >
+            <p className="pb-3 font-semibold text-text-primary">PT{index + 1}</p>
+            <label className="text-xs font-medium text-text-secondary">
+              Desde
+              <Input
+                className="mt-1"
+                aria-label={`PT${index + 1} desde`}
+                inputMode="numeric"
+                value={band.minimo}
+                disabled={disabled}
+                onChange={(event) => {
+                  const next = [...bands];
+                  next[index] = { ...band, nombre: `PT${index + 1}`, minimo: event.target.value };
+                  onChange(next);
+                }}
+              />
+            </label>
+            <label className="text-xs font-medium text-text-secondary">
+              Hasta
+              <Input
+                className="mt-1"
+                aria-label={`PT${index + 1} hasta`}
+                inputMode="numeric"
+                value={band.maximo}
+                disabled={disabled}
+                onChange={(event) => {
+                  const next = [...bands];
+                  next[index] = { ...band, nombre: `PT${index + 1}`, maximo: event.target.value };
+                  onChange(next);
+                }}
+              />
+            </label>
+          </div>
+        ))}
+      </div>
+      {!arePtBoundariesValid(bands, criterionCount) ? (
+        <p className="mt-3 text-sm text-semantic-warning">
+          Los rangos deben cubrir todo el puntaje posible, sin huecos ni traslapes.
+        </p>
+      ) : null}
+    </Card>
+  );
+}
+
 export default function ConfigurarMatrizEmpresaPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -507,6 +748,7 @@ export default function ConfigurarMatrizEmpresaPage() {
   const [compositionDirty, setCompositionDirty] = useState(false);
   const [ptCompositionDirty, setPtCompositionDirty] = useState(false);
   const [ptBandsDirty, setPtBandsDirty] = useState(false);
+  const [ptConfirmationRequired, setPtConfirmationRequired] = useState(true);
   const [grBandsDirty, setGrBandsDirty] = useState(false);
   const [creating, setCreating] = useState(false);
   const [cloneReason, setCloneReason] = useState('');
@@ -543,6 +785,7 @@ export default function ConfigurarMatrizEmpresaPage() {
         setCompositionDirty(false);
         setPtCompositionDirty(false);
         setPtBandsDirty(false);
+        setPtConfirmationRequired(currentDraft.resultados_pt.length !== 3);
         setGrBandsDirty(false);
         setDirtyRuleIds(new Set());
         setDirtyPtOptionIds(new Set());
@@ -558,6 +801,7 @@ export default function ConfigurarMatrizEmpresaPage() {
           setCompositionDirty(false);
           setPtCompositionDirty(false);
           setPtBandsDirty(false);
+          setPtConfirmationRequired(true);
           setGrBandsDirty(false);
           setDirtyRuleIds(new Set());
           setDirtyPtOptionIds(new Set());
@@ -589,17 +833,12 @@ export default function ConfigurarMatrizEmpresaPage() {
     [criteriosGr],
   );
   const ptSelectionValid = criteriosPt.length >= 3 && criteriosPt.length <= 6;
-  const ptDescriptionsComplete = criteriosPt.every(
-    (item) => item.matrizCriterioId !== undefined && item.opciones.length === 3 &&
-      item.opciones.every((option) => !!option.trim()) &&
-      new Set(item.opciones.map((option) => option.trim())).size === 3,
-  );
-  const ptBandsComplete = bandasPt.length === 3 && bandasPt.every(
-    (band) => !!band.nombre.trim() && !!band.minimo.trim() && !!band.maximo.trim(),
-  );
+  const ptDescriptionsComplete = criteriosPt.every(isPtCriterionConfigured);
+  const ptBoundariesValid = arePtBoundariesValid(bandasPt, criteriosPt.length);
   const ptReadyForBands = ptSelectionValid && ptDescriptionsComplete &&
     !ptCompositionDirty && dirtyPtOptionIds.size === 0;
-  const ptComplete = ptReadyForBands && ptBandsComplete && !ptBandsDirty;
+  const ptReadyForPreview = ptReadyForBands && ptBoundariesValid;
+  const ptComplete = ptReadyForPreview && !ptBandsDirty && !ptConfirmationRequired;
   const hasPendingChanges = compositionDirty || ptBandsDirty || grBandsDirty ||
     dirtyRuleIds.size > 0 || dirtyPtOptionIds.size > 0;
   const ruleConditionLabels = useMemo(() => {
@@ -688,6 +927,7 @@ export default function ConfigurarMatrizEmpresaPage() {
       setCriteriosGr(toEditable(saved.criterios_gr));
       setCompositionDirty(false);
       setPtCompositionDirty(false);
+      if (savingPtComposition) setPtConfirmationRequired(true);
       setDirtyRuleIds(new Set());
       setDirtyPtOptionIds(new Set());
       setSuccess(
@@ -750,26 +990,65 @@ export default function ConfigurarMatrizEmpresaPage() {
       remainingDirty.delete(item.matrizCriterioId);
       setDirtyPtOptionIds(remainingDirty);
       const allDescriptionsComplete = saved.criterios_pt.length >= 3 &&
-        saved.criterios_pt.every(
-          (criterion) => criterion.opciones.length === 3 &&
-            criterion.opciones.every((option) => !!option.etiqueta.trim()) &&
-            new Set(criterion.opciones.map((option) => option.etiqueta.trim())).size === 3,
-        );
-      const profileCompleteAfterSave = allDescriptionsComplete &&
-        remainingDirty.size === 0 && !ptCompositionDirty &&
-        ptBandsComplete && !ptBandsDirty;
+        toEditable(saved.criterios_pt).every(isPtCriterionConfigured);
       setSuccess(
-        profileCompleteAfterSave
-          ? 'Perfil Transaccional completo y guardado correctamente.'
-          : allDescriptionsComplete && remainingDirty.size === 0
+        allDescriptionsComplete && remainingDirty.size === 0
             ? 'Criterios y descripciones de Perfil Transaccional completados.'
             : 'Descripción guardada correctamente.',
       );
+      setPtConfirmationRequired(true);
     } catch (requestError) {
       setError(getApiErrorMessage(
         requestError,
         'No fue posible guardar las respuestas. Si la matriz cambió, recarga la página.',
       ));
+    } finally {
+      setSavingParameterId(null);
+    }
+  };
+
+  const saveRanges = async (item: CriterioEditable) => {
+    if (!draft || !item.matrizCriterioId || !isPtCriterionConfigured(item)) {
+      setError('Selecciona UMA o PESOS y captura dos límites válidos, de menor a mayor.');
+      setSuccess('');
+      return;
+    }
+    setSavingParameterId(item.matrizCriterioId);
+    setError('');
+    setSuccess('');
+    try {
+      const saved = await guardarRangosCriterioMatriz(
+        empresaId,
+        draft.id,
+        item.matrizCriterioId,
+        draft.revision,
+        item.unidadEmpresarial as 'UMA' | 'PESOS',
+        Number(item.corte1),
+        Number(item.corte2),
+      );
+      setDraft(saved);
+      const savedPt = toEditable(saved.criterios_pt);
+      const savedByVersion = new Map(savedPt.map((criterion) => [criterion.versionId, criterion]));
+      setCriteriosPt((current) => current.map((criterion) => {
+        const persisted = savedByVersion.get(criterion.versionId);
+        return persisted ? {
+          ...criterion,
+          rangos: persisted.rangos,
+          unidadEmpresarial: persisted.unidadEmpresarial,
+          corte1: persisted.corte1,
+          corte2: persisted.corte2,
+        } : criterion;
+      }));
+      setCriteriosGr((current) => mergeSavedGrCriteria(saved.criterios_gr, current));
+      setDirtyPtOptionIds((current) => {
+        const next = new Set(current);
+        next.delete(item.matrizCriterioId!);
+        return next;
+      });
+      setPtConfirmationRequired(true);
+      setSuccess('Rangos de Monto guardados correctamente.');
+    } catch (requestError) {
+      setError(getApiErrorMessage(requestError, 'No fue posible guardar los rangos de Monto.'));
     } finally {
       setSavingParameterId(null);
     }
@@ -830,8 +1109,8 @@ export default function ConfigurarMatrizEmpresaPage() {
         draft.id,
         ambito,
         draft.revision,
-        bands.map((band) => ({
-          nombre: band.nombre.trim(),
+        bands.map((band, index) => ({
+          nombre: ambito === 'PT' ? `PT${index + 1}` : band.nombre.trim(),
           minimo: Number(band.minimo),
           maximo: Number(band.maximo),
         })),
@@ -841,6 +1120,7 @@ export default function ConfigurarMatrizEmpresaPage() {
       if (ambito === 'PT') {
         setBandasPt(toBands(saved.resultados_pt));
         setPtBandsDirty(false);
+        setPtConfirmationRequired(false);
       } else {
         setBandasGr(toBands(saved.resultados_gr));
         setGrBandsDirty(false);
@@ -878,6 +1158,7 @@ export default function ConfigurarMatrizEmpresaPage() {
       setCompositionDirty(false);
       setPtCompositionDirty(false);
       setPtBandsDirty(false);
+      setPtConfirmationRequired(false);
       setGrBandsDirty(false);
       setDirtyRuleIds(new Set());
       setDirtyPtOptionIds(new Set());
@@ -919,6 +1200,7 @@ export default function ConfigurarMatrizEmpresaPage() {
       setCompositionDirty(false);
       setPtCompositionDirty(false);
       setPtBandsDirty(false);
+      setPtConfirmationRequired(true);
       setGrBandsDirty(false);
       setDirtyPtOptionIds(new Set());
       await load();
@@ -1035,14 +1317,17 @@ export default function ConfigurarMatrizEmpresaPage() {
                 setCriteriosPt(items);
                 setCompositionDirty(true);
                 setPtCompositionDirty(true);
+                setPtConfirmationRequired(true);
               }}
               onParameterChange={(items, criterioId) => {
                 setCriteriosPt(items);
                 if (criterioId !== undefined) {
                   setDirtyPtOptionIds((current) => new Set(current).add(criterioId));
+                  setPtConfirmationRequired(true);
                 }
               }}
               onSaveOptions={saveOptions}
+              onSaveRanges={saveRanges}
               conditionLabels={ruleConditionLabels}
               savingRuleId={savingRuleId}
               rulesDisabled
@@ -1051,36 +1336,119 @@ export default function ConfigurarMatrizEmpresaPage() {
               maxSelected={6}
               parametersDisabled={compositionDirty}
             />
+            {!ptComplete ? (
+              <div className="flex justify-end">
+                <Button
+                  disabled={
+                    draft.estado_editorial !== 'BORRADOR' || saving ||
+                    savingParameterId !== null || !ptSelectionValid
+                  }
+                  onClick={save}
+                >
+                  {saving ? 'Guardando selección…' : 'Guardar selección PT'}
+                </Button>
+              </div>
+            ) : null}
           </section>
 
           {invalidLabels ? (
             <Alert variant="danger">Todas las etiquetas visibles deben contener texto.</Alert>
           ) : null}
 
-          <section className="space-y-4 border-t border-border-light pt-6" aria-labelledby="resultados-pt">
+          <section className="space-y-4 border-t border-border-light pt-6" aria-labelledby="fronteras-pt">
             <div>
-              <h2 id="resultados-pt" className="text-xl font-semibold text-text-primary">
-                2. Configuración del resultado PT
+              <h2 id="fronteras-pt" className="text-xl font-semibold text-text-primary">
+                2. Fronteras del resultado PT
               </h2>
               <p className="mt-1 text-sm text-text-secondary">
-                Define por separado las tres bandas del resultado de Perfil Transaccional.
+                Define los rangos de PT1, PT2 y PT3.
               </p>
             </div>
-            <ResultBandsSection
-              ambito="PT"
+            <PtBoundariesSection
               criterionCount={criteriosPt.length}
               bands={bandasPt}
               disabled={
                 draft.estado_editorial !== 'BORRADOR' || savingBands !== null ||
                 savingRuleId !== null || transitioning || !ptReadyForBands
               }
-              saving={savingBands === 'PT'}
               onChange={(bands) => {
                 setBandasPt(bands);
                 setPtBandsDirty(true);
+                setPtConfirmationRequired(true);
               }}
-              onSave={() => void saveBands('PT')}
             />
+          </section>
+
+          <section className="space-y-4 border-t border-border-light pt-6" aria-labelledby="vista-previa-pt">
+            <div>
+              <h2 id="vista-previa-pt" className="text-xl font-semibold text-text-primary">
+                3. Vista previa
+              </h2>
+              <p className="mt-1 text-sm text-text-secondary">
+                Revisa la matriz antes de confirmar su guardado.
+              </p>
+            </div>
+            {ptReadyForPreview ? (
+              <Card className="space-y-5 p-5">
+                {criteriosPt.map((criterion) => (
+                  <div key={criterion.versionId}>
+                    <h3 className="font-semibold text-text-primary">{criterion.texto}</h3>
+                    <div className="mt-2 overflow-hidden rounded-card border border-border-light">
+                      {['Bajo', 'Medio', 'Alto'].map((label, index) => (
+                        <div
+                          key={label}
+                          className="grid grid-cols-[5rem_1fr_3rem] gap-3 border-b border-border-light px-3 py-2 text-sm last:border-b-0"
+                        >
+                          <span className="font-medium text-text-primary">{label}</span>
+                          <span className="text-text-secondary">
+                            {criterion.tipoResolucion === 'CAPTURA_RANGO_NUMERICO'
+                              ? formatAmountRange(criterion.rangos[index], criterion.unidadEmpresarial)
+                              : criterion.opciones[index]}
+                          </span>
+                          <span className="text-right font-semibold text-text-primary">{index + 1}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <div>
+                  <h3 className="font-semibold text-text-primary">Resultado PT</h3>
+                  <p className="mt-1 text-sm text-text-secondary">
+                    Puntaje posible: {criteriosPt.length}–{criteriosPt.length * 3}
+                  </p>
+                  <div className="mt-2 overflow-hidden rounded-card border border-border-light">
+                    {bandasPt.map((band, index) => (
+                      <div
+                        key={index}
+                        className="grid grid-cols-[5rem_1fr] gap-3 border-b border-border-light px-3 py-2 text-sm last:border-b-0"
+                      >
+                        <span className="font-medium text-text-primary">PT{index + 1}</span>
+                        <span className="text-text-secondary">{band.minimo}–{band.maximo}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Card>
+            ) : (
+              <Alert variant="info">
+                Completa los criterios, las descripciones y las fronteras para ver el resumen.
+              </Alert>
+            )}
+          </section>
+
+          <section className="space-y-3 border-t border-border-light pt-6" aria-labelledby="confirmacion-pt">
+            <h2 id="confirmacion-pt" className="text-xl font-semibold text-text-primary">
+              4. Confirmación
+            </h2>
+            <Button
+              disabled={
+                draft.estado_editorial !== 'BORRADOR' || savingBands !== null ||
+                transitioning || !ptReadyForPreview
+              }
+              onClick={() => void saveBands('PT')}
+            >
+              {savingBands === 'PT' ? 'Guardando matriz PT…' : 'Guardar matriz PT'}
+            </Button>
           </section>
 
           {!ptComplete ? (
@@ -1098,6 +1466,7 @@ export default function ConfigurarMatrizEmpresaPage() {
               }}
               onParameterChange={setCriteriosGr}
               onSaveOptions={saveOptions}
+              onSaveRanges={saveRanges}
               conditionLabels={ruleConditionLabels}
               savingRuleId={savingRuleId}
               rulesDisabled={
@@ -1129,7 +1498,7 @@ export default function ConfigurarMatrizEmpresaPage() {
             onSave={() => void saveBands('GR')}
           /> : null}
 
-          <div className="flex justify-end">
+          {ptComplete ? <div className="flex justify-end">
             <Button
               disabled={
                 draft.estado_editorial !== 'BORRADOR' || saving ||
@@ -1137,13 +1506,9 @@ export default function ConfigurarMatrizEmpresaPage() {
               }
               onClick={save}
             >
-              {saving
-                ? 'Guardando…'
-                : ptComplete && !ptCompositionDirty
-                  ? 'Guardar composición GR'
-                  : 'Guardar selección PT'}
+              {saving ? 'Guardando…' : 'Guardar composición GR'}
             </Button>
-          </div>
+          </div> : null}
           {hasPendingChanges ? (
             <Alert variant="warning">Guarda los cambios pendientes antes de validar.</Alert>
           ) : null}
