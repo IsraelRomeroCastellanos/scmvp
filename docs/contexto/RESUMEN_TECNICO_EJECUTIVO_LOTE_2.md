@@ -380,9 +380,23 @@ incidente de producción real.
 - identificación de roles efectivos de PostgreSQL y `GRANT`/`REVOKE` nominales;
 - smoke funcional integral del flujo editorial y del bloqueo de clientes;
 - pruebas del frontend administrativo de matrices;
-- publicación con mínimo 1 PT + 1 GR, cantidad variable sin máximo fijo y
-  exactamente tres bandas PT y tres GR que cubran N..3N sin huecos ni
-  traslapes;
+- publicación con 3 a 6 criterios PT y al menos un criterio GR, y con
+  fronteras empresariales `PT1/PT2/PT3` y tres resultados GR que cubran N..3N
+  sin huecos ni traslapes; PT se confirma expresamente después de una vista
+  previa con criterios, descripciones, valores internos, dominio y fronteras;
+- `MONTO` V1 se conserva histórica con opciones; en V2 `MONTO` es la dimensión
+  canónica, la empresa elige `UMA` o `PESOS` y captura dos cortes decimales. El
+  sistema deriva tres tramos continuos puntuados 1/2/3. El PT inicial persiste
+  el monto esperado/declarado, unidad, rango y puntaje con su matriz y resultado;
+  no se reemplaza por clasificación manual ni convierte unidades;
+- los criterios descriptivos conservan tres respuestas Bajo/Medio/Alto y una
+  selección por evaluación; MONTO V2 captura el monto declarado y resuelve el
+  tramo automáticamente. Ambos aportan un valor 1/2/3 y el dominio sigue `N..3N`;
+- las operaciones futuras resolverán el monto observado contra la matriz
+  aplicable y lo compararán con el rango esperado sin reescribir el PT histórico;
+  captura individual/masiva y alertas permanecen fuera de este sublote;
+- patrón reutilizable documentado, no implementado en GR: dimensión/fuente →
+  unidad empresarial → dos límites → tres tramos → valoración;
 - clonado futuro sin alterar históricos: criterios activos toman su versión
   vigente; retirados requieren sustitución/remoción antes de publicar;
 - contrato futuro `NO_EVALUABLE` para GR sin dato fuente, sin puntaje ni
@@ -440,7 +454,7 @@ El bloque 002–007 está cerrado. La próxima etapa es:
 4. crear borrador;
 5. seleccionar PT/GR;
 6. parametrizar criterios;
-7. configurar bandas PT/GR;
+7. definir fronteras PT y resultados GR;
 8. validar;
 9. reabrir y volver a validar si corresponde;
 10. publicar;
@@ -453,9 +467,9 @@ El bloque 002–007 está cerrado. La próxima etapa es:
 Una empresa puede crearse sin matriz, pero no crear clientes sin una matriz
 `PUBLICADA` y activa. `PUBLICADA` nunca se reabre; `VALIDADA` puede reabrirse
 explícitamente. Activar es separado de publicar y una activa existente produce
-`409 MATRIZ_ACTIVA_EXISTENTE`, sin reemplazo silencioso. La composición mínima
-es 1 PT + 1 GR, sin máximo fijo; para N criterios el score es N..3N, con
-exactamente tres bandas por ámbito, cobertura total sin huecos ni traslapes. La
+`409 MATRIZ_ACTIVA_EXISTENTE`, sin reemplazo silencioso. La composición PT es
+de 3 a 6 criterios; para N criterios el score es N..3N, con fronteras
+`PT1/PT2/PT3` y tres resultados GR, cobertura total sin huecos ni traslapes. La
 composición publicada queda congelada y los cambios exigen nueva versión. GR
 nunca es captura manual. XLSX permanece como legado/importación futura.
 

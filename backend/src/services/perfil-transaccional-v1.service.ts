@@ -39,14 +39,24 @@ export class PerfilTransaccionalV1Error extends Error {
   }
 }
 
-export type PerfilTransaccionalV1RespuestaInput = {
-  criterio_id: number;
-  opcion_id: number;
-};
+export type PerfilTransaccionalV1RespuestaInput =
+  | { criterio_id: number; tipo: 'OPCION'; opcion_id: number }
+  | { criterio_id: number; tipo: 'MONTO'; valor: number; unidad: 'UMA' | 'PESOS' };
 
 type Cliente = { id: number; empresa_id: number; nombre: string };
 type Matriz = { id: number; numero_version: number; revision: number };
 type Opcion = { id: number; criterio_id: number; etiqueta: string; orden: number; puntaje: 1 | 2 | 3 };
+export type RangoMontoPt = {
+  id: number;
+  criterio_id: number;
+  unidad: 'UMA' | 'PESOS';
+  minimo: number | null;
+  maximo: number | null;
+  minimo_incluido: boolean;
+  maximo_incluido: boolean;
+  orden: number;
+  puntaje: 1 | 2 | 3;
+};
 type Criterio = {
   id: number;
   codigo: string;
@@ -56,6 +66,7 @@ type Criterio = {
   tipo_parametrizacion: string;
   unidad_canonica: string | null;
   opciones: Opcion[];
+  rangos: RangoMontoPt[];
 };
 type Resultado = {
   id: number;
@@ -67,6 +78,20 @@ type Resultado = {
   orden: number;
 };
 type Configuracion = { matriz: Matriz; criterios: Criterio[]; resultados: Resultado[] };
+
+export function resolverMontoPt(valor: number, rangos: readonly RangoMontoPt[]): RangoMontoPt {
+  if (!Number.isFinite(valor)) {
+    throw new PerfilTransaccionalV1Error('PT_RESPUESTAS_INVALIDAS');
+  }
+  const aplicables = rangos.filter((rango) =>
+    (rango.minimo === null || (rango.minimo_incluido ? valor >= rango.minimo : valor > rango.minimo)) &&
+    (rango.maximo === null || (rango.maximo_incluido ? valor <= rango.maximo : valor < rango.maximo))
+  );
+  if (aplicables.length !== 1) {
+    throw new PerfilTransaccionalV1Error('PT_CONFIGURACION_INCONSISTENTE');
+  }
+  return aplicables[0];
+}
 
 function positiveInteger(value: unknown): number {
   const normalized = typeof value === 'string' && /^[1-9]\d*$/.test(value)
@@ -123,22 +148,23 @@ export function parsePerfilTransaccionalV1Body(
       throw new PerfilTransaccionalV1Error('PT_RESPUESTAS_INVALIDAS');
     }
     const item = candidate as Record<string, unknown>;
-    const keys = Object.keys(item);
-    if (
-      keys.length !== 2
-      || !Object.prototype.hasOwnProperty.call(item, 'criterio_id')
-      || !Object.prototype.hasOwnProperty.call(item, 'opcion_id')
-      || !Number.isSafeInteger(item.criterio_id)
-      || Number(item.criterio_id) <= 0
-      || !Number.isSafeInteger(item.opcion_id)
-      || Number(item.opcion_id) <= 0
-    ) {
+    if (!Number.isSafeInteger(item.criterio_id) || Number(item.criterio_id) <= 0) {
       throw new PerfilTransaccionalV1Error('PT_RESPUESTAS_INVALIDAS');
     }
-    return {
-      criterio_id: Number(item.criterio_id),
-      opcion_id: Number(item.opcion_id),
+    const keys = Object.keys(item);
+    if (
+      keys.length === 2 && keys.every((key) => ['criterio_id', 'opcion_id'].includes(key)) &&
+      Number.isSafeInteger(item.opcion_id) && Number(item.opcion_id) > 0
+    ) return { criterio_id: Number(item.criterio_id), tipo: 'OPCION' as const, opcion_id: Number(item.opcion_id) };
+    if (
+      keys.length === 3 && keys.every((key) => ['criterio_id', 'valor', 'unidad'].includes(key)) &&
+      typeof item.valor === 'number' && Number.isFinite(item.valor) &&
+      (item.unidad === 'UMA' || item.unidad === 'PESOS')
+    ) return {
+      criterio_id: Number(item.criterio_id), tipo: 'MONTO' as const,
+      valor: item.valor, unidad: item.unidad,
     };
+    throw new PerfilTransaccionalV1Error('PT_RESPUESTAS_INVALIDAS');
   });
 }
 
@@ -189,7 +215,7 @@ async function loadConfiguracion(
     revision: positiveInteger(matrixRow.revision),
   };
 
-  const [criteriaResult, optionResult, resultResult] = await Promise.all([
+  const [criteriaResult, rangeResult, optionResult, resultResult] = await Promise.all([
     db.query(
       `SELECT mc.id, mc.codigo, mc.texto, mc.orden,
               cv.tipo_resolucion, cv.tipo_parametrizacion, cv.unidad_canonica
@@ -198,6 +224,15 @@ async function loadConfiguracion(
          ON cv.id = mc.catalogo_criterio_pt_version_id
        WHERE mc.matriz_version_id = $1 AND mc.ambito = 'PT'
        ORDER BY mc.orden, mc.id`,
+      [matriz.id],
+    ),
+    db.query(
+      `SELECT mr.id, mr.criterio_id, mr.unidad, mr.minimo, mr.maximo,
+              mr.minimo_incluido, mr.maximo_incluido, mr.orden, mr.puntaje
+       FROM public.matriz_rango mr
+       JOIN public.matriz_criterio mc ON mc.id = mr.criterio_id
+       WHERE mc.matriz_version_id = $1 AND mc.ambito = 'PT'
+       ORDER BY mc.orden, mr.orden, mr.id`,
       [matriz.id],
     ),
     db.query(
@@ -240,6 +275,20 @@ async function loadConfiguracion(
     tipo_parametrizacion: String(row.tipo_parametrizacion),
     unidad_canonica: row.unidad_canonica === null ? null : String(row.unidad_canonica),
     opciones: optionsByCriterion.get(positiveInteger(row.id)) ?? [],
+    rangos: rangeResult.rows
+      .filter((range) => positiveInteger(range.criterio_id) === positiveInteger(row.id))
+      .map((range) => ({
+        id: positiveInteger(range.id),
+        criterio_id: positiveInteger(range.criterio_id),
+        unidad: range.unidad === 'UMA' || range.unidad === 'PESOS'
+          ? range.unidad : (() => { throw new PerfilTransaccionalV1Error('PT_CONFIGURACION_INCONSISTENTE'); })(),
+        minimo: range.minimo === null ? null : Number(range.minimo),
+        maximo: range.maximo === null ? null : Number(range.maximo),
+        minimo_incluido: range.minimo_incluido,
+        maximo_incluido: range.maximo_incluido,
+        orden: positiveInteger(range.orden),
+        puntaje: score(range.puntaje),
+      })),
   }));
 
   const resultados: Resultado[] = resultResult.rows.map((row) => ({
@@ -252,7 +301,7 @@ async function loadConfiguracion(
     orden: positiveInteger(row.orden),
   }));
 
-  validateConfiguracion(criterios, resultados, optionResult.rows.length);
+  validateConfiguracion(criterios, resultados, optionResult.rows.length, rangeResult.rows.length);
   return { matriz, criterios, resultados };
 }
 
@@ -260,22 +309,62 @@ function validateConfiguracion(
   criterios: Criterio[],
   resultados: Resultado[],
   optionCount: number,
+  rangeCount: number,
 ): void {
-  if (criterios.length < 3 || criterios.length > 6 || optionCount !== criterios.length * 3) {
+  const optionCriteria = criterios.filter((criterio) => criterio.tipo_resolucion === 'CAPTURA_OPCIONES');
+  const rangeCriteria = criterios.filter(
+    (criterio) => criterio.tipo_resolucion === 'CAPTURA_RANGO_NUMERICO',
+  );
+  if (
+    criterios.length < 3 || criterios.length > 6 ||
+    optionCount !== optionCriteria.length * 3 || rangeCount !== rangeCriteria.length * 3
+  ) {
     throw new PerfilTransaccionalV1Error('PT_CONFIGURACION_INCONSISTENTE');
   }
   criterios.forEach((criterio, index) => {
+    const optionsValid = criterio.tipo_resolucion === 'CAPTURA_OPCIONES' &&
+      criterio.tipo_parametrizacion === 'OPCIONES' && criterio.unidad_canonica === null &&
+      criterio.opciones.length === 3 && criterio.rangos.length === 0 &&
+      criterio.opciones.every((option, optionIndex) => option.orden === optionIndex + 1) &&
+      new Set(criterio.opciones.map((option) => option.puntaje)).size === 3 &&
+      new Set(criterio.opciones.map((option) => option.etiqueta.trim())).size === 3;
+    const rangesValid = criterio.codigo === 'MONTO' &&
+      criterio.tipo_resolucion === 'CAPTURA_RANGO_NUMERICO' &&
+      criterio.tipo_parametrizacion === 'RANGOS_NUMERICOS' &&
+      criterio.unidad_canonica === 'MONTO' && criterio.opciones.length === 0 &&
+      criterio.rangos.length === 3 && criterio.rangos.every((range, rangeIndex) =>
+        range.orden === rangeIndex + 1 && range.puntaje === rangeIndex + 1
+      ) && new Set(criterio.rangos.map((range) => range.unidad)).size === 1 &&
+      criterio.rangos[0].minimo === null && criterio.rangos[0].maximo !== null &&
+      !criterio.rangos[0].minimo_incluido && criterio.rangos[0].maximo_incluido &&
+      criterio.rangos[1].minimo !== null && criterio.rangos[1].maximo !== null &&
+      !criterio.rangos[1].minimo_incluido && criterio.rangos[1].maximo_incluido &&
+      criterio.rangos[2].minimo !== null && criterio.rangos[2].maximo === null &&
+      !criterio.rangos[2].minimo_incluido;
     if (
       criterio.orden !== index + 1
-      || criterio.tipo_resolucion !== 'CAPTURA_OPCIONES'
-      || criterio.tipo_parametrizacion !== 'OPCIONES'
-      || criterio.unidad_canonica !== null
-      || criterio.opciones.length !== 3
-      || criterio.opciones.some((option, optionIndex) => option.orden !== optionIndex + 1)
-      || new Set(criterio.opciones.map((option) => option.puntaje)).size !== 3
-      || new Set(criterio.opciones.map((option) => option.etiqueta.trim())).size !== 3
+      || (!optionsValid && !rangesValid)
     ) {
       throw new PerfilTransaccionalV1Error('PT_CONFIGURACION_INCONSISTENTE');
+    }
+    if (rangesValid) {
+      criterio.rangos.forEach((range, rangeIndex) => {
+        if (
+          (range.minimo !== null && !Number.isFinite(range.minimo)) ||
+          (range.maximo !== null && !Number.isFinite(range.maximo)) ||
+          (range.minimo === null && rangeIndex !== 0) ||
+          (range.maximo === null && rangeIndex !== 2) ||
+          (range.minimo === null && range.maximo === null) ||
+          (range.minimo !== null && range.maximo !== null && range.minimo >= range.maximo) ||
+          (rangeIndex > 0 && (
+            criterio.rangos[rangeIndex - 1].maximo !== range.minimo ||
+            criterio.rangos[rangeIndex - 1].maximo_incluido === range.minimo_incluido
+          ))
+        ) throw new PerfilTransaccionalV1Error('PT_CONFIGURACION_INCONSISTENTE');
+      });
+      const probes = criterio.rangos.flatMap((range) => [range.minimo, range.maximo])
+        .filter((value): value is number => value !== null);
+      probes.forEach((value) => resolverMontoPt(value, criterio.rangos));
     }
   });
 
@@ -302,21 +391,38 @@ function validateConfiguracion(
 function validateRespuestas(
   input: PerfilTransaccionalV1RespuestaInput[],
   criterios: Criterio[],
-): Array<{ criterio: Criterio; opcion: Opcion }> {
+): Array<
+  | { tipo: 'OPCION'; criterio: Criterio; opcion: Opcion; puntaje: 1 | 2 | 3 }
+  | { tipo: 'MONTO'; criterio: Criterio; rango: RangoMontoPt; valor: number; unidad: 'UMA' | 'PESOS'; puntaje: 1 | 2 | 3 }
+> {
   if (
     input.length !== criterios.length ||
     new Set(input.map((item) => item.criterio_id)).size !== criterios.length
   ) {
     throw new PerfilTransaccionalV1Error('PT_RESPUESTAS_INVALIDAS');
   }
-  const inputByCriterion = new Map(input.map((item) => [item.criterio_id, item.opcion_id]));
+  const inputByCriterion = new Map(input.map((item) => [item.criterio_id, item]));
   return criterios.map((criterio) => {
-    const optionId = inputByCriterion.get(criterio.id);
-    const opcion = criterio.opciones.find((candidate) => candidate.id === optionId);
-    if (!opcion) {
+    const respuesta = inputByCriterion.get(criterio.id);
+    if (!respuesta) throw new PerfilTransaccionalV1Error('PT_RESPUESTAS_INVALIDAS');
+    if (criterio.tipo_resolucion === 'CAPTURA_OPCIONES') {
+      if (respuesta.tipo !== 'OPCION') throw new PerfilTransaccionalV1Error('PT_RESPUESTAS_INVALIDAS');
+      const opcion = criterio.opciones.find((candidate) => candidate.id === respuesta.opcion_id);
+      if (!opcion) throw new PerfilTransaccionalV1Error('PT_RESPUESTAS_INVALIDAS');
+      return { tipo: 'OPCION' as const, criterio, opcion, puntaje: opcion.puntaje };
+    }
+    if (
+      criterio.codigo !== 'MONTO' || criterio.tipo_resolucion !== 'CAPTURA_RANGO_NUMERICO' ||
+      criterio.unidad_canonica !== 'MONTO' || respuesta.tipo !== 'MONTO' ||
+      criterio.rangos.length !== 3 || criterio.rangos[0].unidad !== respuesta.unidad
+    ) {
       throw new PerfilTransaccionalV1Error('PT_RESPUESTAS_INVALIDAS');
     }
-    return { criterio, opcion };
+    const rango = resolverMontoPt(respuesta.valor, criterio.rangos);
+    return {
+      tipo: 'MONTO' as const, criterio, rango, valor: respuesta.valor,
+      unidad: respuesta.unidad, puntaje: rango.puntaje,
+    };
   });
 }
 
@@ -360,6 +466,10 @@ export async function getPerfilTransaccionalV1Context(db: Pool, clienteId: numbe
           codigo: criterio.codigo,
           texto: criterio.texto,
           orden: criterio.orden,
+          tipo_captura: criterio.tipo_resolucion === 'CAPTURA_RANGO_NUMERICO'
+            ? 'NUMERICA' : 'OPCION',
+          unidad: criterio.tipo_resolucion === 'CAPTURA_RANGO_NUMERICO'
+            ? criterio.rangos[0]?.unidad ?? null : null,
           opciones: criterio.opciones.map((opcion) => ({
             id: opcion.id,
             etiqueta: opcion.etiqueta,
@@ -404,7 +514,7 @@ export async function createPerfilTransaccionalV1Evaluation(
     const cliente = await loadCliente(client, clienteId, true);
     const configuracion = await loadConfiguracion(client, cliente.empresa_id, true);
     const respuestas = validateRespuestas(input, configuracion.criterios);
-    const puntajeTotal = respuestas.reduce((total, item) => total + item.opcion.puntaje, 0);
+    const puntajeTotal = respuestas.reduce((total, item) => total + item.puntaje, 0);
     const matchingResults = configuracion.resultados.filter((resultado) => (
       (resultado.minimo_incluido ? puntajeTotal >= resultado.minimo : puntajeTotal > resultado.minimo)
       && (resultado.maximo_incluido ? puntajeTotal <= resultado.maximo : puntajeTotal < resultado.maximo)
@@ -443,20 +553,26 @@ export async function createPerfilTransaccionalV1Evaluation(
     const evaluacionId = positiveInteger(evaluationResult.rows[0].id);
 
     for (const respuesta of respuestas) {
-      await client.query(
-        `INSERT INTO public.cliente_pt_respuesta (
-           evaluacion_id, matriz_version_id, matriz_criterio_id,
-           matriz_opcion_id, puntaje, orden
-         ) VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          evaluacionId,
-          configuracion.matriz.id,
-          respuesta.criterio.id,
-          respuesta.opcion.id,
-          respuesta.opcion.puntaje,
-          respuesta.criterio.orden,
-        ],
-      );
+      if (respuesta.tipo === 'OPCION') {
+        await client.query(
+          `INSERT INTO public.cliente_pt_respuesta (
+             evaluacion_id, matriz_version_id, matriz_criterio_id,
+             matriz_opcion_id, puntaje, orden
+           ) VALUES ($1, $2, $3, $4, $5, $6)`,
+          [evaluacionId, configuracion.matriz.id, respuesta.criterio.id,
+            respuesta.opcion.id, respuesta.puntaje, respuesta.criterio.orden],
+        );
+      } else {
+        await client.query(
+          `INSERT INTO public.cliente_pt_respuesta (
+             evaluacion_id, matriz_version_id, matriz_criterio_id,
+             matriz_rango_id, valor_numerico, unidad, puntaje, orden
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [evaluacionId, configuracion.matriz.id, respuesta.criterio.id,
+            respuesta.rango.id, respuesta.valor, respuesta.unidad,
+            respuesta.puntaje, respuesta.criterio.orden],
+        );
+      }
     }
     const countResult = await client.query(
       `SELECT COUNT(*)::integer AS total
@@ -464,7 +580,7 @@ export async function createPerfilTransaccionalV1Evaluation(
        WHERE evaluacion_id = $1`,
       [evaluacionId],
     );
-    if (countResult.rows[0]?.total !== 4) {
+    if (countResult.rows[0]?.total !== configuracion.criterios.length) {
       throw new PerfilTransaccionalV1Error('PT_PERSISTENCIA_INCONSISTENTE');
     }
 
@@ -488,14 +604,16 @@ export async function createPerfilTransaccionalV1Evaluation(
             minimo: resultado.minimo,
             maximo: resultado.maximo,
           },
-          respuestas: respuestas.map(({ criterio, opcion }) => ({
-            criterio_id: criterio.id,
-            criterio_codigo: criterio.codigo,
-            criterio_texto: criterio.texto,
-            orden: criterio.orden,
-            opcion_id: opcion.id,
-            opcion_etiqueta: opcion.etiqueta,
-            puntaje: opcion.puntaje,
+          respuestas: respuestas.map((respuesta) => respuesta.tipo === 'OPCION' ? ({
+            tipo: 'OPCION', criterio_id: respuesta.criterio.id,
+            criterio_codigo: respuesta.criterio.codigo, criterio_texto: respuesta.criterio.texto,
+            orden: respuesta.criterio.orden, opcion_id: respuesta.opcion.id,
+            opcion_etiqueta: respuesta.opcion.etiqueta, puntaje: respuesta.puntaje,
+          }) : ({
+            tipo: 'MONTO', criterio_id: respuesta.criterio.id,
+            criterio_codigo: respuesta.criterio.codigo, criterio_texto: respuesta.criterio.texto,
+            orden: respuesta.criterio.orden, valor: respuesta.valor, unidad: respuesta.unidad,
+            matriz_rango_id: respuesta.rango.id, puntaje: respuesta.puntaje,
           })),
           creada_en: isoDate(evaluationResult.rows[0].creada_en),
         },

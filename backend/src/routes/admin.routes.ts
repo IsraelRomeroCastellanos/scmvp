@@ -106,6 +106,23 @@ function parseParameterizationBody(body: unknown): ParametrizacionInput | null {
   const revision = parsePositiveInteger(raw.revision);
   if (revision === null) return null;
 
+  if (
+    Object.keys(raw).length === 4 &&
+    Object.keys(raw).every((key) => ['revision', 'unidad', 'corte_1', 'corte_2'].includes(key)) &&
+    (raw.unidad === 'UMA' || raw.unidad === 'PESOS') &&
+    typeof raw.corte_1 === 'number' && Number.isFinite(raw.corte_1) &&
+    typeof raw.corte_2 === 'number' && Number.isFinite(raw.corte_2) &&
+    raw.corte_1 < raw.corte_2
+  ) {
+    return {
+      revision,
+      tipo: 'MONTO_CORTES',
+      unidad: raw.unidad,
+      corte_1: raw.corte_1,
+      corte_2: raw.corte_2,
+    };
+  }
+
   if (Array.isArray(raw.opciones)) {
     if (
       Object.keys(raw).some((key) => !['revision', 'opciones'].includes(key)) ||
