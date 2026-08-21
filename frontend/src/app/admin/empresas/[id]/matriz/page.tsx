@@ -134,6 +134,8 @@ function MatrixSection({
   rulesDisabled,
   onSaveRules,
   onRulesChange,
+  maxSelected,
+  parametersDisabled = false,
 }: {
   ambito: AmbitoMatriz;
   catalogo: CriterioCatalogoMatriz[];
@@ -141,13 +143,15 @@ function MatrixSection({
   disabled: boolean;
   savingParameterId: number | null;
   onChange: (items: CriterioEditable[]) => void;
-  onParameterChange: (items: CriterioEditable[]) => void;
+  onParameterChange: (items: CriterioEditable[], criterioId?: number) => void;
   onSaveOptions: (item: CriterioEditable) => void;
   conditionLabels: Record<string, string>;
   savingRuleId: number | null;
   rulesDisabled: boolean;
   onSaveRules: (item: CriterioEditable) => void;
   onRulesChange: (items: CriterioEditable[], criterioId?: number) => void;
+  maxSelected?: number;
+  parametersDisabled?: boolean;
 }) {
   const selectedIds = new Set(selected.map((item) => item.versionId));
   const available = catalogo.filter((item) => !selectedIds.has(item.version_vigente_id));
@@ -191,27 +195,37 @@ function MatrixSection({
       <div className="mt-5 space-y-3">
         {selected.length === 0 ? (
           <p className="rounded-card bg-surface-muted p-4 text-sm text-text-secondary">
-            Aún no hay criterios seleccionados. Un borrador puede permanecer vacío.
+            {ambito === 'PT'
+              ? 'Selecciona entre 3 y 6 criterios.'
+              : 'Aún no hay criterios seleccionados.'}
           </p>
         ) : null}
         {selected.map((item, index) => (
           <div key={item.versionId} className="rounded-card border border-border-light p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
               <div className="min-w-0 flex-1">
-                <label className="block text-xs font-medium uppercase tracking-wide text-text-secondary">
-                  {index + 1}. {item.codigo}
-                </label>
-                <Input
-                  className="mt-2"
-                  value={item.texto}
-                  disabled={disabled}
-                  aria-label={`Etiqueta visible de ${item.codigo}`}
-                  onChange={(event) => {
-                    const next = [...selected];
-                    next[index] = { ...item, texto: event.target.value };
-                    onChange(next);
-                  }}
-                />
+                {ambito === 'PT' ? (
+                  <h3 className="text-base font-semibold text-text-primary">
+                    {index + 1}. {item.texto}
+                  </h3>
+                ) : (
+                  <>
+                    <label className="block text-xs font-medium uppercase tracking-wide text-text-secondary">
+                      {index + 1}. {item.codigo}
+                    </label>
+                    <Input
+                      className="mt-2"
+                      value={item.texto}
+                      disabled={disabled}
+                      aria-label={`Etiqueta visible de ${item.codigo}`}
+                      onChange={(event) => {
+                        const next = [...selected];
+                        next[index] = { ...item, texto: event.target.value };
+                        onChange(next);
+                      }}
+                    />
+                  </>
+                )}
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -242,26 +256,23 @@ function MatrixSection({
             </div>
             {ambito === 'PT' && item.tipoResolucion === 'CAPTURA_OPCIONES' ? (
               <div className="mt-4 border-t border-border-light pt-4">
-                <h3 className="text-sm font-semibold text-text-primary">Configurar respuestas</h3>
-                <p className="mt-1 text-xs text-text-secondary">
-                  Los puntajes 1, 2 y 3 son fijos y no son editables.
-                </p>
+                <h3 className="text-sm font-semibold text-text-primary">Descripciones</h3>
                 <div className="mt-3 grid gap-3 md:grid-cols-3">
-                  {['riesgo bajo', 'riesgo medio', 'riesgo alto'].map((label, optionIndex) => (
+                  {['Bajo', 'Medio', 'Alto'].map((label, optionIndex) => (
                     <div key={label}>
                       <label className="block text-xs font-medium text-text-secondary">
-                        Opción de {label} · Puntaje {optionIndex + 1}
+                        {label}
                       </label>
                       <Input
                         className="mt-1"
                         value={item.opciones[optionIndex] ?? ''}
-                        disabled={disabled}
+                        disabled={disabled || parametersDisabled || !item.matrizCriterioId}
                         onChange={(event) => {
                           const next = [...selected];
                           const options = [...item.opciones];
                           options[optionIndex] = event.target.value;
                           next[index] = { ...item, opciones: options };
-                          onParameterChange(next);
+                          onParameterChange(next, item.matrizCriterioId);
                         }}
                       />
                     </div>
@@ -273,6 +284,7 @@ function MatrixSection({
                     size="sm"
                     disabled={
                       disabled ||
+                      parametersDisabled ||
                       savingParameterId === item.matrizCriterioId ||
                       item.opciones.some((option) => !option.trim())
                     }
@@ -284,7 +296,7 @@ function MatrixSection({
                   </Button>
                 ) : (
                   <p className="mt-3 text-xs text-semantic-warning">
-                    Guarda primero la composición para parametrizar este criterio.
+                    Guarda primero la selección de criterios.
                   </p>
                 )}
               </div>
@@ -382,7 +394,7 @@ function MatrixSection({
                 key={item.version_vigente_id}
                 size="sm"
                 variant="secondary"
-                disabled={disabled}
+                disabled={disabled || (maxSelected !== undefined && selected.length >= maxSelected)}
                 onClick={() => add(item)}
               >
                 Agregar {item.nombre_visible_global}
@@ -490,8 +502,10 @@ export default function ConfigurarMatrizEmpresaPage() {
   const [savingBands, setSavingBands] = useState<AmbitoMatriz | null>(null);
   const [savingRuleId, setSavingRuleId] = useState<number | null>(null);
   const [dirtyRuleIds, setDirtyRuleIds] = useState<Set<number>>(new Set());
+  const [dirtyPtOptionIds, setDirtyPtOptionIds] = useState<Set<number>>(new Set());
   const [transitioning, setTransitioning] = useState(false);
   const [compositionDirty, setCompositionDirty] = useState(false);
+  const [ptCompositionDirty, setPtCompositionDirty] = useState(false);
   const [ptBandsDirty, setPtBandsDirty] = useState(false);
   const [grBandsDirty, setGrBandsDirty] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -527,9 +541,11 @@ export default function ConfigurarMatrizEmpresaPage() {
         setBandasPt(toBands(currentDraft.resultados_pt));
         setBandasGr(toBands(currentDraft.resultados_gr));
         setCompositionDirty(false);
+        setPtCompositionDirty(false);
         setPtBandsDirty(false);
         setGrBandsDirty(false);
         setDirtyRuleIds(new Set());
+        setDirtyPtOptionIds(new Set());
         setNotFoundDraft(false);
       } catch (requestError: unknown) {
         const status = (requestError as { response?: { status?: number } })?.response?.status;
@@ -540,9 +556,11 @@ export default function ConfigurarMatrizEmpresaPage() {
           setBandasPt(toBands([]));
           setBandasGr(toBands([]));
           setCompositionDirty(false);
+          setPtCompositionDirty(false);
           setPtBandsDirty(false);
           setGrBandsDirty(false);
           setDirtyRuleIds(new Set());
+          setDirtyPtOptionIds(new Set());
           setNotFoundDraft(true);
         } else {
           throw requestError;
@@ -567,10 +585,23 @@ export default function ConfigurarMatrizEmpresaPage() {
   }, [load, router]);
 
   const invalidLabels = useMemo(
-    () => [...criteriosPt, ...criteriosGr].some((item) => !item.texto.trim()),
-    [criteriosPt, criteriosGr],
+    () => criteriosGr.some((item) => !item.texto.trim()),
+    [criteriosGr],
   );
-  const hasPendingChanges = compositionDirty || ptBandsDirty || grBandsDirty || dirtyRuleIds.size > 0;
+  const ptSelectionValid = criteriosPt.length >= 3 && criteriosPt.length <= 6;
+  const ptDescriptionsComplete = criteriosPt.every(
+    (item) => item.matrizCriterioId !== undefined && item.opciones.length === 3 &&
+      item.opciones.every((option) => !!option.trim()) &&
+      new Set(item.opciones.map((option) => option.trim())).size === 3,
+  );
+  const ptBandsComplete = bandasPt.length === 3 && bandasPt.every(
+    (band) => !!band.nombre.trim() && !!band.minimo.trim() && !!band.maximo.trim(),
+  );
+  const ptReadyForBands = ptSelectionValid && ptDescriptionsComplete &&
+    !ptCompositionDirty && dirtyPtOptionIds.size === 0;
+  const ptComplete = ptReadyForBands && ptBandsComplete && !ptBandsDirty;
+  const hasPendingChanges = compositionDirty || ptBandsDirty || grBandsDirty ||
+    dirtyRuleIds.size > 0 || dirtyPtOptionIds.size > 0;
   const ruleConditionLabels = useMemo(() => {
     const labels: Record<string, string> = {};
     const destination = draft?.criterios_pt.find(
@@ -632,6 +663,12 @@ export default function ConfigurarMatrizEmpresaPage() {
 
   const save = async () => {
     if (!draft || invalidLabels) return;
+    if (!ptSelectionValid) {
+      setError('Selecciona entre 3 y 6 criterios.');
+      setSuccess('');
+      return;
+    }
+    const savingPtComposition = ptCompositionDirty || !ptComplete;
     setSaving(true);
     setError('');
     setSuccess('');
@@ -640,7 +677,6 @@ export default function ConfigurarMatrizEmpresaPage() {
         revision: draft.revision,
         criterios_pt: criteriosPt.map((item) => ({
           catalogo_criterio_version_id: item.versionId,
-          texto: item.texto.trim(),
         })),
         criterios_gr: criteriosGr.map((item) => ({
           catalogo_criterio_version_id: item.versionId,
@@ -651,8 +687,14 @@ export default function ConfigurarMatrizEmpresaPage() {
       setCriteriosPt(toEditable(saved.criterios_pt));
       setCriteriosGr(toEditable(saved.criterios_gr));
       setCompositionDirty(false);
+      setPtCompositionDirty(false);
       setDirtyRuleIds(new Set());
-      setSuccess('Composición guardada correctamente.');
+      setDirtyPtOptionIds(new Set());
+      setSuccess(
+        savingPtComposition
+          ? 'Selección de Perfil Transaccional guardada correctamente.'
+          : 'Composición GR guardada correctamente.',
+      );
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, 'No fue posible guardar la composición'));
     } finally {
@@ -662,6 +704,15 @@ export default function ConfigurarMatrizEmpresaPage() {
 
   const saveOptions = async (item: CriterioEditable) => {
     if (!draft || !item.matrizCriterioId) return;
+    const descriptions = item.opciones.map((option) => option.trim());
+    if (
+      descriptions.length !== 3 || descriptions.some((description) => !description) ||
+      new Set(descriptions).size !== 3
+    ) {
+      setError('Completa Bajo, Medio y Alto.');
+      setSuccess('');
+      return;
+    }
     setSavingParameterId(item.matrizCriterioId);
     setError('');
     setSuccess('');
@@ -671,7 +722,7 @@ export default function ConfigurarMatrizEmpresaPage() {
         draft.id,
         item.matrizCriterioId,
         draft.revision,
-        item.opciones.map((option) => option.trim()),
+        descriptions,
       );
       setDraft(saved);
       const savedPtByVersion = new Map(
@@ -695,7 +746,25 @@ export default function ConfigurarMatrizEmpresaPage() {
       });
       setCriteriosPt((current) => refreshParameters(current, savedPtByVersion));
       setCriteriosGr((current) => mergeSavedGrCriteria(saved.criterios_gr, current));
-      setSuccess('Respuestas del criterio guardadas correctamente.');
+      const remainingDirty = new Set(dirtyPtOptionIds);
+      remainingDirty.delete(item.matrizCriterioId);
+      setDirtyPtOptionIds(remainingDirty);
+      const allDescriptionsComplete = saved.criterios_pt.length >= 3 &&
+        saved.criterios_pt.every(
+          (criterion) => criterion.opciones.length === 3 &&
+            criterion.opciones.every((option) => !!option.etiqueta.trim()) &&
+            new Set(criterion.opciones.map((option) => option.etiqueta.trim())).size === 3,
+        );
+      const profileCompleteAfterSave = allDescriptionsComplete &&
+        remainingDirty.size === 0 && !ptCompositionDirty &&
+        ptBandsComplete && !ptBandsDirty;
+      setSuccess(
+        profileCompleteAfterSave
+          ? 'Perfil Transaccional completo y guardado correctamente.'
+          : allDescriptionsComplete && remainingDirty.size === 0
+            ? 'Criterios y descripciones de Perfil Transaccional completados.'
+            : 'Descripción guardada correctamente.',
+      );
     } catch (requestError) {
       setError(getApiErrorMessage(
         requestError,
@@ -776,7 +845,11 @@ export default function ConfigurarMatrizEmpresaPage() {
         setBandasGr(toBands(saved.resultados_gr));
         setGrBandsDirty(false);
       }
-      setSuccess(`Bandas ${ambito} guardadas correctamente.`);
+      setSuccess(
+        ambito === 'PT'
+          ? 'Perfil Transaccional completo y guardado correctamente.'
+          : 'Bandas GR guardadas correctamente.',
+      );
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, 'Las bandas no cubren correctamente el dominio.'));
     } finally {
@@ -803,9 +876,11 @@ export default function ConfigurarMatrizEmpresaPage() {
       setBandasPt(toBands(saved.resultados_pt));
       setBandasGr(toBands(saved.resultados_gr));
       setCompositionDirty(false);
+      setPtCompositionDirty(false);
       setPtBandsDirty(false);
       setGrBandsDirty(false);
       setDirtyRuleIds(new Set());
+      setDirtyPtOptionIds(new Set());
       setSuccess(
         action === 'VALIDAR' ? 'Matriz validada correctamente.'
           : action === 'PUBLICAR' ? 'Matriz publicada. Ya puede activarse.'
@@ -842,8 +917,10 @@ export default function ConfigurarMatrizEmpresaPage() {
       setBandasPt(toBands([]));
       setBandasGr(toBands([]));
       setCompositionDirty(false);
+      setPtCompositionDirty(false);
       setPtBandsDirty(false);
       setGrBandsDirty(false);
+      setDirtyPtOptionIds(new Set());
       await load();
       setSuccess(`Borrador V${discardedVersion} descartado.`);
     } catch (requestError) {
@@ -917,12 +994,14 @@ export default function ConfigurarMatrizEmpresaPage() {
             {draft.version_origen_id ? (
               <span>Origen histórico #{draft.version_origen_id}</span>
             ) : null}
-            <Badge variant={draft.cobertura_gr.estado === 'COMPLETA' ? 'success' : 'warning'}>
-              Reglas GR: {draft.cobertura_gr.estado === 'COMPLETA' ? 'completa' : 'incompleta'}
-            </Badge>
+            {ptComplete ? (
+              <Badge variant={draft.cobertura_gr.estado === 'COMPLETA' ? 'success' : 'warning'}>
+                Reglas GR: {draft.cobertura_gr.estado === 'COMPLETA' ? 'completa' : 'incompleta'}
+              </Badge>
+            ) : null}
           </div>
 
-          {draft.cobertura_gr.estado === 'INCOMPLETA' ? (
+          {ptComplete && draft.cobertura_gr.estado === 'INCOMPLETA' ? (
             <Alert variant="warning">
               <div>
                 <p className="font-semibold">La configuración GR todavía no puede validarse.</p>
@@ -937,77 +1016,104 @@ export default function ConfigurarMatrizEmpresaPage() {
             </Alert>
           ) : null}
 
-          <MatrixSection
-            ambito="PT"
-            catalogo={catalogoPt}
-            selected={criteriosPt}
-            disabled={draft.estado_editorial !== 'BORRADOR' || saving || savingParameterId !== null}
-            savingParameterId={savingParameterId}
-            onChange={(items) => {
-              setCriteriosPt(items);
-              setCompositionDirty(true);
-            }}
-            onParameterChange={setCriteriosPt}
-            onSaveOptions={saveOptions}
-            conditionLabels={ruleConditionLabels}
-            savingRuleId={savingRuleId}
-            rulesDisabled
-            onSaveRules={saveRules}
-            onRulesChange={setCriteriosPt}
-          />
-          <MatrixSection
-            ambito="GR"
-            catalogo={catalogoGr}
-            selected={criteriosGr}
-            disabled={draft.estado_editorial !== 'BORRADOR' || saving || savingParameterId !== null}
-            savingParameterId={savingParameterId}
-            onChange={(items) => {
-              setCriteriosGr(items);
-              setCompositionDirty(true);
-            }}
-            onParameterChange={setCriteriosGr}
-            onSaveOptions={saveOptions}
-            conditionLabels={ruleConditionLabels}
-            savingRuleId={savingRuleId}
-            rulesDisabled={
-              draft.estado_editorial !== 'BORRADOR' || draft.activa || compositionDirty ||
-              saving || savingRuleId !== null
-            }
-            onSaveRules={saveRules}
-            onRulesChange={(items, criterioId) => {
-              setCriteriosGr(items);
-              if (criterioId !== undefined) {
-                setDirtyRuleIds((current) => new Set(current).add(criterioId));
-              }
-            }}
-          />
+          <section className="space-y-4" aria-labelledby="configuracion-criterios-pt">
+            <div>
+              <h2 id="configuracion-criterios-pt" className="text-xl font-semibold text-text-primary">
+                1. Configuración de criterios PT
+              </h2>
+              <p className="mt-1 text-sm text-text-secondary">
+                Selecciona los criterios y captura sus descripciones Bajo, Medio y Alto.
+              </p>
+            </div>
+            <MatrixSection
+              ambito="PT"
+              catalogo={catalogoPt}
+              selected={criteriosPt}
+              disabled={draft.estado_editorial !== 'BORRADOR' || saving || savingParameterId !== null}
+              savingParameterId={savingParameterId}
+              onChange={(items) => {
+                setCriteriosPt(items);
+                setCompositionDirty(true);
+                setPtCompositionDirty(true);
+              }}
+              onParameterChange={(items, criterioId) => {
+                setCriteriosPt(items);
+                if (criterioId !== undefined) {
+                  setDirtyPtOptionIds((current) => new Set(current).add(criterioId));
+                }
+              }}
+              onSaveOptions={saveOptions}
+              conditionLabels={ruleConditionLabels}
+              savingRuleId={savingRuleId}
+              rulesDisabled
+              onSaveRules={saveRules}
+              onRulesChange={setCriteriosPt}
+              maxSelected={6}
+              parametersDisabled={compositionDirty}
+            />
+          </section>
 
           {invalidLabels ? (
             <Alert variant="danger">Todas las etiquetas visibles deben contener texto.</Alert>
           ) : null}
 
-          <Card className="p-5">
-            <h2 className="text-lg font-semibold text-text-primary">Clasificación final</h2>
-            <p className="mt-1 text-sm text-text-secondary">
-              Configura tres bandas inclusivas para cada ámbito.
-            </p>
-          </Card>
-          <ResultBandsSection
-            ambito="PT"
-            criterionCount={criteriosPt.length}
-            bands={bandasPt}
-            disabled={
-              draft.estado_editorial !== 'BORRADOR' || savingBands !== null ||
-              savingRuleId !== null || transitioning
-            }
-            saving={savingBands === 'PT'}
-            onChange={(bands) => {
-              setBandasPt(bands);
-              setPtBandsDirty(true);
-            }}
-            onSave={() => void saveBands('PT')}
-          />
-          <ResultBandsSection
+          <section className="space-y-4 border-t border-border-light pt-6" aria-labelledby="resultados-pt">
+            <div>
+              <h2 id="resultados-pt" className="text-xl font-semibold text-text-primary">
+                2. Configuración del resultado PT
+              </h2>
+              <p className="mt-1 text-sm text-text-secondary">
+                Define por separado las tres bandas del resultado de Perfil Transaccional.
+              </p>
+            </div>
+            <ResultBandsSection
+              ambito="PT"
+              criterionCount={criteriosPt.length}
+              bands={bandasPt}
+              disabled={
+                draft.estado_editorial !== 'BORRADOR' || savingBands !== null ||
+                savingRuleId !== null || transitioning || !ptReadyForBands
+              }
+              saving={savingBands === 'PT'}
+              onChange={(bands) => {
+                setBandasPt(bands);
+                setPtBandsDirty(true);
+              }}
+              onSave={() => void saveBands('PT')}
+            />
+          </section>
+
+          {!ptComplete ? (
+            <Alert variant="info">Completa y guarda Perfil Transaccional para continuar a GR.</Alert>
+          ) : (
+            <MatrixSection
+              ambito="GR"
+              catalogo={catalogoGr}
+              selected={criteriosGr}
+              disabled={draft.estado_editorial !== 'BORRADOR' || saving || savingParameterId !== null}
+              savingParameterId={savingParameterId}
+              onChange={(items) => {
+                setCriteriosGr(items);
+                setCompositionDirty(true);
+              }}
+              onParameterChange={setCriteriosGr}
+              onSaveOptions={saveOptions}
+              conditionLabels={ruleConditionLabels}
+              savingRuleId={savingRuleId}
+              rulesDisabled={
+                draft.estado_editorial !== 'BORRADOR' || draft.activa || compositionDirty ||
+                saving || savingRuleId !== null
+              }
+              onSaveRules={saveRules}
+              onRulesChange={(items, criterioId) => {
+                setCriteriosGr(items);
+                if (criterioId !== undefined) {
+                  setDirtyRuleIds((current) => new Set(current).add(criterioId));
+                }
+              }}
+            />
+          )}
+          {ptComplete ? <ResultBandsSection
             ambito="GR"
             criterionCount={criteriosGr.length}
             bands={bandasGr}
@@ -1021,14 +1127,21 @@ export default function ConfigurarMatrizEmpresaPage() {
               setGrBandsDirty(true);
             }}
             onSave={() => void saveBands('GR')}
-          />
+          /> : null}
 
           <div className="flex justify-end">
             <Button
-              disabled={draft.estado_editorial !== 'BORRADOR' || saving || savingParameterId !== null || invalidLabels}
+              disabled={
+                draft.estado_editorial !== 'BORRADOR' || saving ||
+                savingParameterId !== null || invalidLabels || !ptSelectionValid
+              }
               onClick={save}
             >
-              {saving ? 'Guardando…' : 'Guardar composición'}
+              {saving
+                ? 'Guardando…'
+                : ptComplete && !ptCompositionDirty
+                  ? 'Guardar composición GR'
+                  : 'Guardar selección PT'}
             </Button>
           </div>
           {hasPendingChanges ? (

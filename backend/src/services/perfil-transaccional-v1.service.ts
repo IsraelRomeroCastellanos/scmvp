@@ -111,7 +111,10 @@ export function parsePerfilTransaccionalV1Body(
   if (Object.keys(source).length !== 1 || !Object.prototype.hasOwnProperty.call(source, 'respuestas')) {
     throw new PerfilTransaccionalV1Error('PT_SOLICITUD_INVALIDA');
   }
-  if (!Array.isArray(source.respuestas) || source.respuestas.length !== 4) {
+  if (
+    !Array.isArray(source.respuestas) ||
+    source.respuestas.length < 3 || source.respuestas.length > 6
+  ) {
     throw new PerfilTransaccionalV1Error('PT_RESPUESTAS_INVALIDAS');
   }
 
@@ -258,7 +261,7 @@ function validateConfiguracion(
   resultados: Resultado[],
   optionCount: number,
 ): void {
-  if (criterios.length !== 4 || optionCount !== 12) {
+  if (criterios.length < 3 || criterios.length > 6 || optionCount !== criterios.length * 3) {
     throw new PerfilTransaccionalV1Error('PT_CONFIGURACION_INCONSISTENTE');
   }
   criterios.forEach((criterio, index) => {
@@ -270,6 +273,7 @@ function validateConfiguracion(
       || criterio.opciones.length !== 3
       || criterio.opciones.some((option, optionIndex) => option.orden !== optionIndex + 1)
       || new Set(criterio.opciones.map((option) => option.puntaje)).size !== 3
+      || new Set(criterio.opciones.map((option) => option.etiqueta.trim())).size !== 3
     ) {
       throw new PerfilTransaccionalV1Error('PT_CONFIGURACION_INCONSISTENTE');
     }
@@ -286,9 +290,9 @@ function validateConfiguracion(
       || resultado.minimo_incluido !== true
       || resultado.maximo_incluido !== true
       || resultado.minimo > resultado.maximo
-      || (index === 0 && resultado.minimo !== 4)
+      || (index === 0 && resultado.minimo !== criterios.length)
       || (index > 0 && resultado.minimo !== resultados[index - 1].maximo + 1)
-      || (index === resultados.length - 1 && resultado.maximo !== 12)
+      || (index === resultados.length - 1 && resultado.maximo !== criterios.length * 3)
     ) {
       throw new PerfilTransaccionalV1Error('PT_CONFIGURACION_INCONSISTENTE');
     }
@@ -299,7 +303,10 @@ function validateRespuestas(
   input: PerfilTransaccionalV1RespuestaInput[],
   criterios: Criterio[],
 ): Array<{ criterio: Criterio; opcion: Opcion }> {
-  if (input.length !== 4 || new Set(input.map((item) => item.criterio_id)).size !== 4) {
+  if (
+    input.length !== criterios.length ||
+    new Set(input.map((item) => item.criterio_id)).size !== criterios.length
+  ) {
     throw new PerfilTransaccionalV1Error('PT_RESPUESTAS_INVALIDAS');
   }
   const inputByCriterion = new Map(input.map((item) => [item.criterio_id, item.opcion_id]));

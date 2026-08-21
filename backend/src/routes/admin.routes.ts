@@ -31,7 +31,8 @@ import {
   saveCompanyMatrixCriterionParameters,
   saveCompanyMatrixResults,
   transitionCompanyMatrix,
-  type CriterioComposicionInput,
+  type CriterioGrComposicionInput,
+  type CriterioPtComposicionInput,
   type ParametrizacionInput,
   type ResultadosInput,
   type ReglasCriterioInput,
@@ -57,21 +58,38 @@ function parsePositiveInteger(value: unknown): number | null {
     : null;
 }
 
-function parseCompositionItems(value: unknown): CriterioComposicionInput[] | null {
+function parsePtCompositionItems(value: unknown): CriterioPtComposicionInput[] | null {
   if (!Array.isArray(value)) return null;
   const ids = new Set<number>();
-  const parsed: CriterioComposicionInput[] = [];
+  const parsed: CriterioPtComposicionInput[] = [];
+
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const item = raw as Record<string, unknown>;
+    if (Object.keys(item).length !== 1 || !('catalogo_criterio_version_id' in item)) return null;
+    const id = parsePositiveInteger(item.catalogo_criterio_version_id);
+    if (id === null || ids.has(id)) return null;
+    ids.add(id);
+    parsed.push({ catalogo_criterio_version_id: id });
+  }
+
+  return parsed;
+}
+
+function parseGrCompositionItems(value: unknown): CriterioGrComposicionInput[] | null {
+  if (!Array.isArray(value)) return null;
+  const ids = new Set<number>();
+  const parsed: CriterioGrComposicionInput[] = [];
 
   for (const raw of value) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
     const item = raw as Record<string, unknown>;
     if (
+      Object.keys(item).length !== 2 ||
       Object.keys(item).some(
         (key) => !['catalogo_criterio_version_id', 'texto'].includes(key),
       )
-    ) {
-      return null;
-    }
+    ) return null;
     const id = parsePositiveInteger(item.catalogo_criterio_version_id);
     const texto = typeof item.texto === 'string' ? item.texto.trim() : '';
     if (id === null || !texto || ids.has(id)) return null;
@@ -334,8 +352,8 @@ router.put(
     }
 
     const revision = parsePositiveInteger(body.revision);
-    const criteriosPt = parseCompositionItems(body.criterios_pt);
-    const criteriosGr = parseCompositionItems(body.criterios_gr);
+    const criteriosPt = parsePtCompositionItems(body.criterios_pt);
+    const criteriosGr = parseGrCompositionItems(body.criterios_gr);
     if (revision === null || criteriosPt === null || criteriosGr === null) {
       return matrizError(res, 400, 'COMPOSICION_INVALIDA', 'Composicion de matriz invalida');
     }

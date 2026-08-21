@@ -124,9 +124,10 @@ navegador.
 - La migración 006 agrega `usuarios.tipo_principal` y
   `usuarios.codigo_principal`, con soporte diferenciado para principales
   `HUMANO` y `SISTEMA`.
-- La migración 007 deja el principal técnico determinístico `PLD_SYSTEM` y
-  ocho criterios canónicos: PT `TIPO_PRODUCTO`, `NATURALEZA_PRODUCTO`,
-  `FRECUENCIA_PRODUCTO`, `DESTINO_RECURSOS_PT`; GR `ACTIVIDAD_ECONOMICA`,
+- La migración 007 deja el principal técnico determinístico `PLD_SYSTEM`; la
+  migración 014 completa PT V1 con `TIPO_PRODUCTO`, `NATURALEZA_PRODUCTO`,
+  `MONTO`, `FRECUENCIA_PRODUCTO`, `DESTINO_RECURSOS_PT` y
+  `ZONA_GEOGRAFICA_PT`. GR conserva `ACTIVIDAD_ECONOMICA`,
   `ZONA_GEOGRAFICA`, `DESTINO_RECURSOS_GR`, `PERFIL_TRANSACCIONAL`.
 - El principal técnico es `SISTEMA`, correo
   `pld-system@internal.invalid`, password hash

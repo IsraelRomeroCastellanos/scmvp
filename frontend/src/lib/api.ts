@@ -292,7 +292,7 @@ export async function guardarComposicionMatrizEmpresa(
   matrizId: number,
   payload: {
     revision: number;
-    criterios_pt: Array<{ catalogo_criterio_version_id: number; texto: string }>;
+    criterios_pt: Array<{ catalogo_criterio_version_id: number }>;
     criterios_gr: Array<{ catalogo_criterio_version_id: number; texto: string }>;
   },
 ): Promise<BorradorMatrizEmpresa> {
