@@ -205,10 +205,18 @@ hash `!SYSTEM_PRINCIPAL_NO_LOGIN!`, nombre `Principal técnico PLD VISSION`,
 
 Seeds PT, todos `CAPTURA_OPCIONES`:
 
-- `TIPO_PRODUCTO`: Tipo de producto;
-- `NATURALEZA_PRODUCTO`: Naturaleza del producto/servicio;
-- `FRECUENCIA_PRODUCTO`: Frecuencia del producto/servicio;
-- `DESTINO_RECURSOS_PT`: Destino de los recursos.
+- `TIPO_PRODUCTO`: Número y Tipo de Producto;
+- `NATURALEZA_PRODUCTO`: Naturaleza del Producto;
+- `MONTO`: Monto;
+- `FRECUENCIA_PRODUCTO`: Frecuencia;
+- `DESTINO_RECURSOS_PT`: Origen y Destino de los recursos;
+- `ZONA_GEOGRAFICA_PT`: Zona geográfica.
+
+PT V1 permite seleccionar entre tres y seis criterios. Cada nombre es canónico y
+fijo; la empresa captura sólo las descripciones Bajo, Medio y Alto, asociadas
+internamente a 1, 2 y 3. Para `N` criterios el dominio es `N..3N`. PT debe quedar
+guardado y completo antes de habilitar GR. Las versiones históricas no se
+reescriben ni reinterpretan.
 
 Seeds GR:
 
@@ -619,8 +627,8 @@ permita crear clientes sin una versión `PUBLICADA` y activa.
 - identificación de los roles efectivos de PostgreSQL y definición nominal de
   `GRANT`/`REVOKE`;
 - smoke funcional integral del flujo editorial real y del bloqueo de clientes;
-- publicación futura: mínimo 1 criterio PT y 1 GR, cantidad variable sin
-  máximo fijo, tres bandas y cobertura N..3N sin huecos ni solapes;
+- publicación PT: entre 3 y 6 criterios canónicos, tres bandas y cobertura
+  N..3N sin huecos ni solapes; GR conserva su contrato independiente;
 - futuro motor GR: un dato fuente faltante produce `NO_EVALUABLE`, sin puntaje
   ni resultado final mientras exista un criterio requerido no evaluable;
 - clonado futuro: toma la versión vigente de criterios `ACTIVO`; un criterio
@@ -701,9 +709,9 @@ reabre; `VALIDADA` puede reabrirse explícitamente a `BORRADOR`; publicación y
 activación son operaciones separadas. Si ya existe otra activa, corresponde
 `409 MATRIZ_ACTIVA_EXISTENTE`, sin reemplazo silencioso.
 
-La composición mínima es 1 PT + 1 GR, sin máximo fijo aprobado. Para N
-criterios, el score va de N a 3N; se exigen exactamente tres bandas PT y tres
-GR, con cobertura completa sin huecos ni traslapes. La composición publicada
+La composición PT exige entre 3 y 6 criterios. Para N criterios, el score va de
+N a 3N; se exigen exactamente tres bandas PT con cobertura completa sin huecos
+ni traslapes. La composición publicada
 queda congelada y cualquier cambio exige nueva versión. GR nunca es captura
 manual. El motor de evaluación de clientes y los resolvers GR no deben
 declararse terminados mientras no estén implementados y probados.

@@ -107,15 +107,19 @@ export type CoberturaGr = {
   detalles: string[];
 };
 
-export type CriterioComposicionInput = {
+export type CriterioPtComposicionInput = {
+  catalogo_criterio_version_id: number;
+};
+
+export type CriterioGrComposicionInput = {
   catalogo_criterio_version_id: number;
   texto: string;
 };
 
 export type ReemplazarComposicionInput = {
   revision: number;
-  criterios_pt: CriterioComposicionInput[];
-  criterios_gr: CriterioComposicionInput[];
+  criterios_pt: CriterioPtComposicionInput[];
+  criterios_gr: CriterioGrComposicionInput[];
 };
 
 export type ParametrizacionInput =
@@ -466,6 +470,15 @@ const GR_V1_CRITERIA = [
   'ZONA_GEOGRAFICA',
   'DESTINO_RECURSOS_GR',
   'PERFIL_TRANSACCIONAL',
+] as const;
+
+const PT_V1_CRITERIA = [
+  'TIPO_PRODUCTO',
+  'NATURALEZA_PRODUCTO',
+  'MONTO',
+  'FRECUENCIA_PRODUCTO',
+  'DESTINO_RECURSOS_PT',
+  'ZONA_GEOGRAFICA_PT',
 ] as const;
 
 const ACTIVITY_MARKS = [
@@ -932,12 +945,25 @@ export async function replaceCompanyMatrixDraftComposition(
       throw new ConfiguracionMatrizError('REVISION_DESACTUALIZADA');
     }
 
+    if (input.criterios_pt.length < 3 || input.criterios_pt.length > PT_V1_CRITERIA.length) {
+      throw new ConfiguracionMatrizError('CONFIGURACION_INCONSISTENTE');
+    }
+
     const ptIds = input.criterios_pt.map((item) => item.catalogo_criterio_version_id);
     const grIds = input.criterios_gr.map((item) => item.catalogo_criterio_version_id);
     const [ptVersions, grVersions] = await Promise.all([
       resolveSelectableVersions(client, 'PT', ptIds),
       resolveSelectableVersions(client, 'GR', grIds),
     ]);
+    if (
+      [...ptVersions.values()].some(
+        (criterion) => !PT_V1_CRITERIA.includes(
+          criterion.codigo as typeof PT_V1_CRITERIA[number],
+        ),
+      )
+    ) {
+      throw new ConfiguracionMatrizError('CONFIGURACION_INCONSISTENTE');
+    }
 
     const existingResult = await client.query(
       `SELECT id, ambito, orden, catalogo_criterio_pt_version_id,
@@ -966,6 +992,61 @@ export async function replaceCompanyMatrixDraftComposition(
         id: normalizePositiveInteger(row.id),
         orden: normalizePositiveInteger(row.orden),
       });
+    }
+
+    const existingGrIds = existingResult.rows
+      .filter((row) => row.ambito === 'GR')
+      .sort((left, right) => Number(left.orden) - Number(right.orden))
+      .map((row) => normalizePositiveInteger(row.catalogo_criterio_gr_version_id));
+    const grCompositionChanged = existingGrIds.length !== grIds.length ||
+      existingGrIds.some((id, index) => id !== grIds[index]);
+    if (grCompositionChanged) {
+      const proposedPtCriterionIds = ptIds.map(
+        (versionId) => existingByVersion.get(`PT:${versionId}`)?.id,
+      );
+      if (proposedPtCriterionIds.some((id) => id === undefined)) {
+        throw new ConfiguracionMatrizError('CONFIGURACION_INCONSISTENTE');
+      }
+      const configuredOptions = await client.query<{
+        criterio_id: number;
+        total: string;
+        etiquetas_distintas: string;
+      }>(
+        `SELECT criterio_id, pg_catalog.count(*)::text AS total,
+                pg_catalog.count(DISTINCT pg_catalog.btrim(etiqueta))::text
+                  AS etiquetas_distintas
+         FROM public.matriz_opcion
+         WHERE criterio_id = ANY($1::integer[])
+           AND orden BETWEEN 1 AND 3 AND puntaje = orden
+           AND pg_catalog.btrim(etiqueta) <> ''
+         GROUP BY criterio_id`,
+        [proposedPtCriterionIds],
+      );
+      if (
+        configuredOptions.rows.length !== ptIds.length ||
+        configuredOptions.rows.some(
+          (row) => Number(row.total) !== 3 || Number(row.etiquetas_distintas) !== 3,
+        )
+      ) {
+        throw new ConfiguracionMatrizError('CONFIGURACION_INCONSISTENTE');
+      }
+      const ptBands = await client.query(
+        `SELECT minimo, maximo FROM public.matriz_resultado
+         WHERE matriz_version_id = $1 AND ambito = 'PT'
+         ORDER BY orden`,
+        [matrizId],
+      );
+      try {
+        validateFinalBands(
+          ptBands.rows.map((band) => ({
+            minimo: Number(band.minimo),
+            maximo: Number(band.maximo),
+          })),
+          ptIds.length,
+        );
+      } catch {
+        throw new ConfiguracionMatrizError('CONFIGURACION_INCONSISTENTE');
+      }
     }
 
     const selectedKeys = new Set([
@@ -1006,9 +1087,9 @@ export async function replaceCompanyMatrixDraftComposition(
       if (existing) {
         await client.query(
           `UPDATE public.matriz_criterio
-           SET texto = $1, orden = $2
-           WHERE id = $3 AND matriz_version_id = $4`,
-          [item.texto, index + 1, existing.id, matrizId],
+           SET orden = $1
+           WHERE id = $2 AND matriz_version_id = $3`,
+          [index + 1, existing.id, matrizId],
         );
       } else {
         await client.query(
@@ -1017,7 +1098,8 @@ export async function replaceCompanyMatrixDraftComposition(
              fuente_dato, suma_perfil, catalogo_criterio_pt_version_id,
              catalogo_criterio_gr_version_id
            ) VALUES ($1, $2, 'PT', $3, $4, NULL, FALSE, $5, NULL)`,
-          [matrizId, catalog.codigo, item.texto, index + 1, item.catalogo_criterio_version_id],
+          [matrizId, catalog.codigo, catalog.nombre, index + 1,
+            item.catalogo_criterio_version_id],
         );
       }
     }
@@ -1338,7 +1420,11 @@ async function validatePublishableMatrix(
     throw new ConfiguracionMatrizError('MATRIZ_NO_PUBLICABLE');
   }
   const configuration = await loadMatrixConfiguration(client, matrixRow);
-  if (configuration.criterios_pt.length < 1 || configuration.criterios_gr.length < 1) {
+  if (
+    configuration.criterios_pt.length < 3 ||
+    configuration.criterios_pt.length > PT_V1_CRITERIA.length ||
+    configuration.criterios_gr.length < 1
+  ) {
     throw new ConfiguracionMatrizError('MATRIZ_NO_PUBLICABLE');
   }
   if (configuration.cobertura_gr.estado !== 'COMPLETA') {
@@ -1360,7 +1446,7 @@ async function validatePublishableMatrix(
 
   const [canonicalPt, canonicalGr] = await Promise.all([
     client.query(
-      `SELECT mc.id, pt.estado
+      `SELECT mc.id, pt.estado, pt.codigo_canonico AS codigo
        FROM public.matriz_criterio mc
        JOIN public.catalogo_criterio_pt_version ptv
          ON ptv.id = mc.catalogo_criterio_pt_version_id
@@ -1390,6 +1476,11 @@ async function validatePublishableMatrix(
     if (row.estado !== 'ACTIVO') {
       throw new ConfiguracionMatrizError('MATRIZ_NO_PUBLICABLE');
     }
+  }
+  if (canonicalPt.rows.some(
+    (row) => !PT_V1_CRITERIA.includes(row.codigo as typeof PT_V1_CRITERIA[number]),
+  )) {
+    throw new ConfiguracionMatrizError('MATRIZ_NO_PUBLICABLE');
   }
 
   const optionRows = await client.query(
@@ -1424,7 +1515,10 @@ async function validatePublishableMatrix(
     const options = optionsByCriterion.get(criterion.matriz_criterio_id) ?? [];
     const ranges = rangesByCriterion.get(criterion.matriz_criterio_id) ?? [];
     if (criterion.tipo_resolucion === 'CAPTURA_OPCIONES') {
-      if (options.length !== 3 || ranges.length !== 0) {
+      if (
+        options.length !== 3 || ranges.length !== 0 ||
+        new Set(options.map((option) => String(option.etiqueta).trim())).size !== 3
+      ) {
         throw new ConfiguracionMatrizError('MATRIZ_NO_PUBLICABLE');
       }
       options.forEach((option, index) => {
@@ -1693,6 +1787,9 @@ export async function saveCompanyMatrixResults(
       [matrizId, ambito],
     );
     const criterionCount = Number(count.rows[0].total);
+    if (ambito === 'PT' && (criterionCount < 3 || criterionCount > PT_V1_CRITERIA.length)) {
+      throw new ConfiguracionMatrizError('RESULTADOS_INVALIDOS');
+    }
     validateFinalBands(input.resultados, criterionCount);
 
     await client.query(

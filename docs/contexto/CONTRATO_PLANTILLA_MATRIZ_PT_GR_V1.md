@@ -280,15 +280,15 @@ La regla de una sola valoración por fila no aplica a `C19:E19` de ninguna de la
 
 Perfil Transaccional funciona de la siguiente manera:
 
-1. Existen exactamente cuatro bloques.
-2. Cada bloque representa una pregunta o aspecto definido por la empresa.
-3. Cada bloque contiene exactamente tres respuestas posibles.
-4. Cada respuesta tiene una valoración de `1`, `2` o `3` puntos. La valoración pertenece a la respuesta, no a la pregunta.
-5. Para evaluar a un cliente se selecciona una respuesta de cada uno de los cuatro bloques.
-6. Se suman los cuatro puntajes seleccionados.
-7. La suma determina uno de los tres resultados finales de Perfil Transaccional configurados por la empresa.
+1. El catálogo PT V1 contiene exactamente seis criterios canónicos: `TIPO_PRODUCTO` (Número y Tipo de Producto), `NATURALEZA_PRODUCTO` (Naturaleza del Producto), `MONTO` (Monto), `FRECUENCIA_PRODUCTO` (Frecuencia), `DESTINO_RECURSOS_PT` (Origen y Destino de los recursos) y `ZONA_GEOGRAFICA_PT` (Zona geográfica).
+2. La empresa selecciona entre tres y seis criterios. Sus nombres son fijos y no editables.
+3. Por cada criterio seleccionado la empresa captura exclusivamente tres descripciones: Bajo, Medio y Alto.
+4. El sistema asigna internamente Bajo=`1`, Medio=`2` y Alto=`3`; el usuario no captura ni ve el puntaje.
+5. Para evaluar a un cliente se selecciona una respuesta de cada criterio configurado y se suman sus valores internos.
+6. Para `N` criterios el dominio total es `N..3N` y la suma determina uno de los tres resultados finales configurados por la empresa.
+7. PT debe quedar guardado y completo antes de habilitar la configuración de GR.
 
-Las preguntas, respuestas, montos, frecuencias, textos, puntajes, rangos y nombres de los resultados pertenecen a cada empresa. El contenido observado en el archivo de muestra no debe convertirse en contenido general del sistema.
+La interfaz principal PT no muestra códigos, nombres de persistencia, cobertura ni diagnósticos internos. Los archivos Excel y CAVIACE son referencia funcional e histórica, no el contrato literal de esta interfaz ni un flujo operativo de importación. Las matrices y evaluaciones históricas conservan sus textos, versiones, composición y resultados originales; el catálogo V1 se aplica a matrices nuevas o nuevas versiones.
 
 ### 2.4 Grado de Riesgo
 
@@ -450,7 +450,7 @@ Esta semántica es obligatoria tanto para Perfil Transaccional como para Grado d
 
 #### 2.11.1 Base matemática
 
-Cada evaluación contiene exactamente cuatro bloques o criterios y en cada uno se obtiene exactamente una valoración entera de `1`, `2` o `3`. Por lo tanto, el puntaje total posible es siempre un número entero entre `4` y `12`, ambos inclusive.
+Cada evaluación PT contiene `N` criterios, con `3 <= N <= 6`, y en cada uno se obtiene exactamente una valoración entera de `1`, `2` o `3`. Por lo tanto, su puntaje total posible comprende todos los enteros entre `N` y `3N`, ambos inclusive. La estructura física histórica del archivo `PT_GR_EMPRESA_V1` conserva su dominio original sin reinterpretar matrices ya publicadas ni evaluaciones realizadas.
 
 #### 2.11.2 Definición de los tres rangos
 
@@ -460,14 +460,14 @@ Los tres rangos deben cumplir simultáneamente las siguientes reglas:
 
 1. Cada rango tiene un límite inferior entero y un límite superior entero.
 2. Ambos extremos son inclusivos.
-3. Los tres rangos, considerados en conjunto, cubren exactamente todos los puntajes enteros desde `4` hasta `12`.
+3. Los tres rangos, considerados en conjunto, cubren exactamente todos los puntajes enteros desde `N` hasta `3N`.
 4. No existen huecos entre rangos.
 5. No existen traslapes entre rangos.
-6. Cada número entero entre `4` y `12` pertenece exactamente a un solo resultado.
-7. Ningún rango incluye valores menores de `4` ni mayores de `12`.
+6. Cada número entero entre `N` y `3N` pertenece exactamente a un solo resultado.
+7. Ningún rango incluye valores menores de `N` ni mayores de `3N`.
 8. En cada rango, el límite inferior es menor o igual al límite superior.
 
-Son ejemplos válidos:
+Para una matriz histórica o configuración con `N=4`, son ejemplos válidos:
 
 - Resultado A: `4 a 5`; Resultado B: `6 a 8`; Resultado C: `9 a 12`.
 - Resultado A: `4 a 7`; Resultado B: `8 a 10`; Resultado C: `11 a 12`.
