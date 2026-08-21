@@ -129,13 +129,21 @@ BEGIN
       AND t.tgname='trg_cliente_pt_respuesta_rango' AND NOT t.tgisinternal
       AND t.tgenabled='O' AND t.tgtype=23
       AND t.tgfoid=pg_catalog.to_regprocedure('public.validar_cliente_pt_respuesta_rango()')
-      AND t.tgattr::SMALLINT[]=ARRAY[
+      AND pg_catalog.cardinality(t.tgattr::SMALLINT[])=5
+      AND t.tgattr::SMALLINT[] @> ARRAY[
         (SELECT attnum FROM pg_catalog.pg_attribute WHERE attrelid=t.tgrelid AND attname='matriz_rango_id'),
         (SELECT attnum FROM pg_catalog.pg_attribute WHERE attrelid=t.tgrelid AND attname='matriz_criterio_id'),
         (SELECT attnum FROM pg_catalog.pg_attribute WHERE attrelid=t.tgrelid AND attname='puntaje'),
         (SELECT attnum FROM pg_catalog.pg_attribute WHERE attrelid=t.tgrelid AND attname='unidad'),
         (SELECT attnum FROM pg_catalog.pg_attribute WHERE attrelid=t.tgrelid AND attname='valor_numerico')
       ]::SMALLINT[]
+      AND ARRAY[
+        (SELECT attnum FROM pg_catalog.pg_attribute WHERE attrelid=t.tgrelid AND attname='matriz_rango_id'),
+        (SELECT attnum FROM pg_catalog.pg_attribute WHERE attrelid=t.tgrelid AND attname='matriz_criterio_id'),
+        (SELECT attnum FROM pg_catalog.pg_attribute WHERE attrelid=t.tgrelid AND attname='puntaje'),
+        (SELECT attnum FROM pg_catalog.pg_attribute WHERE attrelid=t.tgrelid AND attname='unidad'),
+        (SELECT attnum FROM pg_catalog.pg_attribute WHERE attrelid=t.tgrelid AND attname='valor_numerico')
+      ]::SMALLINT[] @> t.tgattr::SMALLINT[]
   ) THEN
     RAISE EXCEPTION 'VERIFY fallido: indice, funcion o trigger de rango incompatible';
   END IF;
